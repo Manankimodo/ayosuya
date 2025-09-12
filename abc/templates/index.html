@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>FAQチャットボット</title>
+</head>
+<body>
+  <h1>FAQチャットボット</h1>
+
+  <form action="/ask" method="post">
+    <input type="text" name="question" placeholder="質問を入力してください" size="50" required>
+    <button type="submit">送信</button>
+  </form>
+
+  {% if question %}
+    <h2>あなたの質問: {{ question }}</h2>
+    <h3>回答: {{ answer }}</h3>
+  {% endif %}
+</body>
+</html>
