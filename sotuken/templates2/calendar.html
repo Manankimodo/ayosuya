@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="../calendar.css">
+ <link rel="stylesheet" href="../calendar.js">
+  <title>カレンダー</title>
+  
+</head>
+<body>
+  <h1 id="monthYear"></h1>
+  <div class="month-switch">
+    <button id="prevMonth">← 前の月</button>
+    <button id="nextMonth">次の月 →</button>
+  </div>
+
+  <table class="calendar" id="calendar">
+    <thead>
+      <tr>
+        <th>日</th>
+        <th>月</th>
+        <th>火</th>
+        <th>水</th>
+        <th>木</th>
+        <th>金</th>
+        <th>土</th>
+      </tr>
+    </thead>
+    <tbody id="calendar-body"></tbody>
+  </table>
+</body>
+</html>
