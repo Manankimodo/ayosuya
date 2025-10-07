@@ -10,8 +10,8 @@
         名前：<input type="text" name="name" required><br><br>
         出勤有無：
         <select name="work">
-            <option value="○">○ 出勤可能</option>
-            <option value="×">× 出勤不可</option>
+            <option value="○">○</option>
+            <option value="×">×</option>
         </select><br><br>
         時間帯：
         <select name="time">
@@ -24,5 +24,7 @@
         </select><br><br>
         <button type="submit">保存</button>
     </form>
+    <p><a href="{{ url_for('calendar') }}">カレンダーに戻る</a></p>
+
 </body>
 </html>
