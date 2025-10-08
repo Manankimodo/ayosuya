@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>希望入力</title>
+</head>
+<body>
+    <h1>{{ date }} の希望入力</h1>
+    <form method="POST">
+        名前：<input type="text" name="name" required><br><br>
+        出勤有無：
+        <select name="work">
+            <option value="○">○</option>
+            <option value="×">×</option>
+        </select><br><br>
+        時間帯：
+        <select name="time">
+            <option value="9:00~13:00">9:00~13:00</option>
+            <option value="11:00~18:00">11:00~18:00</option>
+            <option value="13:00~16:00">13:00~16:00</option>
+            <option value="16:00~21:00">16:00~21:00</option>
+            <option value="17:30~23:00">17:30~23:00</option>
+            <option value="19:00~23:00">19:00~23:00</option>
+        </select><br><br>
+        <button type="submit">保存</button>
+    </form>
+    <p><a href="{{ url_for('calendar') }}">カレンダーに戻る</a></p>
+
+</body>
+</html>
