@@ -1,16 +1,32 @@
 from flask import Flask, render_template, request, redirect, url_for
+<<<<<<< HEAD
 from flask_mysqldb import MySQL
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 
+=======
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from sentence_transformers import SentenceTransformer
+import chromadb
+import ollama
+import warnings
+
+# 警告を非表示
+warnings.filterwarnings("ignore")
+>>>>>>> 86b7dddddba184a1a768d9f796c83ecbea27c2be
 
 app = Flask(__name__)
 
-# XAMPPのMySQL接続設定
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''  # XAMPPは通常パスワードなし
-app.config['MYSQL_DB'] = 'ayosuya'  # ← あなたのデータベース名に変更
+# ==========================
+# 🔹 1. MariaDB接続設定
+# ==========================
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    'mysql+pymysql://root:@localhost/ayosuya?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
+)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
+<<<<<<< HEAD
 
 mysql = MySQL(app)
 
@@ -43,30 +59,130 @@ mysql = MySQL(app)
 #     return render_template('login.html')
 
 # カレンダー表示
+=======
+# ==========================
+# 🔹 2. Chroma + AI設定
+# ==========================
+embedder = SentenceTransformer("all-MiniLM-L6-v2")#文章を数値ベクトルに変換
+
+chroma_client = chromadb.PersistentClient(path="./chroma_db")#類似度検索
+collection = chroma_client.get_or_create_collection("faq_collection")#コレクションを作って保存
+
+faqs = [
+    {"q": "シフトはどうやって提出しますか？", "a": "シフト希望は毎週日曜までにLINEで提出してください。"},
+    {"q": "新人研修はどのくらいですか？", "a": "新人研修は約3日間行います。"},
+    {"q": "有給はいつ使えますか？", "a": "有給は入社6ヶ月後から取得可能です。"}
+]
+
+
+#各質問をSentenceTransformerで**埋め込み（ベクトル化）**してChromaに保存。
+for i, faq in enumerate(faqs):
+    if not collection.get(ids=[str(i)])["ids"]:  # 未登録なら
+        embedding = embedder.encode(faq["q"]).tolist()
+        collection.add(
+            ids=[str(i)],
+            embeddings=[embedding],
+            metadatas=[{"answer": faq["a"]}],
+            documents=[faq["q"]]
+        )
+
+# ==========================
+# 🔹 3. ルート（共通UI）
+# ==========================
+
+#トップページ (/) にアクセスしたとき、index.html を表示。
+>>>>>>> 86b7dddddba184a1a768d9f796c83ecbea27c2be
 @app.route("/")
+def index():
+    return render_template("index.html")
+
+# ==========================
+# 🔹 4. チャットボット機能
+# ==========================
+
+# １フォームから送られた質問を取得。
+# ２SentenceTransformer で埋め込みベクトルに変換。
+# ３ChromaDBから類似度が高いFAQを2件検索。
+# ４その結果を元に「コンテキスト（参考情報）」を作成。
+
+@app.route("/ask", methods=["POST"])
+def ask():
+    user_question = request.form["question"]
+
+    # 類似FAQ検索
+    query_emb = embedder.encode(user_question).tolist()
+    results = collection.query(query_embeddings=[query_emb], n_results=2)
+
+    # コンテキスト生成
+    context = "\n".join([
+        f"Q: {d}\nA: {m['answer']}"
+        for d, m in zip(results["documents"][0], results["metadatas"][0])
+    ])
+
+    prompt = f"""
+以下はFAQです。ユーザーの質問に答えてください。
+
+{context}
+
+ユーザーの質問: {user_question}
+"""
+
+    #Ollama（mistral モデル）に「FAQ＋ユーザー質問」を渡して回答を生成。
+    response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
+    answer = response["message"]["content"]
+
+
+    #結果（質問と回答）を index.html に渡して再表示。
+    return render_template("index.html", question=user_question, answer=answer)
+
+# ==========================
+# 🔹 5. カレンダー表示
+# ==========================
+@app.route("/calendar")
 def calendar():
     return render_template("calendar.html")
 
-# 申請フォーム
+# ==========================
+# 🔹 6. 希望申請フォーム
+# ==========================
 @app.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
     if request.method == "POST":
-        name = request.form["name"]
-        work = request.form["work"]
-        time = request.form["time"]
-        start_time, end_time = time.split("~")
+        name = request.form.get("name")
+        work = request.form.get("work")
+        time = request.form.get("time")
 
-        cur = mysql.connection.cursor()
-        cur.execute(
-            "INSERT INTO schedule (ID, date, work, start_time, end_time) VALUES (%s, %s, %s, %s, %s)",
-            (name, date, work, start_time, end_time)
-        )
-        mysql.connection.commit()
-        cur.close()
+        # 時間フォーマット変換
+        if "~" in time:
+            start_time, end_time = time.split("~")
+            start_time = start_time.strip() + ":00"
+            end_time = end_time.strip() + ":00"
+        else:
+            start_time = None
+            end_time = None
+
+        # SQLでINSERT
+        sql = text("""
+            INSERT INTO calendar (ID, date, work, start_time, end_time)
+            VALUES (:name, :date, :work, :start_time, :end_time)
+        """)
+
+        db.session.execute(sql, {
+            "name": name,
+            "date": date,
+            "work": work,
+            "start_time": start_time,
+            "end_time": end_time
+        })
+        db.session.commit()
 
         return redirect(url_for("calendar"))
 
     return render_template("sinsei.html", date=date)
 
+
+# ==========================
+# 🔹 メイン
+# ==========================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

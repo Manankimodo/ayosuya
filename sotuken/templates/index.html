@@ -1,20 +1,22 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>FAQチャットボット</title>
+    <meta charset="utf-8">
+    <title>AI チャットボット</title>
 </head>
 <body>
-  <h1>FAQチャットボット</h1>
+    <h1>AI チャットボット</h1>
+    <form action="/ask" method="POST">
+        <input type="text" name="question" placeholder="質問を入力してください" required>
+        <button type="submit">送信</button>
+    </form>
 
-  <form action="/ask" method="post">
-    <input type="text" name="question" placeholder="質問を入力してください" size="50" required>
-    <button type="submit">送信</button>
-  </form>
+    {% if question %}
+        <h3>質問: {{ question }}</h3>
+        <p><strong>回答:</strong> {{ answer }}</p>
+    {% endif %}
 
-  {% if question %}
-    <h2>あなたの質問: {{ question }}</h2>
-    <h3>回答: {{ answer }}</h3>
-  {% endif %}
+    <hr>
+    <a href="{{ url_for('calendar') }}">📅 シフト申請ページへ</a>
 </body>
 </html>
