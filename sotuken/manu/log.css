@@ -1,0 +1,81 @@
+body {
+    font-family: "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.login-container {
+    background-color: white;
+    padding: 40px 50px;
+    border-radius: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    width: 420px;
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 25px;
+    color: #050104;
+}
+
+.form-group {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+/* input:focus {
+    border-color: #a770ef;
+    box-shadow: 0 0 4px #a770ef;
+} */
+
+button {
+    background-color: #000000;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+    transition: background 0.3s;
+}
+
+/* button:hover {
+    background-color: #8338ec;
+} */
+
+/* テキスト欄の初期状態の文字 */
+.signup-text {
+    margin-top: 15px;
+    font-size: 14px;
+    color: #555;
+}
+
+/* .signup-text a {
+    color: #a770ef;
+    text-decoration: none;
+} */
+
+.signup-text a:hover {
+    text-decoration: underline;
+}
+
