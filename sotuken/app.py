@@ -23,10 +23,10 @@ db = SQLAlchemy(app)
 # ==========================
 # 🔹 2. Chroma + AI設定
 # ==========================
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+embedder = SentenceTransformer("all-MiniLM-L6-v2")#文章を数値ベクトルに変換
 
-chroma_client = chromadb.PersistentClient(path="./chroma_db")
-collection = chroma_client.get_or_create_collection("faq_collection")
+chroma_client = chromadb.PersistentClient(path="./chroma_db")#類似度検索
+collection = chroma_client.get_or_create_collection("faq_collection")#コレクションを作って保存
 
 faqs = [
     {"q": "シフトはどうやって提出しますか？", "a": "シフト希望は毎週日曜までにLINEで提出してください。"},
@@ -34,6 +34,8 @@ faqs = [
     {"q": "有給はいつ使えますか？", "a": "有給は入社6ヶ月後から取得可能です。"}
 ]
 
+
+#各質問をSentenceTransformerで**埋め込み（ベクトル化）**してChromaに保存。
 for i, faq in enumerate(faqs):
     if not collection.get(ids=[str(i)])["ids"]:  # 未登録なら
         embedding = embedder.encode(faq["q"]).tolist()
@@ -47,6 +49,8 @@ for i, faq in enumerate(faqs):
 # ==========================
 # 🔹 3. ルート（共通UI）
 # ==========================
+
+#トップページ (/) にアクセスしたとき、index.html を表示。
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -54,6 +58,12 @@ def index():
 # ==========================
 # 🔹 4. チャットボット機能
 # ==========================
+
+# １フォームから送られた質問を取得。
+# ２SentenceTransformer で埋め込みベクトルに変換。
+# ３ChromaDBから類似度が高いFAQを2件検索。
+# ４その結果を元に「コンテキスト（参考情報）」を作成。
+
 @app.route("/ask", methods=["POST"])
 def ask():
     user_question = request.form["question"]
@@ -76,10 +86,12 @@ def ask():
 ユーザーの質問: {user_question}
 """
 
-    # Ollama（mistral）を使用して回答生成
+    #Ollama（mistral モデル）に「FAQ＋ユーザー質問」を渡して回答を生成。
     response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
     answer = response["message"]["content"]
 
+
+    #結果（質問と回答）を index.html に渡して再表示。
     return render_template("index.html", question=user_question, answer=answer)
 
 # ==========================
