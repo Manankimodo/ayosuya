@@ -1,25 +1,97 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
+from sentence_transformers import SentenceTransformer
+import chromadb
+import ollama
+import warnings
+
+# 警告を非表示
+warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
 
-# ✅ XAMPP（MariaDB）への接続設定
+# ==========================
+# 🔹 1. MariaDB接続設定
+# ==========================
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     'mysql+pymysql://root:@localhost/ayosuya?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
 
+# ==========================
+# 🔹 2. Chroma + AI設定
+# ==========================
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-# ✅ カレンダー表示
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+collection = chroma_client.get_or_create_collection("faq_collection")
+
+faqs = [
+    {"q": "シフトはどうやって提出しますか？", "a": "シフト希望は毎週日曜までにLINEで提出してください。"},
+    {"q": "新人研修はどのくらいですか？", "a": "新人研修は約3日間行います。"},
+    {"q": "有給はいつ使えますか？", "a": "有給は入社6ヶ月後から取得可能です。"}
+]
+
+for i, faq in enumerate(faqs):
+    if not collection.get(ids=[str(i)])["ids"]:  # 未登録なら
+        embedding = embedder.encode(faq["q"]).tolist()
+        collection.add(
+            ids=[str(i)],
+            embeddings=[embedding],
+            metadatas=[{"answer": faq["a"]}],
+            documents=[faq["q"]]
+        )
+
+# ==========================
+# 🔹 3. ルート（共通UI）
+# ==========================
 @app.route("/")
+def index():
+    return render_template("index.html")
+
+# ==========================
+# 🔹 4. チャットボット機能
+# ==========================
+@app.route("/ask", methods=["POST"])
+def ask():
+    user_question = request.form["question"]
+
+    # 類似FAQ検索
+    query_emb = embedder.encode(user_question).tolist()
+    results = collection.query(query_embeddings=[query_emb], n_results=2)
+
+    # コンテキスト生成
+    context = "\n".join([
+        f"Q: {d}\nA: {m['answer']}"
+        for d, m in zip(results["documents"][0], results["metadatas"][0])
+    ])
+
+    prompt = f"""
+以下はFAQです。ユーザーの質問に答えてください。
+
+{context}
+
+ユーザーの質問: {user_question}
+"""
+
+    # Ollama（mistral）を使用して回答生成
+    response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
+    answer = response["message"]["content"]
+
+    return render_template("index.html", question=user_question, answer=answer)
+
+# ==========================
+# 🔹 5. カレンダー表示
+# ==========================
+@app.route("/calendar")
 def calendar():
     return render_template("calendar.html")
 
-
-# ✅ 希望申請フォーム
+# ==========================
+# 🔹 6. 希望申請フォーム
+# ==========================
 @app.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
     if request.method == "POST":
@@ -27,7 +99,7 @@ def sinsei(date):
         work = request.form.get("work")
         time = request.form.get("time")
 
-        # "9:00~13:00" → ("9:00", "13:00")
+        # 時間フォーマット変換
         if "~" in time:
             start_time, end_time = time.split("~")
             start_time = start_time.strip() + ":00"
@@ -36,13 +108,12 @@ def sinsei(date):
             start_time = None
             end_time = None
 
-        # ✅ SQLAlchemyのtext()で安全にINSERT
+        # SQLでINSERT
         sql = text("""
             INSERT INTO calendar (ID, date, work, start_time, end_time)
             VALUES (:name, :date, :work, :start_time, :end_time)
         """)
 
-        # ✅ パラメータを渡して実行
         db.session.execute(sql, {
             "name": name,
             "date": date,
@@ -57,5 +128,8 @@ def sinsei(date):
     return render_template("sinsei.html", date=date)
 
 
+# ==========================
+# 🔹 メイン
+# ==========================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
