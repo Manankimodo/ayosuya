@@ -73,17 +73,17 @@ def login():
         user_id = request.form["user_id"]
         password = request.form["password"]
 
-        sql = text("SELECT * FROM users WHERE user_id = :user_id AND password = :password")
+        sql = text("SELECT * FROM account WHERE ID = :user_id AND password = :password")
         result = db.session.execute(sql, {"user_id": user_id, "password": password}).fetchone()
 
         if result:
             session["user"] = user_id
-            flash("ログインに成功しました。", "success")
             return redirect(url_for("calendar"))
         else:
             flash("IDまたはパスワードが間違っています。", "danger")
-
+    
     return render_template("login.html")
+
 
 @app.route("/logout")
 def logout():
@@ -137,6 +137,7 @@ def ask():
 @app.route("/calendar")
 def calendar():
     return render_template("calendar.html")
+
 
 # ==========================
 # 🔹 6. 希望申請フォーム
