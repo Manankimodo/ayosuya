@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>ログイン画面</h1>
+<form action="{{ url_for('index') }}" method="post">
+    <div>
+        <label for="email">電子メール: </label>
+        <input type="text" name="email">
+    </div>
+    <div>
+        <label for="password">パスワード: </label>
+        <input type="password" name="password">
+    </div>
+    <div>
+        <input type="submit" value="ログイン">
+    </div>
+</form>
+
+<form action="{{ url_for('register') }}" method="get">
+    <div>
+        <input type="submit" value="新規登録">
+    </div>
+</form>
+{% endblock %}

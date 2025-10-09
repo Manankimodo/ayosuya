@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const nextMonthBtn = document.getElementById("nextMonth");
   
     let currentDate = new Date();
+    window.alert('ログイン成功')
   
     function renderCalendar() {
       const year = currentDate.getFullYear();

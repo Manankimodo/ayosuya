@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for
+# from flask import Flask, render_template, request, redirect, url_for
+# from flask_mysqldb import MySQL
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from sentence_transformers import SentenceTransformer
@@ -8,8 +10,10 @@ import warnings
 
 # 警告を非表示
 warnings.filterwarnings("ignore")
-
 app = Flask(__name__)
+app.secret_key = "your_secret_key"  # ← セッションに必須（任意の文字列でOK）
+
+
 
 # ==========================
 # 🔹 1. MariaDB接続設定
@@ -19,6 +23,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+# mysql = MySQL(app)
+
+
+# カレンダー表示
 
 # ==========================
 # 🔹 2. Chroma + AI設定
@@ -54,6 +62,35 @@ for i, faq in enumerate(faqs):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+# ==========================
+# 🔹 4. ログイン機能追加
+# ==========================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        user_id = request.form["user_id"]
+        password = request.form["password"]
+
+        sql = text("SELECT * FROM account WHERE ID = :user_id AND password = :password")
+        result = db.session.execute(sql, {"user_id": user_id, "password": password}).fetchone()
+
+        if result:
+            session["user"] = user_id
+            return redirect(url_for("calendar"))
+        else:
+            flash("IDまたはパスワードが間違っています。", "danger")
+    
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    flash("ログアウトしました。", "info")
+    return redirect(url_for("login"))
+
 
 # ==========================
 # 🔹 4. チャットボット機能
@@ -100,6 +137,7 @@ def ask():
 @app.route("/calendar")
 def calendar():
     return render_template("calendar.html")
+
 
 # ==========================
 # 🔹 6. 希望申請フォーム
