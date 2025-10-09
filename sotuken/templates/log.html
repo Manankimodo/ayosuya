@@ -11,6 +11,14 @@
     </ul>
 {% endif %}
 {% endwith %}
+<form action="/login" method="post">
+    <label>ID</label>
+    <input type="text" name="ID" required><br>
+    <label>パスワード</label>
+    <input type="password" name="password" required><br>
+    <input type="submit" value="ログイン">
+</form>
+<!-- 
 
 <form action="{{ url_for('index') }}" method="post">
     <div>
@@ -24,7 +32,7 @@
     <div>
         <input type="submit" value="ログイン">
     </div>
-</form>
+</form> -->
 {% endblock %}
 
 <!-- <!DOCTYPE html>
