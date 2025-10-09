@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ユーザー管理</title>
+</head>
+<body>
+
+    <!-- フラッシュメッセージ表示 -->
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul style="color: green;">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <!-- 各ページの中身がここに入る -->
+    {% block content %}{% endblock %}
+
+</body>
+</html>

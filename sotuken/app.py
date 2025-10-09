@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for
+# from flask import Flask, render_template, request, redirect, url_for
+# from flask_mysqldb import MySQL
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from sentence_transformers import SentenceTransformer
@@ -6,10 +8,16 @@ import chromadb
 import ollama
 import warnings
 
+
+
+#--------------------------------------------------------------------------------
+
 # 警告を非表示
 warnings.filterwarnings("ignore")
-
 app = Flask(__name__)
+app.secret_key = "your_secret_key"  # ← セッションに必須（任意の文字列でOK）
+
+
 
 # ==========================
 # 🔹 1. MariaDB接続設定
@@ -19,6 +27,32 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+# mysql = MySQL(app)
+
+
+# 仮のユーザーデータ
+users = {
+    "user1": {"password": "1234"},
+    "admin": {"password": "adminpass"}
+}
+
+@app.route("/check")
+def check():
+    # ログイン済み確認
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    return render_template("check.html")
+
+@app.route("/admin")
+def admin():
+    return render_template ("calendar.html")
+
+@app.route("/shift")
+def shift():
+    return render_template ("login.html")
+
+
+# カレンダー表示
 
 # ==========================
 # 🔹 2. Chroma + AI設定
@@ -53,7 +87,36 @@ for i, faq in enumerate(faqs):
 #トップページ (/) にアクセスしたとき、index.html を表示。
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("login.html")
+
+
+# ==========================
+# 🔹 4. ログイン機能追加
+# ==========================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        user_id = request.form["user_id"]
+        password = request.form["password"]
+
+        sql = text("SELECT * FROM account WHERE ID = :user_id AND password = :password")
+        result = db.session.execute(sql, {"user_id": user_id, "password": password}).fetchone()
+
+        if result:
+            session["user_id"] = user_id
+            return redirect(url_for("check"))
+        else:
+            flash("IDまたはパスワードが間違っています。", "danger")
+    
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    flash("ログアウトしました。", "info")
+    return redirect(url_for("login"))
+
 
 # ==========================
 # 🔹 4. チャットボット機能
@@ -100,6 +163,7 @@ def ask():
 @app.route("/calendar")
 def calendar():
     return render_template("calendar.html")
+
 
 # ==========================
 # 🔹 6. 希望申請フォーム
