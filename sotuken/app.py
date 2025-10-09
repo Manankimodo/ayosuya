@@ -1,9 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for
-<<<<<<< HEAD
-from flask_mysqldb import MySQL
+# from flask import Flask, render_template, request, redirect, url_for
+# from flask_mysqldb import MySQL
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-
-=======
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from sentence_transformers import SentenceTransformer
@@ -13,9 +10,10 @@ import warnings
 
 # 警告を非表示
 warnings.filterwarnings("ignore")
->>>>>>> 86b7dddddba184a1a768d9f796c83ecbea27c2be
-
 app = Flask(__name__)
+app.secret_key = "your_secret_key"  # ← セッションに必須（任意の文字列でOK）
+
+
 
 # ==========================
 # 🔹 1. MariaDB接続設定
@@ -25,41 +23,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+# mysql = MySQL(app)
 
-<<<<<<< HEAD
-
-mysql = MySQL(app)
-
-# #ログイン
-# @app.route('/', methods=['GET', 'POST'])
-# def index():
-#     if request.method == 'POST':
-#         email = request.form.get('ID')
-#         password = request.form.get('password')
-
-#         try:
-#             cur = mysql.connection.cursor()
-#             sql = "SELECT * FROM users WHERE email = %s AND password = %s"
-#             cur.execute(sql, (email, password))
-#             user = cur.fetchone()
-#             cur.close()
-
-#             if user:
-#                 session['user_name'] = user['name']
-#                 flash("ログイン成功！", "success")
-#                 return redirect(url_for('calendar'))  # ← ログイン後にcalendarへ遷移
-#             else:
-#                 flash("IDまたはパスワードが違います。", "error")
-#                 return redirect(url_for('index'))
-
-#         except Exception as e:
-#             flash(f"ログイン中にエラーが発生しました: {str(e)}")
-#             return redirect(url_for('index'))
-
-#     return render_template('login.html')
 
 # カレンダー表示
-=======
+
 # ==========================
 # 🔹 2. Chroma + AI設定
 # ==========================
@@ -91,10 +59,38 @@ for i, faq in enumerate(faqs):
 # ==========================
 
 #トップページ (/) にアクセスしたとき、index.html を表示。
->>>>>>> 86b7dddddba184a1a768d9f796c83ecbea27c2be
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+# ==========================
+# 🔹 4. ログイン機能追加
+# ==========================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        user_id = request.form["user_id"]
+        password = request.form["password"]
+
+        sql = text("SELECT * FROM users WHERE user_id = :user_id AND password = :password")
+        result = db.session.execute(sql, {"user_id": user_id, "password": password}).fetchone()
+
+        if result:
+            session["user"] = user_id
+            flash("ログインに成功しました。", "success")
+            return redirect(url_for("calendar"))
+        else:
+            flash("IDまたはパスワードが間違っています。", "danger")
+
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    flash("ログアウトしました。", "info")
+    return redirect(url_for("login"))
+
 
 # ==========================
 # 🔹 4. チャットボット機能
