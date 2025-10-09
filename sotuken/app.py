@@ -61,7 +61,7 @@ for i, faq in enumerate(faqs):
 #トップページ (/) にアクセスしたとき、index.html を表示。
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("login.html")
 
 
 # ==========================
