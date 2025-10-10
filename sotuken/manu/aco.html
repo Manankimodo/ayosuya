@@ -2,6 +2,33 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <title>アカウンコ登録</title>
+</head>
+<body>
+    <h2>アカウント登録</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <ul>
+            {% for category, message in messages %}
+            <li style="color:red;">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    {% endwith %}
+
+    <form action="/acount" method="POST">
+        <label>ID：</label><input type="text" name="user_id" required><br>
+        <label>パスワード：</label><input type="password" name="password" required><br>
+        <label>名前：</label><input type="password" name="password" required><br>
+        <button type="submit">アカウント作成</button>
+    </form>
+</body>
+</html>
+<!-- <!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>アカウント登録画面</title>
     <link rel="stylesheet" href="akaunt.css">
@@ -26,5 +53,5 @@
         </form>
     </div>
 </body>
-</html>
+</html> -->
 
