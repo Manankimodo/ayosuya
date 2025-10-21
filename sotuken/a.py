@@ -97,6 +97,154 @@
 # # ==========================
 # @app.route("/login", methods=["GET", "POST"])
 
+<<<<<<< HEAD
+=======
+# from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+# from sqlalchemy import text
+# from app import db  # ← app.pyのdbを使用
+
+# login_bp = Blueprint("login", __name__, url_prefix="/login")
+
+# # ==========================
+# # 🔹 ログイン画面
+# # ==========================
+# @login_bp.route("/", methods=["GET", "POST"])
+
+# def login():
+#     if request.method == "POST":
+#         user_id = request.form["user_id"]
+#         password = request.form["password"]
+
+ 
+
+
+
+#         sql = text("SELECT * FROM account WHERE ID = :user_id AND password = :password")
+#         result = db.session.execute(sql, {"user_id": user_id, "password": password}).fetchone()
+ 
+#         if result:
+#             session["user_id"] = user_id
+
+#             return redirect(url_for("check"))
+
+#             flash("ログインに成功しました！", "success")
+#             return redirect(url_for("calendar.calendar"))
+
+#         else:
+#             flash("IDまたはパスワードが間違っています。", "danger")
+    
+#     return render_template("login.html")
+ 
+ 
+# @app.route("/logout")
+# def logout():
+#     session.pop("user", None)
+#     flash("ログアウトしました。", "info")
+#     return redirect(url_for("login"))
+ 
+ 
+# # ==========================
+
+# # 🔹 4. チャットボット機能
+# # ==========================
+ 
+# # １フォームから送られた質問を取得。
+# # ２SentenceTransformer で埋め込みベクトルに変換。
+# # ３ChromaDBから類似度が高いFAQを2件検索。
+# # ４その結果を元に「コンテキスト（参考情報）」を作成。
+ 
+# @app.route("/ask", methods=["POST"])
+# def ask():
+#     user_question = request.form["question"]
+ 
+#     # 類似FAQ検索
+#     query_emb = embedder.encode(user_question).tolist()
+#     results = collection.query(query_embeddings=[query_emb], n_results=2)
+ 
+#     # コンテキスト生成
+#     context = "\n".join([
+#         f"Q: {d}\nA: {m['answer']}"
+#         for d, m in zip(results["documents"][0], results["metadatas"][0])
+#     ])
+ 
+#     prompt = f"""
+# 以下はFAQです。ユーザーの質問に答えてください。
+ 
+# {context}
+ 
+# ユーザーの質問: {user_question}
+# """
+ 
+#     #Ollama（mistral モデル）に「FAQ＋ユーザー質問」を渡して回答を生成。
+#     response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
+#     answer = response["message"]["content"]
+ 
+ 
+#     #結果（質問と回答）を index.html に渡して再表示。
+#     return render_template("index.html", question=user_question, answer=answer)
+ 
+# # ==========================
+# # 🔹 5. カレンダー表示
+# # ==========================
+# @app.route("/calendar")
+# def calendar():
+#     return render_template("calendar.html")
+ 
+ 
+# # ==========================
+# # 🔹 6. 希望申請フォーム
+# # ==========================
+# @app.route("/sinsei/<date>", methods=["GET", "POST"])
+# def sinsei(date):
+#     if request.method == "POST":
+#         name = request.form.get("name")
+#         work = request.form.get("work")
+#         time = request.form.get("time")
+ 
+#         # 時間フォーマット変換
+#         if "~" in time:
+#             start_time, end_time = time.split("~")
+#             start_time = start_time.strip() + ":00"
+#             end_time = end_time.strip() + ":00"
+#         else:
+#             start_time = None
+#             end_time = None
+
+#         # SQLでINSERT
+#         sql = text("""
+#             INSERT INTO calendar (ID, date, work, start_time, end_time)
+#             VALUES (:name, :date, :work, :start_time, :end_time)
+#         """)
+
+#         db.session.execute(sql, {
+#             "name": name,
+#             "date": date,
+#             "work": work,
+#             "start_time": start_time,
+#             "end_time": end_time
+#         })
+#         db.session.commit()
+
+#         return redirect(url_for("calendar"))
+
+#     return render_template("sinsei.html", date=date)
+
+
+# # ==========================
+# # 🔹 メイン
+# # ==========================
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5000, debug=True)
+
+# # 🔹 ログアウト機能
+# # ==========================
+# @login_bp.route("/logout")
+# def logout():
+#     session.pop("user_id", None)
+#     flash("ログアウトしました。", "info")
+#     return redirect(url_for("login.login"))
+
+>>>>>>> ced6647b75a13cb8a46c4ffc54d04e698a182d3b
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from sqlalchemy import text
 from app import db  # ← app.pyのdbを使用
@@ -140,6 +288,7 @@ def logout():
     flash("ログアウトしました。", "info")
     return redirect(url_for("login"))
 
+<<<<<<< HEAD
 
 # ==========================
 
@@ -242,3 +391,5 @@ def logout():
     flash("ログアウトしました。", "info")
     return redirect(url_for("login.login"))
 
+=======
+>>>>>>> ced6647b75a13cb8a46c4ffc54d04e698a182d3b
