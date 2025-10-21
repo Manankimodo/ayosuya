@@ -1,8 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for
+# faq.py
+from flask import Blueprint, render_template, request
 import pymysql
 import ollama
 from sentence_transformers import SentenceTransformer
 import chromadb
+
+# ===== Flask Blueprint設定 =====
+faq_bp = Blueprint('faq', __name__, url_prefix='/faq')
 
 # ===== Embedding & Chroma設定 =====
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
@@ -18,7 +22,6 @@ DB_CONFIG = {
     "charset": "utf8mb4",
     "cursorclass": pymysql.cursors.DictCursor
 }
-
 
 # ===== FAQ取得関数 =====
 def get_faqs():
@@ -47,8 +50,9 @@ def update_chroma_from_db():
             documents=[faq["question"]],
             metadatas=[{"answer": faq["answer"]}]
         )
-        
-@app.route("/ask", methods=["POST"])
+
+# ===== /ask エンドポイント =====
+@faq_bp.route("/ask", methods=["POST"])
 def ask():
     update_chroma_from_db()  # 毎回FAQを最新化
     user_question = request.form["question"]

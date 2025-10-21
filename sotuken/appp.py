@@ -45,7 +45,7 @@ def check():
  
 @app.route("/admin")
 def admin():
-    return render_template ("calendar.html")
+    return render_template ("calendar2.html")
  
 @app.route("/shift")
 def shift():

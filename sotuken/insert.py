@@ -1,13 +1,14 @@
-from flask import Flask, render_template, request, redirect, flash
+# insert.py
+from flask import Blueprint, render_template, request, redirect, flash
 import mysql.connector
-from werkzeug.security import generate_password_hash
 
-app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # セッション用
+# Blueprintの作成（名前・ルートプレフィックスを設定）
+insert_bp = Blueprint('insert', __name__, url_prefix='/insert')
 
 # 🔧 MySQL接続設定
 db_config = {
-    'host': 'localhost',       
+    'host': 'localhost',
+    'user': 'root',  # ← 忘れず追加！
     'password': '',
     'database': 'ayosuya',
 }
@@ -15,11 +16,10 @@ db_config = {
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
-@app.route('/')
-def index():
-    return redirect('/register')
-
-@app.route('/register', methods=['GET', 'POST'])
+# ------------------------------
+# 従業員登録画面
+# ------------------------------
+@insert_bp.route('/', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         name = request.form['name']
@@ -38,9 +38,6 @@ def register():
         conn.close()
 
         flash('✅ 従業員登録が完了しました！')
-        return redirect('/register')
+        return redirect('/insert')  # ← Blueprint名に合わせる
 
     return render_template('accountinsert.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
