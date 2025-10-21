@@ -28,7 +28,6 @@ app.register_blueprint(insert_bp)
 app.register_blueprint(faq_bp)
 app.register_blueprint(shift_bp)
 
-<<<<<<< HEAD
 
 
 # ===== MySQL接続設定 =====
@@ -113,9 +112,6 @@ for i, faq in enumerate(faqs):
 # 🔹 トップページ（ルート）
 # -------------------------------------------------
 
-=======
-# --- トップページ ---
->>>>>>> 3bc36fa3c995d8afa972a32026decce048f13b80
 @app.route('/')
 
 def index():
