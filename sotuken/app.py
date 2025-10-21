@@ -40,7 +40,7 @@ def update_chroma_from_db():
     if len(existing["ids"]) > 0:
         collection.delete(ids=existing["ids"])
 
-<<<<<<< HEAD
+
 
 # ==========================
 # 🔹 2. Chroma + AI設定
@@ -61,11 +61,11 @@ faqs = [
 for i, faq in enumerate(faqs):
     if not collection.get(ids=[str(i)])["ids"]:  # 未登録なら
         embedding = embedder.encode(faq["q"]).tolist()
-=======
+
     # DBから再登録
     for faq in faqs:
         emb = embedder.encode(faq["question"]).tolist()
->>>>>>> 696d1111ddc6d3407af74de4b840e81fe14daed6
+
         collection.add(
             ids=[str(faq["id"])],
             embeddings=[emb],
@@ -73,7 +73,7 @@ for i, faq in enumerate(faqs):
             metadatas=[{"answer": faq["answer"]}]
         )
 
-<<<<<<< HEAD
+
 
 # @app.route("/")
 # def index():
@@ -82,8 +82,7 @@ for i, faq in enumerate(faqs):
 # ==========================
 # 🔹 3. ルート（共通UI）
 # ==========================
-=======
->>>>>>> 696d1111ddc6d3407af74de4b840e81fe14daed6
+
 
 # ===== チャット画面 =====
 @app.route("/")
