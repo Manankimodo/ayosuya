@@ -16,7 +16,7 @@ app.register_blueprint(calendar_bp)
 app.register_blueprint(insert_bp)
 app.register_blueprint(faq_bp)
 
-<<<<<<< HEAD
+
 # ===== MySQL接続設定 =====
 DB_CONFIG = {
     "host": "localhost",
@@ -92,10 +92,10 @@ for i, faq in enumerate(faqs):
 
 # ===== チャット画面 =====
 @app.route("/")
-=======
+
 # --- トップページ（ルート） ---
 @app.route('/')
->>>>>>> 2b253ea49a77c3ab9d50634beb7bf22dca7b1a4e
+
 def index():
     # 最初にログイン画面へ飛ばす
     return redirect(url_for('login.login'))
