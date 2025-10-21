@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='calendar.css') }}">
+    <title>カレンダー</title>
+</head>
+<body>
+    <!-- ▼ ハンバーガーメニュー -->
+    <div class="hamburger" id="hamburger">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+    </div>
+
+    <!-- ▼ メニュー本体 -->
+    <nav class="menu" id="menu">
+        <ul>
+            <li><a href="/home">ホーム</a></li>
+            <li><a href="/calendar">カレンダー</a></li>
+            <li><a href="/history">履歴</a></li>
+            <li><a href="/logout">ログアウト</a></li>
+        </ul>
+    </nav>
+
+    <!-- ▼ カレンダー部分 -->
+    <table class="calendar" id="calendar">
+        <thead>
+            <tr>
+                <th>日</th><th>月</th><th>火</th>
+                <th>水</th><th>木</th><th>金</th><th>土</th>
+            </tr>
+        </thead>
+        <tbody id="calendar-body"></tbody>
+    </table>
+
+    <script src="{{ url_for('static', filename='calendar.js') }}"></script>
+    <script>
+        // ハンバーガーメニュー開閉処理
+        const hamburger = document.getElementById("hamburger");
+        const menu = document.getElementById("menu");
+
+        hamburger.addEventListener("click", () => {
+            hamburger.classList.toggle("active");
+            menu.classList.toggle("open");
+        });
+    </script>
+</body>
+</html>
+
