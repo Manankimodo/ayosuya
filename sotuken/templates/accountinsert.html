@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>従業員登録フォーム</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h2>従業員登録</h2>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul>
+        {% for msg in messages %}
+          <li>{{ msg }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST">
+    <label>名前：</label>
+    <input type="text" name="name" required>
+
+    <label>パスワード：</label>
+    <input type="password" name="password" required>
+
+    <label>権限：</label>
+    <select name="kengen">
+      <option value="1">管理者</option>
+      <option value="0">一般</option>
+    </select>
+
+    <label>店舗ID：</label>
+    <input type="number" name="store_id" required>
+
+    <button type="submit">登録する</button>
+  </form>
+</body>
+</html>
