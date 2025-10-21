@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # # from flask import Flask, render_template, request, redirect, url_for
 # # from flask_mysqldb import MySQL
@@ -245,6 +246,8 @@
 #     return redirect(url_for("login.login"))
 
 >>>>>>> ced6647b75a13cb8a46c4ffc54d04e698a182d3b
+=======
+>>>>>>> 137c58fbecf7b3c18b122e42191938189d7f3cda
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from sqlalchemy import text
 from app import db  # ← app.pyのdbを使用
