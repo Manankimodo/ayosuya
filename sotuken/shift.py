@@ -4,6 +4,7 @@ import ollama
 from sentence_transformers import SentenceTransformer
 import chromadb
 
+from sotuken import app
 from sotuken.app import DB_CONFIG, get_faqs
 
 # ===== MySQL接続設定 =====
