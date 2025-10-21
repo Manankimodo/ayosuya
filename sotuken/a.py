@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 
 # # from flask import Flask, render_template, request, redirect, url_for
 # # from flask_mysqldb import MySQL
@@ -246,7 +245,6 @@
 #     flash("ログアウトしました。", "info")
 #     return redirect(url_for("login.login"))
 
-=======
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from sqlalchemy import text
 from extensions import db  # ✅ extensions から import
@@ -293,4 +291,4 @@ def logout():
     session.pop("user", None)
     flash("ログアウトしました。", "info")
     return redirect(url_for("login"))
->>>>>>> 3bc36fa3c995d8afa972a32026decce048f13b80
+
