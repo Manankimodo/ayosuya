@@ -1,57 +1,104 @@
-from flask import Flask, render_template, request, redirect, url_for
-import pymysql
-import ollama
-from sentence_transformers import SentenceTransformer
-import chromadb
+from flask import Blueprint, render_template, redirect, url_for, session, request
+from sqlalchemy import text
+from extensions import db  # ← extensions.py からdbをimport
 
-from sotuken import app
-from sotuken.app import DB_CONFIG, get_faqs
+shift_bp = Blueprint("shift", __name__, url_prefix="/shift")
 
-# ===== MySQL接続設定 =====
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "ayosuya",
-    "charset": "utf8mb4",
-    "cursorclass": pymysql.cursors.DictCursor
-}
 
-@app.route("/manage")
+# ==========================
+# 🔹 カレンダー画面
+# ==========================
+@shift_bp.route("/")
+def calendar():
+    if "user_id" not in session:
+        return redirect(url_for("login.login"))
+    return render_template("calendar.html")
+
+
+# ==========================
+# 🔹 希望申請フォーム
+# ==========================
+@shift_bp.route("/sinsei/<date>", methods=["GET", "POST"])
+def sinsei(date):
+    if request.method == "POST":
+        name = request.form.get("name")
+        work = request.form.get("work")
+        time = request.form.get("time")
+
+        # 時間フォーマット変換
+        if "~" in time:
+            start_time, end_time = time.split("~")
+            start_time = start_time.strip() + ":00"
+            end_time = end_time.strip() + ":00"
+        else:
+            start_time = None
+            end_time = None
+
+        # SQLでINSERT実行
+        sql = text("""
+            INSERT INTO calendar (ID, date, work, start_time, end_time)
+            VALUES (:name, :date, :work, :start_time, :end_time)
+        """)
+        db.session.execute(sql, {
+            "name": name,
+            "date": date,
+            "work": work,
+            "start_time": start_time,
+            "end_time": end_time
+        })
+        db.session.commit()
+
+        return redirect(url_for("shift.calendar"))
+
+    return render_template("sinsei.html", date=date)
+
+
+# ==========================
+# 🔹 FAQ管理画面
+# ==========================
+@shift_bp.route("/manage")
 def manage_faq():
-    faqs = get_faqs()
+    faqs = db.session.execute(text("SELECT * FROM faqs")).fetchall()
     return render_template("manage_faq.html", faqs=faqs)
 
-# 新規登録
-@app.route("/add_faq", methods=["POST"])
+
+# ==========================
+# 🔹 FAQ追加
+# ==========================
+@shift_bp.route("/add_faq", methods=["POST"])
 def add_faq():
     question = request.form["question"]
     answer = request.form["answer"]
-    conn = pymysql.connect(**DB_CONFIG)
-    with conn.cursor() as cur:
-        cur.execute("INSERT INTO faqs (question, answer) VALUES (%s, %s)", (question, answer))
-        conn.commit()
-    conn.close()
-    return redirect(url_for("manage_faq"))
 
-# 編集
-@app.route("/edit_faq/<int:id>", methods=["POST"])
+    db.session.execute(
+        text("INSERT INTO faqs (question, answer) VALUES (:q, :a)"),
+        {"q": question, "a": answer}
+    )
+    db.session.commit()
+    return redirect(url_for("shift.manage_faq"))
+
+
+# ==========================
+# 🔹 FAQ編集
+# ==========================
+@shift_bp.route("/edit_faq/<int:id>", methods=["POST"])
 def edit_faq(id):
     question = request.form["question"]
     answer = request.form["answer"]
-    conn = pymysql.connect(**DB_CONFIG)
-    with conn.cursor() as cur:
-        cur.execute("UPDATE faqs SET question=%s, answer=%s WHERE id=%s", (question, answer, id))
-        conn.commit()
-    conn.close()
-    return redirect(url_for("manage_faq"))
 
-# 削除
-@app.route("/delete_faq/<int:id>")
+    db.session.execute(
+        text("UPDATE faqs SET question=:q, answer=:a WHERE id=:id"),
+        {"q": question, "a": answer, "id": id}
+    )
+    db.session.commit()
+    return redirect(url_for("shift.manage_faq"))
+
+
+# ==========================
+# 🔹 FAQ削除
+# ==========================
+@shift_bp.route("/delete_faq/<int:id>")
 def delete_faq(id):
-    conn = pymysql.connect(**DB_CONFIG)
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM faqs WHERE id=%s", (id,))
-        conn.commit()
-    conn.close()
-    return redirect(url_for("manage_faq"))
+    db.session.execute(text("DELETE FROM faqs WHERE id=:id"), {"id": id})
+    db.session.commit()
+    return redirect(url_for("shift.manage_faq"))

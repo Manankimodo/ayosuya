@@ -1,40 +1,34 @@
+# app.py
 from flask import Flask, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-import warnings
-
-# -------------------------------------------------
-# 初期設定
-# -------------------------------------------------
-warnings.filterwarnings("ignore")
+from extensions import db  # ✅ ← dbをこちらからimport
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # セッション用
+app.secret_key = 'your_secret_key'
 
-# -------------------------------------------------
-# 🔹 MariaDB接続設定（SQLAlchemy）
-# -------------------------------------------------
+# --- DB設定 ---
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     'mysql+pymysql://root:@localhost/ayosuya?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# データベースオブジェクト作成
-db = SQLAlchemy(app)
+# --- DB初期化 ---
+db.init_app(app)
 
-# -------------------------------------------------
-# 🔹 各画面（Blueprint）の読み込み
-# -------------------------------------------------
+# --- Blueprintの読み込み ---
 from a import login_bp
-from calendar_page import calendar_bp 
+from calendar_page import calendar_bp
 from insert import insert_bp
-from chatbot import faq_bp 
+from chatbot import faq_bp
+from shift import shift_bp
 
-# Blueprint登録
+# --- Blueprint登録 ---
 app.register_blueprint(login_bp)
 app.register_blueprint(calendar_bp)
 app.register_blueprint(insert_bp)
 app.register_blueprint(faq_bp)
+app.register_blueprint(shift_bp)
 
+<<<<<<< HEAD
 
 
 # ===== MySQL接続設定 =====
@@ -119,14 +113,13 @@ for i, faq in enumerate(faqs):
 # 🔹 トップページ（ルート）
 # -------------------------------------------------
 
+=======
+# --- トップページ ---
+>>>>>>> 3bc36fa3c995d8afa972a32026decce048f13b80
 @app.route('/')
 
 def index():
-    # 最初にログイン画面へ飛ばす
     return redirect(url_for('login.login'))
 
-# -------------------------------------------------
-# 🔹 メイン起動
-# -------------------------------------------------
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)

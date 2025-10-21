@@ -12,14 +12,14 @@
         // はい → 管理者パスワード入力
         const adminPass = prompt("管理者パスワードを入力してください：");
         if (adminPass === "admin123") {
-            window.location.href = "/admin";
+            window.location.href = "/login/admin";  // ✅ Blueprint対応
         } else {
             alert("パスワードが違います。ログイン画面に戻ります。");
-            window.location.href = "/shift";
+            window.location.href = "/login/shift";  // ✅ Blueprint対応
         }
     } else {
         // いいえ → シフト確認画面へ
-        window.location.href = "/shift";
+        window.location.href = "/login/shift";  // ✅ Blueprint対応
     }
 </script>
 </body>
