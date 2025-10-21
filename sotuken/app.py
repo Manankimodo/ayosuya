@@ -28,7 +28,6 @@ app.register_blueprint(insert_bp)
 app.register_blueprint(faq_bp)
 app.register_blueprint(shift_bp)
 
-# --- トップページ ------
 @app.route('/')
 def index():
     return redirect(url_for('login.login'))
