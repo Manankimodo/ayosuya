@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+
 
 # # from flask import Flask, render_template, request, redirect, url_for
 # # from flask_mysqldb import MySQL
@@ -245,6 +247,8 @@
 #     flash("ログアウトしました。", "info")
 #     return redirect(url_for("login.login"))
 
+=======
+>>>>>>> 1a1f33c498003d89085e3ad6e11001f31665445c
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from sqlalchemy import text
 from extensions import db  # ✅ extensions から import
@@ -290,5 +294,8 @@ def shift():
 def logout():
     session.pop("user", None)
     flash("ログアウトしました。", "info")
+<<<<<<< HEAD
     return redirect(url_for("login"))
-
+=======
+    return redirect(url_for("login"))
+>>>>>>> 1a1f33c498003d89085e3ad6e11001f31665445c
