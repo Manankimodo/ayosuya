@@ -123,6 +123,35 @@ def delete_faq(id):
     conn.close()
     return redirect(url_for("manage_faq"))
 
+@app.route("/calendar")
+def calendar(): 
+    return render_template("calendar.html")
+
+@app.route("/sinsei/<date>", methods=["GET", "POST"]) 
+def sinsei(date): 
+    if request.method == "POST": name = request.form.get("name") 
+    work = request.form.get("work") 
+    time = request.form.get("time")  
+    if "~" in time: 
+        start_time, end_time = time.split("~") 
+        start_time = start_time.strip() + ":00" 
+        end_time = end_time.strip() + ":00" 
+    else: 
+        start_time = None 
+        end_time = None  
+        
+        sql = text(""" INSERT INTO calendar (ID, date, work, start_time, end_time) VALUES (:name, :date, :work, :start_time, :end_time) """) 
+        db.session.execute(sql, { 
+            "name": name, 
+            "date": date, 
+            "work": work, 
+            "start_time": start_time, 
+            "end_time": end_time }) 
+        db.session.commit()
+
+        return redirect(url_for("calendar")) 
+
+    return render_template("sinsei.html", date=date)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True)
