@@ -1,43 +1,23 @@
-# insert.py
-from flask import Blueprint, render_template, request, redirect, flash
-import mysql.connector
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from sqlalchemy import text
+from extensions import db  # ✅ ← 修正ポイント！
 
-# Blueprintの作成（名前・ルートプレフィックスを設定）
-insert_bp = Blueprint('insert', __name__, url_prefix='/insert')
+insert_bp = Blueprint("insert", __name__, url_prefix="/insert")
 
-# 🔧 MySQL接続設定
-db_config = {
-    'host': 'localhost',
-    'user': 'root',  # ← 忘れず追加！
-    'password': '',
-    'database': 'ayosuya',
-}
 
-def get_db_connection():
-    return mysql.connector.connect(**db_config)
+@insert_bp.route("/insert", methods=["GET", "POST"])
+def insert():
+    if request.method == "POST":
+        name = request.form["name"]
+        password = request.form["password"]
+        store_id = request.form["store_id"]
 
-# ------------------------------
-# 従業員登録画面
-# ------------------------------
-@insert_bp.route('/', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        name = request.form['name']
-        password = request.form['password']
-        kengen = request.form['kengen']
-        store_id = request.form['store_id']
+        sql = text("INSERT INTO account (name, password, store_id) VALUES (:name, :password, :store_id)")
+        db.session.execute(sql, {"name": name, "password": password, "store_id": store_id})
+        db.session.commit()
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO account (name, password, kengen, store_id) VALUES (%s, %s, %s, %s)",
-            (name, password, kengen, store_id)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
 
-        flash('✅ 従業員登録が完了しました！')
-        return redirect('/insert')  # ← Blueprint名に合わせる
+        flash("従業員を登録しました！", "success")
+        return redirect(url_for("login.login"))
 
-    return render_template('accountinsert.html')
+    return render_template("accountinsert.html")
