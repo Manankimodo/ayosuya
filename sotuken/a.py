@@ -1,101 +1,101 @@
 
-# from flask import Flask, render_template, request, redirect, url_for
-# from flask_mysqldb import MySQL
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text
-from sentence_transformers import SentenceTransformer
-import chromadb
-import ollama
-import warnings
+# # from flask import Flask, render_template, request, redirect, url_for
+# # from flask_mysqldb import MySQL
+# from flask import Flask, render_template, request, redirect, url_for, flash, session
+# from flask_sqlalchemy import SQLAlchemy
+# from sqlalchemy import text
+# from sentence_transformers import SentenceTransformer
+# import chromadb
+# import ollama
+# import warnings
 
 
-#--------------------------------------------------------------------------------
+# #--------------------------------------------------------------------------------
 
-# 警告を非表示
-warnings.filterwarnings("ignore")
-app = Flask(__name__)
-app.secret_key = "your_secret_key"  # ← セッションに必須（任意の文字列でOK）
-
-
-# ==========================
-# 🔹 1. MariaDB接続設定
-# ==========================
-app.config['SQLALCHEMY_DATABASE_URI'] = (
-    'mysql+pymysql://root:@localhost/ayosuya?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
-)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-# mysql = MySQL(app)
+# # 警告を非表示
+# warnings.filterwarnings("ignore")
+# app = Flask(__name__)
+# app.secret_key = "your_secret_key"  # ← セッションに必須（任意の文字列でOK）
 
 
-# 仮のユーザーデータ
-users = {
-    "user1": {"password": "1234"},
-    "admin": {"password": "adminpass"}
-}
-
-@app.route("/check")
-def check():
-    # ログイン済み確認
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    return render_template("check.html")
-
-@app.route("/admin")
-def admin():
-    return render_template ("calendar2.html")
-
-@app.route("/shift")
-def shift():
-    return render_template ("login.html")
+# # ==========================
+# # 🔹 1. MariaDB接続設定
+# # ==========================
+# app.config['SQLALCHEMY_DATABASE_URI'] = (
+#     'mysql+pymysql://root:@localhost/ayosuya?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
+# )
+# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# db = SQLAlchemy(app)
+# # mysql = MySQL(app)
 
 
-# ==========================
-# 🔹 2. Chroma + AI設定
-# ==========================
-embedder = SentenceTransformer("all-MiniLM-L6-v2")#文章を数値ベクトルに変換
+# # 仮のユーザーデータ
+# users = {
+#     "user1": {"password": "1234"},
+#     "admin": {"password": "adminpass"}
+# }
 
-chroma_client = chromadb.PersistentClient(path="./chroma_db")#類似度検索
-collection = chroma_client.get_or_create_collection("faq_collection")#コレクションを作って保存
+# @app.route("/check")
+# def check():
+#     # ログイン済み確認
+#     if "user_id" not in session:
+#         return redirect(url_for("login"))
+#     return render_template("check.html")
 
-faqs = [
-    {"q": "シフトはどうやって提出しますか？", "a": "シフト希望は毎週日曜までにLINEで提出してください。"},
-    {"q": "新人研修はどのくらいですか？", "a": "新人研修は約3日間行います。"},
-    {"q": "有給はいつ使えますか？", "a": "有給は入社6ヶ月後から取得可能です。"}
-]
+# @app.route("/admin")
+# def admin():
+#     return render_template ("calendar2.html")
 
-
-#各質問をSentenceTransformerで**埋め込み（ベクトル化）**してChromaに保存。
-for i, faq in enumerate(faqs):
-    if not collection.get(ids=[str(i)])["ids"]:  # 未登録なら
-        embedding = embedder.encode(faq["q"]).tolist()
-        collection.add(
-            ids=[str(i)],
-            embeddings=[embedding],
-            metadatas=[{"answer": faq["a"]}],
-            documents=[faq["q"]]
-        )
+# @app.route("/shift")
+# def shift():
+#     return render_template ("login.html")
 
 
+# # ==========================
+# # 🔹 2. Chroma + AI設定
+# # ==========================
+# embedder = SentenceTransformer("all-MiniLM-L6-v2")#文章を数値ベクトルに変換
+
+# chroma_client = chromadb.PersistentClient(path="./chroma_db")#類似度検索
+# collection = chroma_client.get_or_create_collection("faq_collection")#コレクションを作って保存
+
+# faqs = [
+#     {"q": "シフトはどうやって提出しますか？", "a": "シフト希望は毎週日曜までにLINEで提出してください。"},
+#     {"q": "新人研修はどのくらいですか？", "a": "新人研修は約3日間行います。"},
+#     {"q": "有給はいつ使えますか？", "a": "有給は入社6ヶ月後から取得可能です。"}
+# ]
+
+
+# #各質問をSentenceTransformerで**埋め込み（ベクトル化）**してChromaに保存。
+# for i, faq in enumerate(faqs):
+#     if not collection.get(ids=[str(i)])["ids"]:  # 未登録なら
+#         embedding = embedder.encode(faq["q"]).tolist()
+#         collection.add(
+#             ids=[str(i)],
+#             embeddings=[embedding],
+#             metadatas=[{"answer": faq["a"]}],
+#             documents=[faq["q"]]
+#         )
+
+
+# # @app.route("/")
+# # def index():
+
+
+# # ==========================
+# # 🔹 3. ルート（共通UI）
+# # ==========================
+
+# #トップページ (/) にアクセスしたとき、index.html を表示。
 # @app.route("/")
 # def index():
+#     return render_template("login.html")
 
 
-# ==========================
-# 🔹 3. ルート（共通UI）
-# ==========================
-
-#トップページ (/) にアクセスしたとき、index.html を表示。
-@app.route("/")
-def index():
-    return render_template("login.html")
-
-
-# ==========================
-# 🔹 4. ログイン機能追加
-# ==========================
-@app.route("/login", methods=["GET", "POST"])
+# # ==========================
+# # 🔹 4. ログイン機能追加
+# # ==========================
+# @app.route("/login", methods=["GET", "POST"])
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from sqlalchemy import text
