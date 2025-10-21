@@ -52,7 +52,6 @@ def shift():
     return render_template ("login.html")
 
 
-# カレンダー表示
 
 # ==========================
 # 🔹 2. Chroma + AI設定
