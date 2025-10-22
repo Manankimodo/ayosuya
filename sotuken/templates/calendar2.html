@@ -23,7 +23,7 @@
     <!-- ▼ メニュー本体 -->
     <nav class="menu" id="menu">
         <ul>
-            <li><a href="{{ url_for('login.logout') }}">ログアウト</a></li>
+            <li><a href="#" id="logout-link">ログアウト</a></li>
             <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
             <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
             <li><a href="{{ url_for('insert.insert') }}">シフト作成</a></li>
@@ -44,15 +44,26 @@
 
     <script src="{{ url_for('static', filename='calendar.js') }}"></script>
     <script>
-        // ハンバーガーメニュー開閉処理
-        const hamburger = document.getElementById("hamburger");
-        const menu = document.getElementById("menu");
+    // ハンバーガーメニュー開閉処理
+    const hamburger = document.getElementById("hamburger");
+    const menu = document.getElementById("menu");
 
-        hamburger.addEventListener("click", () => {
-            hamburger.classList.toggle("active");
-            menu.classList.toggle("open");
-        });
-    </script>
+    hamburger.addEventListener("click", () => {
+        hamburger.classList.toggle("active");
+        menu.classList.toggle("open");
+    });
+
+    // 🔹 ログアウト確認アラート
+    const logoutLink = document.getElementById("logout-link");
+    logoutLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        const confirmed = confirm("ログアウトしますか？");
+        if (confirmed) {
+            window.location.href = "{{ url_for('login.logout') }}";
+        }
+    });
+</script>
+
 </body>
 </html>
 

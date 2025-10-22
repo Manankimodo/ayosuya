@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログアウト</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/logout.css') }}">
+</head>
+<body>
+    <div class="logout-container">
+        <h2>ログアウトしました</h2>
+        <a href="{{ url_for('login.login') }}" class="btn">ログイン画面に戻る</a>
+    </div>
+</body>
+</html>

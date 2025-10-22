@@ -1,57 +1,87 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from ortools.sat.python import cp_model
 from extensions import db  # ✅ extensions から import
+import mysql.connector
+from ortools.sat.python import cp_model
 
-makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
-# データ定義
-employees = ['佐藤', '鈴木', '高橋']
-days = ['月', '火', '水', '木']
+# --- データベース接続 ---
+conn = mysql.connector.connect(
+    host="localhost",
+    user="root",          # ←あなたの設定に合わせて変更
+    password="", # ←あなたの設定に合わせて変更
+    database="ayosuya"    # ←あなたのDB名に合わせて変更
+)
+cursor = conn.cursor(dictionary=True)
 
-# 希望シフト
-requests = {
-    ('佐藤', '月'): 1,
-    ('佐藤', '火'): 1,
-    ('鈴木', '火'): 1,
-    ('鈴木', '水'): 1,
-    ('高橋', '水'): 1,
-    ('高橋', '木'): 1,
-}
+# --- calendarテーブルからデータ取得 ---
+cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
+rows = cursor.fetchall()
 
-# モデル作成
+# --- timedelta対応関数 ---
+def format_time(value):
+    """MySQL TIME型 (timedelta) を HH:MM 形式の文字列に変換"""
+    if isinstance(value, str):  # 文字列ならそのまま扱う
+        return value[:5]
+    elif hasattr(value, "seconds"):  # timedelta型なら手動で整形
+        total_seconds = value.seconds
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+    else:
+        return "??:??"
+
+# --- データ整形 ---
+employees = sorted(set(row["ID"] for row in rows))
+days = sorted(set(row["date"].strftime("%Y-%m-%d") for row in rows))
+shifts = sorted(set((format_time(row["start_time"]), format_time(row["end_time"])) for row in rows))
+
+print("従業員:", employees)
+print("日付:", days)
+print("シフト時間帯:", shifts)
+
+# --- OR-Tools モデル作成 ---
 model = cp_model.CpModel()
 
-# 各従業員 × 日 の変数（勤務するなら1、休みなら0）
-work = {}
+# 変数作成（誰がどの日にどの時間帯に入るか）
+x = {}
 for e in employees:
     for d in days:
-        work[(e, d)] = model.NewBoolVar(f'{e}_{d}')
+        for s in shifts:
+            x[(e, d, s)] = model.NewBoolVar(f"x_{e}_{d}_{s}")
 
-# 制約① 各日にはちょうど1人
+# --- 制約①：同じ日・同じ時間帯に入れるのは1人まで ---
 for d in days:
-    model.Add(sum(work[(e, d)] for e in employees) == 1)
+    for s in shifts:
+        model.Add(sum(x[(e, d, s)] for e in employees) <= 2)
 
-# 制約② 各従業員の勤務回数が均等に近いように
-min_shifts = len(days) // len(employees)
-max_shifts = min_shifts + 1
+# --- 制約②：1人は1日に1シフトまで ---
 for e in employees:
-    model.Add(sum(work[(e, d)] for d in days) >= min_shifts)
-    model.Add(sum(work[(e, d)] for d in days) <= max_shifts)
+    for d in days:
+        model.Add(sum(x[(e, d, s)] for s in shifts) <= 1)
 
-# 目的関数：希望日をできるだけ満たす（希望=1なら加点）
-model.Maximize(
-    sum(requests.get((e, d), 0) * work[(e, d)] for e in employees for d in days)
-)
+# --- 目的関数（できるだけ多くシフトを埋める） ---
+model.Maximize(sum(x[(e, d, s)] for e in employees for d in days for s in shifts))
 
-# ソルバー実行
+# --- 求解 ---
 solver = cp_model.CpSolver()
 status = solver.Solve(model)
 
-# 結果出力
-if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-    print("✅ シフト割り当て結果：\n")
+# --- 結果表示 ---
+if status == cp_model.OPTIMAL:
+    print("\n=== シフト自動作成結果 ===")
     for d in days:
-        for e in employees:
-            if solver.Value(work[(e, d)]) == 1:
-                print(f"{d}: {e}")
+        print(f"\n【{d}】")
+        for s in shifts:
+            start, end = s
+            assigned = False
+            for e in employees:
+                if solver.Value(x[(e, d, s)]) == 1:
+                    print(f" {e}：{start}〜{end}")
+                    assigned = True
+            if not assigned:
+                print(f" （{start}〜{end}）→ 空き")
 else:
-    print("❌ 解が見つかりませんでした。")
+    print("⚠️ 解が見つかりませんでした。")
+
+cursor.close()
+conn.close()
