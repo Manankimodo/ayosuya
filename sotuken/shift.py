@@ -1,56 +1,39 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request
 from sqlalchemy import text
-from extensions import db  # ← extensions.py からdbをimport
+from extensions import db
+import chromadb
+from sentence_transformers import SentenceTransformer
 
 shift_bp = Blueprint("shift", __name__, url_prefix="/shift")
 
-
 # ==========================
-# 🔹 カレンダー画面
+# 🔹 Chroma初期設定
 # ==========================
-@shift_bp.route("/")
-def calendar():
-    if "user_id" not in session:
-        return redirect(url_for("login.login"))
-    return render_template("calendar.html")
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+collection = chroma_client.get_or_create_collection("faq_collection")
 
 
-# ==========================
-# 🔹 希望申請フォーム
-# ==========================
-@shift_bp.route("/sinsei/<date>", methods=["GET", "POST"])
-def sinsei(date):
-    if request.method == "POST":
-        name = request.form.get("name")
-        work = request.form.get("work")
-        time = request.form.get("time")
+def rebuild_chroma_from_db():
+    """DB内のFAQをもとにChromaを再構築"""
+    # 一度全削除
+    all_ids = collection.get()["ids"]
+    if all_ids:  # IDがある場合のみ削除
+        collection.delete(ids=all_ids)
 
-        # 時間フォーマット変換
-        if "~" in time:
-            start_time, end_time = time.split("~")
-            start_time = start_time.strip() + ":00"
-            end_time = end_time.strip() + ":00"
-        else:
-            start_time = None
-            end_time = None
+    # DBから全FAQ取得
+    faqs = db.session.execute(text("SELECT id, question, answer FROM faqs")).fetchall()
 
-        # SQLでINSERT実行
-        sql = text("""
-            INSERT INTO calendar (ID, date, work, start_time, end_time)
-            VALUES (:name, :date, :work, :start_time, :end_time)
-        """)
-        db.session.execute(sql, {
-            "name": name,
-            "date": date,
-            "work": work,
-            "start_time": start_time,
-            "end_time": end_time
-        })
-        db.session.commit()
+    for faq in faqs:
+        embedding = embedder.encode(faq.question).tolist()
+        collection.add(
+            ids=[str(faq.id)],
+            embeddings=[embedding],
+            metadatas=[{"answer": faq.answer}],
+            documents=[faq.question]
+        )
+    print("✅ ChromaをDBの内容で更新しました")
 
-        return redirect(url_for("shift.calendar"))
-
-    return render_template("sinsei.html", date=date)
 
 
 # ==========================
@@ -70,12 +53,26 @@ def add_faq():
     question = request.form["question"]
     answer = request.form["answer"]
 
+    # DB登録
     db.session.execute(
         text("INSERT INTO faqs (question, answer) VALUES (:q, :a)"),
         {"q": question, "a": answer}
     )
     db.session.commit()
+
+    # Chromaに追加
+    # 登録したFAQのIDを取得
+    faq_id = db.session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+    embedding = embedder.encode(question).tolist()
+    collection.add(
+        ids=[str(faq_id)],
+        embeddings=[embedding],
+        documents=[question],
+        metadatas=[{"answer": answer}]
+    )
+
     return redirect(url_for("shift.manage_faq"))
+
 
 
 # ==========================
@@ -86,11 +83,23 @@ def edit_faq(id):
     question = request.form["question"]
     answer = request.form["answer"]
 
+    # DB更新
     db.session.execute(
         text("UPDATE faqs SET question=:q, answer=:a WHERE id=:id"),
         {"q": question, "a": answer, "id": id}
     )
     db.session.commit()
+
+    # Chroma更新（既存のidを削除して追加）
+    collection.delete(ids=[str(id)])
+    embedding = embedder.encode(question).tolist()
+    collection.add(
+        ids=[str(id)],
+        embeddings=[embedding],
+        documents=[question],
+        metadatas=[{"answer": answer}]
+    )
+
     return redirect(url_for("shift.manage_faq"))
 
 
@@ -99,6 +108,11 @@ def edit_faq(id):
 # ==========================
 @shift_bp.route("/delete_faq/<int:id>")
 def delete_faq(id):
+    # DB削除
     db.session.execute(text("DELETE FROM faqs WHERE id=:id"), {"id": id})
     db.session.commit()
+
+    # Chromaから削除
+    collection.delete(ids=[str(id)])
+
     return redirect(url_for("shift.manage_faq"))
