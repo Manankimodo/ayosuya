@@ -14,7 +14,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # --- DB初期化 ---
 db.init_app(app)
 
-# --- Blueprintの読み込み ---
+# --- Blueprintの読み込み ---z
 from login import login_bp
 from calendar_page import calendar_bp
 from insert import insert_bp
