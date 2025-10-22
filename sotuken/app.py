@@ -15,7 +15,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 # --- Blueprintの読み込み ---
-from a import login_bp
+from login import login_bp
 from calendar_page import calendar_bp
 from insert import insert_bp
 from chatbot import faq_bp
