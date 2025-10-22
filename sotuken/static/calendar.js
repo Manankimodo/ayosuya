@@ -28,6 +28,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
+
+        // ✅ チェックマーク表示（送信済みの日付なら）
+      if (sentDates.includes(dateStr)) {
+        const check = document.createElement("span");
+        check.textContent = "✅";
+        check.style.marginLeft = "5px";
+        cell.appendChild(check);
+      }
+
       // ✅ 日付クリックで sinsei.html に遷移
       cell.addEventListener("click", () => {
         window.location.href = `/calendar/sinsei/${dateStr}`;
