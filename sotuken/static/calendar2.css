@@ -88,3 +88,37 @@ body {
 .menu ul li a:hover {
     background-color: #555;
 }
+
+/* ===== カレンダー上部の操作ボタンと月表示 ===== */
+.calendar-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 60px; /* ハンバーガー分の余白 */
+    margin-bottom: 10px;
+}
+
+.calendar-header button {
+    background-color: #f2f2f2;
+    border: 1px solid #ccc;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.calendar-header button:hover {
+    background-color: #ddd;
+}
+
+/* ===== カレンダーセル調整 ===== */
+.calendar th {
+    background-color: #f8f8f8;
+    font-weight: bold;
+}
+
+.calendar td:hover {
+    background-color: #f0f8ff;
+    cursor: pointer;
+}
+

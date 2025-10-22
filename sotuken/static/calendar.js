@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       // ✅ 日付クリックで sinsei.html に遷移
       cell.addEventListener("click", () => {
-        window.location.href = `/sinsei/${dateStr}`;
+        window.location.href = `/calendar/sinsei/${dateStr}`;
       });
 
       row.appendChild(cell);
