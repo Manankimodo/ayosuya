@@ -4,6 +4,7 @@ from extensions import db  # ✅ extensions から import
 import mysql.connector
 from ortools.sat.python import cp_model
 
+makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
 # --- データベース接続 ---
 conn = mysql.connector.connect(
     host="localhost",
