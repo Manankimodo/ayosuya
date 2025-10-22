@@ -1,46 +1,39 @@
+# chatbot.py
 from flask import Blueprint, render_template, request
 from sentence_transformers import SentenceTransformer
 import chromadb
 import ollama
-from extensions import db
 
-faq_bp = Blueprint("faq", __name__, url_prefix="/faq")
+chatbot_bp = Blueprint("chatbot", __name__, url_prefix="/chatbot")
 
 # --- AIセットアップ ---
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection("faq_collection")
 
-faqs = [
-    {"q": "シフトはどうやって提出しますか？", "a": "シフト希望は毎週日曜までにLINEで提出してください。"},
-    {"q": "新人研修はどのくらいですか？", "a": "新人研修は約3日間行います。"},
-    {"q": "有給はいつ使えますか？", "a": "有給は入社6ヶ月後から取得可能です。"}
-]
-
-for i, faq in enumerate(faqs):
-    if not collection.get(ids=[str(i)])["ids"]:
-        embedding = embedder.encode(faq["q"]).tolist()
-        collection.add(
-            ids=[str(i)],
-            embeddings=[embedding],
-            metadatas=[{"answer": faq["a"]}],
-            documents=[faq["q"]]
-        )
-
-@faq_bp.route("/", methods=["GET", "POST"])
-def faq():
+# チャット画面ではDB更新はせず、Chromaにあるデータだけ検索
+@chatbot_bp.route("/", methods=["GET", "POST"])
+def chat():
     if request.method == "POST":
         user_question = request.form["question"]
+
+        # 類似検索
         query_emb = embedder.encode(user_question).tolist()
         results = collection.query(query_embeddings=[query_emb], n_results=2)
 
+        # FAQが一件もない場合
+        if not results["documents"] or len(results["documents"][0]) == 0:
+            return render_template("index.html", question=user_question, answer="FAQがまだ登録されていません。")
+
+        # コンテキスト生成
         context = "\n".join([
             f"Q: {d}\nA: {m['answer']}"
             for d, m in zip(results["documents"][0], results["metadatas"][0])
         ])
 
+        # Ollamaで回答生成
         prompt = f"""
-以下はFAQです。ユーザーの質問に答えてください。
+以下はFAQです。ユーザーの質問に最も関連する回答を出してください。
 
 {context}
 
