@@ -9,13 +9,14 @@
 
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-        <ul>
-            {% for category, message in messages %}
-            <li style="color:red;">{{ message }}</li>
-            {% endfor %}
-        </ul>
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">
+        {{ message }}
+      </div>
+    {% endfor %}
     {% endif %}
     {% endwith %}
+
 
     <form action="/login" method="POST">
         <label>ID：</label><input type="text" name="user_id" required><br>
