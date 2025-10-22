@@ -1,5 +1,8 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from ortools.sat.python import cp_model
+from extensions import db  # ✅ extensions から import
 
+makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
 # データ定義
 employees = ['佐藤', '鈴木', '高橋']
 days = ['月', '火', '水', '木']
