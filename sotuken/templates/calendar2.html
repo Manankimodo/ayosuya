@@ -14,10 +14,16 @@
         <div class="bar"></div>
     </div>
 
+    <h1 id="monthYear"></h1>
+    <div class="month-switch">
+        <button id="prevMonth">← 前の月</button>
+        <button id="nextMonth">次の月 →</button>
+    </div>
+
     <!-- ▼ メニュー本体 -->
     <nav class="menu" id="menu">
         <ul>
-            <li><a href="{{ url_for('login.login') }}">ログアウト</a></li>
+            <li><a href="{{ url_for('login.logout') }}">ログアウト</a></li>
             <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
             <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
         </ul>

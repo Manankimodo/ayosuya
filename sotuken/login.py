@@ -41,6 +41,8 @@ def shift():
 
 @login_bp.route("/logout")
 def logout():
-    session.pop("user", None)
+    session.clear()  # ✅ 全部削除
     flash("ログアウトしました。", "info")
-    return redirect(url_for("login"))
+    return redirect(url_for("login.login"))
+
+
