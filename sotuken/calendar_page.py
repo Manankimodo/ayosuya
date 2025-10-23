@@ -11,13 +11,17 @@ calendar_bp = Blueprint("calendar", __name__, url_prefix="/calendar")
 def calendar():
     if "user_id" not in session:
         return redirect(url_for("login.login"))
-     # ✅ データベースから送信済み日付を取得（例）
-    sql = text("SELECT date FROM calendar")
-    result = db.session.execute(sql).fetchall()
+
+    user_id = session["user_id"]
+
+    # ✅ 自分の提出した日付だけ取得
+    sql = text("SELECT date FROM calendar WHERE ID = :user_id")
+    result = db.session.execute(sql, {"user_id": user_id}).fetchall()
+
     sent_dates = [row[0].strftime("%Y-%m-%d") for row in result]
 
-    # ✅ これをテンプレートに渡す
-    return render_template("calendar.html", sent_dates=sent_dates)
+    return render_template("calendar.html", sent_dates=sent_dates or [])
+
 
 # ==========================
 # 🔹 管理者用カレンダー画面 (/calendar/admin)-----------------------------------------------------------------
@@ -56,10 +60,10 @@ def sinsei(date):
         # SQLでINSERT実行
         sql = text("""
             INSERT INTO calendar (ID, date, work, start_time, end_time)
-            VALUES (:name, :date, :work, :start_time, :end_time)
+            VALUES (:user_id, :date, :work, :start_time, :end_time)
         """)
         db.session.execute(sql, {
-            "name": name,
+            "user_id": session["user_id"],
             "date": date,
             "work": work,
             "start_time": start_time,
