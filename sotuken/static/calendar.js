@@ -70,4 +70,16 @@ document.addEventListener("DOMContentLoaded", function() {
   // <script>
   //   checkAdminAfterLogin({{ login_success|tojson }});
   // </script>
+
+ 
+
+  // 🍔 ハンバーガーメニュー開閉処理
+  const hamburger = document.getElementById("hamburger");
+  const menu = document.getElementById("menu");
+
+  hamburger.addEventListener("click", () => {
+    hamburger.classList.toggle("active");
+    menu.classList.toggle("open");
+  });
+
 });

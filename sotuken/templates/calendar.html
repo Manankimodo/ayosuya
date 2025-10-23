@@ -8,10 +8,27 @@
 </head>
 <body>
   <h1 id="monthYear"></h1>
+  <!-- 🍔 ハンバーガーボタン---------------------------------------------------------------------------- -->
+  <div class="hamburger" id="hamburger">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+  <!-------------------------------------------------------------------------------------------------------->
   <div class="month-switch">
     <button id="prevMonth">← 前の月</button>
     <button id="nextMonth">次の月 →</button>
   </div>
+
+  <!-- ▼ メニュー本体 -->
+  <nav class="menu" id="menu">
+    <ul>
+        <li><a href="#" id="logout-link">ログアウト</a></li>
+        <li><a href="{{ url_for('chatbot.chat') }}">FAQ</a></li>
+        <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
+        <li><a href="{{ url_for('insert.insert') }}">シフト作成</a></li>
+    </ul>
+</nav>
 
   <table class="calendar" id="calendar">
     <thead>
@@ -21,6 +38,7 @@
     </thead>
     <tbody id="calendar-body"></tbody>
   </table>
+
   <script id="sentDatesData" type="application/json">
     {{ sent_dates | tojson | safe }}
   </script>
@@ -32,6 +50,7 @@
   
   <!-- ✅ calendar.js は必ずこの下で読み込む -->
   <script src="{{ url_for('static', filename='calendar.js') }}"></script>
+  
   
 </body>
 </html>
