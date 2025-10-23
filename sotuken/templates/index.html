@@ -2,10 +2,21 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatbot.css') }}">
     <title>AI チャットボット</title>
 </head>
 <body>
     <h1>アルバイト教育支援チャットボット</h1>
+
+    {% if question %}
+        
+        <h3>あなたの質問：</h3>
+        <p>{{ question }}</p>
+
+        <h3>AIの回答：</h3>
+        <p>{{ answer }}</p>
+    {% endif %}
 
     <form action="/chatbot/" method="POST">
         <label>質問を入力：</label><br>
@@ -13,13 +24,5 @@
         <button type="submit">送信</button>
     </form>
 
-    {% if question %}
-        <hr>
-        <h3>あなたの質問：</h3>
-        <p>{{ question }}</p>
-
-        <h3>AIの回答：</h3>
-        <p>{{ answer }}</p>
-    {% endif %}
 </body>
 </html>
