@@ -11,7 +11,7 @@
     if (result) {
         // はい → 管理者パスワード入力
         const adminPass = prompt("管理者パスワードを入力してください：");
-        if (adminPass === "admin123") {
+        if (adminPass === "1") {
             window.location.href = "/login/admin";  // ✅ Blueprint対応
         } else {
             alert("パスワードが違います。ログイン画面に戻ります。");
