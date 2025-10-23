@@ -1,0 +1,145 @@
+
+    /* ===== 背景 ===== */
+    body {
+      font-family: "Roboto", "ヒラギノ角ゴ ProN", Meiryo, sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at top left, #0f0f0f, #1a1a1a);
+      color: #fff;
+    }
+
+    /* ===== 半透明コンテナ ===== */
+    .login-container {
+      background: rgba(0, 0, 0, 0.85);
+      padding: 50px 40px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+      text-align: center;
+      animation: fadeIn 0.8s ease-in-out;
+    }
+
+    /* ===== タイトル（Netflix風ロゴ） ===== */
+    h2 {
+      font-size: 2em;
+      margin-bottom: 30px;
+      color: #e50914;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-shadow: 0 0 15px rgba(229, 9, 20, 0.5);
+    }
+
+    /* ===== フォーム ===== */
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      text-align: left;
+    }
+
+    label {
+      font-weight: bold;
+      font-size: 0.95em;
+      color: #ddd;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      background: #333;
+      border: 1px solid #555;
+      border-radius: 5px;
+      padding: 12px;
+      color: #fff;
+      font-size: 1em;
+      transition: 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: #e50914;
+      box-shadow: 0 0 8px rgba(229, 9, 20, 0.7);
+      outline: none;
+    }
+
+    /* ===== ボタン ===== */
+    button {
+      background: #e50914;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 12px;
+      font-size: 1.1em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+      text-transform: uppercase;
+    }
+
+    button:hover {
+      background: #f6121d;
+      transform: scale(1.02);
+      box-shadow: 0 0 10px rgba(229, 9, 20, 0.8);
+    }
+
+    /* ===== フラッシュメッセージ ===== */
+    .alert {
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+      text-align: center;
+    }
+
+    .alert-success {
+      background-color: rgba(0, 255, 150, 0.15);
+      color: #00ff99;
+    }
+
+    .alert-error,
+    .alert-danger {
+      background-color: rgba(255, 60, 60, 0.2);
+      color: #ff6b6b;
+    }
+
+    /* ===== 下部リンク ===== */
+    .footer {
+      margin-top: 25px;
+      font-size: 0.85em;
+      color: #aaa;
+    }
+
+    .footer a {
+      color: #e50914;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ===== スマホ対応 ===== */
+    @media (max-width: 600px) {
+      .login-container {
+        padding: 35px 25px;
+      }
+      h2 {
+        font-size: 1.8em;
+      }
+    }
+
+    /* ===== アニメーション ===== */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
