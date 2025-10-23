@@ -66,67 +66,7 @@ button {
     cursor: pointer;
 }
 
-button:hover {
-    background-color: #45a049;
-}
-    /* ▼ ハンバーガーボタン */
-    .hamburger {
-      position: fixed;
-      top: 15px;
-      left: 15px;
-      width: 30px;
-      height: 22px;
-      cursor: pointer;
-      z-index: 1001;
-    }
 
-    .hamburger span {
-      display: block;
-      height: 4px;
-      background-color: #333;
-      margin: 5px 0;
-      border-radius: 2px;
-      transition: 0.3s;
-    }
-
-    /* ▼ メニュー本体 */
-    .menu {
-      position: fixed;
-      top: 0;
-      left: -250px;
-      width: 220px;
-      height: 100%;
-      background-color: #f8f8f8;
-      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
-      transition: left 0.3s ease;
-      z-index: 1000;
-      padding-top: 60px;
-    }
-
-    .menu.open {
-      left: 0;
-    }
-
-    .menu ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .menu li {
-      padding: 15px;
-      border-bottom: 1px solid #ccc;
-    }
-
-    .menu a {
-      color: #333;
-      text-decoration: none;
-      display: block;
-    }
-
-    .menu a:hover {
-      background-color: #ddd;
-    }
 
     /* ▼ メニュー開いたときのアニメーション */
     .hamburger.active span:nth-child(1) {
