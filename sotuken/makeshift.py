@@ -1,88 +1,110 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from ortools.sat.python import cp_model
-from extensions import db  # ✅ extensions から import
+from flask import Blueprint, render_template
 import mysql.connector
-from ortools.sat.python import cp_model
+from datetime import datetime, timedelta
 
 makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
+
 # --- データベース接続 ---
-conn = mysql.connector.connect(
-    host="localhost",
-    user="root",          # ←あなたの設定に合わせて変更
-    password="", # ←あなたの設定に合わせて変更
-    database="ayosuya"    # ←あなたのDB名に合わせて変更
-)
-cursor = conn.cursor(dictionary=True)
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="ayosuya"
+    )
 
-# --- calendarテーブルからデータ取得 ---
-cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
-rows = cursor.fetchall()
 
-# --- timedelta対応関数 ---
 def format_time(value):
-    """MySQL TIME型 (timedelta) を HH:MM 形式の文字列に変換"""
-    if isinstance(value, str):  # 文字列ならそのまま扱う
+    """MySQL TIME型 (timedelta) を HH:MM 形式に変換"""
+    if isinstance(value, str):
         return value[:5]
-    elif hasattr(value, "seconds"):  # timedelta型なら手動で整形
+    elif hasattr(value, "seconds"):
         total_seconds = value.seconds
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
-    else:
-        return "??:??"
+    return "??:??"
 
-# --- データ整形 ---
-employees = sorted(set(row["ID"] for row in rows))
-days = sorted(set(row["date"].strftime("%Y-%m-%d") for row in rows))
-shifts = sorted(set((format_time(row["start_time"]), format_time(row["end_time"])) for row in rows))
 
-print("従業員:", employees)
-print("日付:", days)
-print("シフト時間帯:", shifts)
+def find_free_times(registered_times, interval_minutes=60):
+    """1日の中の空き時間を返す"""
+    full_day_start = datetime.strptime("00:00", "%H:%M")
+    full_day_end = full_day_start + timedelta(days=1)  # 24:00扱い
 
-# --- OR-Tools モデル作成 ---
-model = cp_model.CpModel()
+    # --- 登録済み時間を datetime 型に変換 ---
+    registered = []
+    for s, e in registered_times:
+        s_time = datetime.strptime(s, "%H:%M")
+        e_time = datetime.strptime(e, "%H:%M") if e != "00:00" else full_day_end
+        registered.append((s_time, e_time))
 
-# 変数作成（誰がどの日にどの時間帯に入るか）
-x = {}
-for e in employees:
+    # --- 重複をマージ ---
+    registered.sort()
+    merged = []
+    for start, end in registered:
+        if not merged or merged[-1][1] < start:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    registered = merged
+
+    # --- 空き時間を探す ---
+    free_slots = []
+    current_time = full_day_start
+
+    for start, end in registered:
+        if current_time < start:
+            free_slots.append((current_time.strftime("%H:%M"), start.strftime("%H:%M")))
+        current_time = max(current_time, end)
+
+    # --- 最後の申請後も空きがあれば追加（〜24:00）---
+    if current_time < full_day_end:
+        free_slots.append((current_time.strftime("%H:%M"), "24:00"))
+
+    # --- 空きを指定時間で分割 ---
+    divided_slots = []
+    for s, e in free_slots:
+        st = datetime.strptime(s, "%H:%M")
+        en = full_day_end if e == "24:00" else datetime.strptime(e, "%H:%M")
+        while st < en:
+            next_t = min(st + timedelta(minutes=interval_minutes), en)
+            divided_slots.append((st.strftime("%H:%M"), next_t.strftime("%H:%M")))
+            st = next_t
+    return divided_slots
+
+
+@makeshift_bp.route("/")
+def show_free_times():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # --- カレンダーデータ取得 ---
+    cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        return render_template("make_shift.html", results=[])
+
+    # --- 日付別に整理 ---
+    days = sorted(set(r["date"].strftime("%Y-%m-%d") for r in rows))
+    results = []
+
     for d in days:
-        for s in shifts:
-            x[(e, d, s)] = model.NewBoolVar(f"x_{e}_{d}_{s}")
+        # その日のデータだけ抽出
+        registered = [
+            (format_time(r["start_time"]), format_time(r["end_time"]))
+            for r in rows if r["date"].strftime("%Y-%m-%d") == d
+        ]
 
-# --- 制約①：同じ日・同じ時間帯に入れるのは1人まで ---
-for d in days:
-    for s in shifts:
-        model.Add(sum(x[(e, d, s)] for e in employees) <= 2)
+        # 空き時間を計算
+        free_slots = find_free_times(registered, interval_minutes=60)
 
-# --- 制約②：1人は1日に1シフトまで ---
-for e in employees:
-    for d in days:
-        model.Add(sum(x[(e, d, s)] for s in shifts) <= 1)
+        results.append({
+            "date": d,
+            "registered": registered,
+            "free_slots": free_slots
+        })
 
-# --- 目的関数（できるだけ多くシフトを埋める） ---
-model.Maximize(sum(x[(e, d, s)] for e in employees for d in days for s in shifts))
-
-# --- 求解 ---
-solver = cp_model.CpSolver()
-status = solver.Solve(model)
-
-# --- 結果表示 ---
-if status == cp_model.OPTIMAL:
-    print("\n=== シフト自動作成結果 ===")
-    for d in days:
-        print(f"\n【{d}】")
-        for s in shifts:
-            start, end = s
-            assigned = False
-            for e in employees:
-                if solver.Value(x[(e, d, s)]) == 1:
-                    print(f" {e}：{start}〜{end}")
-                    assigned = True
-            if not assigned:
-                print(f" （{start}〜{end}）→ 空き")
-else:
-    print("⚠️ 解が見つかりませんでした。")
-
-cursor.close()
-conn.close()
+    return render_template("make_shift.html", results=results)
