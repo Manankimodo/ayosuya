@@ -8,18 +8,18 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background: radial-gradient(circle at top left, #0f0f0f, #1a1a1a);
+      background: radial-gradient(circle at top left, #0f0f0f93, #1a1a1a);
       color: #fff;
     }
 
     /* ===== 半透明コンテナ ===== */
     .login-container {
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(81, 78, 78, 0.85);
       padding: 50px 40px;
       border-radius: 10px;
       width: 90%;
       max-width: 400px;
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 8px 25px rgba(255, 255, 255, 0.7);
       text-align: center;
       animation: fadeIn 0.8s ease-in-out;
     }
@@ -28,10 +28,10 @@
     h2 {
       font-size: 2em;
       margin-bottom: 30px;
-      color: #e50914;
+      color: #ffffff;
       font-weight: 700;
       letter-spacing: 1px;
-      text-shadow: 0 0 15px rgba(229, 9, 20, 0.5);
+      text-shadow: 0 0 15px rgba(146, 146, 146, 0.5);
     }
 
     /* ===== フォーム ===== */
