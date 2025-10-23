@@ -63,7 +63,19 @@
     hamburger.addEventListener('click', () => {
       hamburger.classList.toggle('active');
       menu.classList.toggle('active');
+
+      // 🔹 ログアウト確認アラート
+    const logoutLink = document.getElementById("logout-link");
+    logoutLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        const confirmed = confirm("ログアウトしますか？");
+        if (confirmed) {
+            window.location.href = "{{ url_for('login.logout') }}";
+        }
     });
+    });
+
+    
   </script>
 
   <!-- ✅ calendar.js はこの下で読み込む -->
