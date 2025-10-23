@@ -1,22 +1,17 @@
-from flask import Blueprint
-from ortools.sat.python import cp_model
+from flask import Blueprint, render_template
 import mysql.connector
 from datetime import datetime, timedelta
 
 makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
 
 # --- データベース接続 ---
-conn = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="",
-    database="ayosuya"
-)
-cursor = conn.cursor(dictionary=True)
-
-# --- calendarテーブルからデータ取得 ---
-cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
-rows = cursor.fetchall()
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="ayosuya"
+    )
 
 
 def format_time(value):
@@ -31,35 +26,19 @@ def format_time(value):
     return "??:??"
 
 
-# --- 日付一覧を取得 ---
-days = sorted(set(row["date"].strftime("%Y-%m-%d") for row in rows))
-
-# --- 各日付ごとに登録済み時間を整理 ---
-calendar_data = {}
-for d in days:
-    calendar_data[d] = []
-    for r in rows:
-        if r["date"].strftime("%Y-%m-%d") == d:
-            calendar_data[d].append((format_time(r["start_time"]), format_time(r["end_time"])))
-
-
-# --- 空き時間を探す関数 ---
 def find_free_times(registered_times, interval_minutes=60):
-    """
-    registered_times: [(start, end), ...]
-    interval_minutes: 区切り分数（例：60, 30, 15）
-    """
+    """1日の中の空き時間を返す"""
     full_day_start = datetime.strptime("00:00", "%H:%M")
-    full_day_end = full_day_start + timedelta(days=1)  # ✅ 翌日の00:00を「24:00」扱い
+    full_day_end = full_day_start + timedelta(days=1)  # 24:00扱い
 
-    # --- 登録済みを時間型に変換 ---
+    # --- 登録済み時間を datetime 型に変換 ---
     registered = []
     for s, e in registered_times:
         s_time = datetime.strptime(s, "%H:%M")
         e_time = datetime.strptime(e, "%H:%M") if e != "00:00" else full_day_end
         registered.append((s_time, e_time))
 
-    # --- 重複・交差をまとめる ---
+    # --- 重複をマージ ---
     registered.sort()
     merged = []
     for start, end in registered:
@@ -69,7 +48,7 @@ def find_free_times(registered_times, interval_minutes=60):
             merged[-1][1] = max(merged[-1][1], end)
     registered = merged
 
-    # --- 空き時間を計算 ---
+    # --- 空き時間を探す ---
     free_slots = []
     current_time = full_day_start
 
@@ -78,11 +57,11 @@ def find_free_times(registered_times, interval_minutes=60):
             free_slots.append((current_time.strftime("%H:%M"), start.strftime("%H:%M")))
         current_time = max(current_time, end)
 
-    # --- 最後の申請後も空いている場合（例：18:22〜24:00） ---
+    # --- 最後の申請後も空きがあれば追加（〜24:00）---
     if current_time < full_day_end:
         free_slots.append((current_time.strftime("%H:%M"), "24:00"))
 
-    # --- 空きを指定間隔で分割 ---
+    # --- 空きを指定時間で分割 ---
     divided_slots = []
     for s, e in free_slots:
         st = datetime.strptime(s, "%H:%M")
@@ -91,29 +70,41 @@ def find_free_times(registered_times, interval_minutes=60):
             next_t = min(st + timedelta(minutes=interval_minutes), en)
             divided_slots.append((st.strftime("%H:%M"), next_t.strftime("%H:%M")))
             st = next_t
-
     return divided_slots
 
 
-# --- 結果表示 ---
-print("\n=== 空き時間表示（24:00対応版） ===")
-for d in days:
-    print(f"\n【{d}】")
+@makeshift_bp.route("/")
+def show_free_times():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-    registered = calendar_data[d]
-    if not registered:
-        print(" 終日空き")
-        continue
+    # --- カレンダーデータ取得 ---
+    cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
 
-    # 登録済み時間を表示
-    for s, e in registered:
-        print(f" 申請あり：{s}〜{e}")
+    if not rows:
+        return render_template("make_shift.html", results=[])
 
-    # 空き時間を算出（15分単位や30分単位もOK）
-    free_slots = find_free_times(registered, interval_minutes=60)
+    # --- 日付別に整理 ---
+    days = sorted(set(r["date"].strftime("%Y-%m-%d") for r in rows))
+    results = []
 
-    for s, e in free_slots:
-        print(f" 空き：{s}〜{e}")
+    for d in days:
+        # その日のデータだけ抽出
+        registered = [
+            (format_time(r["start_time"]), format_time(r["end_time"]))
+            for r in rows if r["date"].strftime("%Y-%m-%d") == d
+        ]
 
-cursor.close()
-conn.close()
+        # 空き時間を計算
+        free_slots = find_free_times(registered, interval_minutes=60)
+
+        results.append({
+            "date": d,
+            "registered": registered,
+            "free_slots": free_slots
+        })
+
+    return render_template("make_shift.html", results=results)
