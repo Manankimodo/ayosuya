@@ -1,11 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <title>ログイン</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+  <title>ログイン | ShiftSystem</title>
+
+  
 </head>
 <body>
-    <h2>ログイン</h2>
+  <div class="login-container">
+    <h2>ShiftSystem</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -17,11 +22,19 @@
     {% endif %}
     {% endwith %}
 
-
     <form action="/login" method="POST">
-        <label>ID：</label><input type="text" name="user_id" required><br>
-        <label>パスワード：</label><input type="password" name="password" required><br>
-        <button type="submit">ログイン</button>
+      <label>ID：</label>
+      <input type="text" name="user_id" required>
+
+      <label>パスワード：</label>
+      <input type="password" name="password" required>
+
+      <button type="submit">ログイン</button>
     </form>
+
+    <div class="footer">
+      <p>アカウントをお持ちでないですか？ <a href="{{ url_for('calendar.calendar') }}">登録はこちら</a></p>
+    </div>
+  </div>
 </body>
 </html>
