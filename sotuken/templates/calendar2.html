@@ -42,7 +42,10 @@
         <tbody id="calendar-body"></tbody>
     </table>
 
-
+    <!-- ✅ 追加（空配列を定義してエラー防止） -->
+    <script>
+        const sentDates = [];
+    </script>
     <script src="{{ url_for('static', filename='calendar.js') }}"></script>
     <script>
     // ハンバーガーメニュー開閉処理
