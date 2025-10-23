@@ -9,19 +9,20 @@
 <body>
     <h1>アルバイト教育支援チャットボット</h1>
 
-    <form action="/chatbot/" method="POST">
-        <label>質問を入力：</label><br>
-        <input type="text" name="question" placeholder="例：新人教育の方法は？" required>
-        <button type="submit">送信</button>
-    </form>
-
     {% if question %}
-        <hr>
+        
         <h3>あなたの質問：</h3>
         <p>{{ question }}</p>
 
         <h3>AIの回答：</h3>
         <p>{{ answer }}</p>
     {% endif %}
+
+    <form action="/chatbot/" method="POST">
+        <label>質問を入力：</label><br>
+        <input type="text" name="question" placeholder="例：新人教育の方法は？" required>
+        <button type="submit">送信</button>
+    </form>
+
 </body>
 </html>
