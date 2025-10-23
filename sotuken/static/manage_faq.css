@@ -48,9 +48,9 @@ form {
     margin-bottom: 40px;
 }
 
-/* テーブル中央寄せ */
+/* 既存FAQ一覧のテーブルを中央寄せ */
 table {
-    margin: 0 auto;
+    margin: 0 auto; /* 上下マージン0、左右マージンautoで中央寄せ */
     border-collapse: collapse;
     width: 100%;
     max-width: 800px;
@@ -80,4 +80,46 @@ a {
 
 a:hover {
     text-decoration: underline;
+}
+
+/* 入力欄共通デザイン（質問・回答） */
+input[type="text"],
+textarea {
+    width: 90%;
+    max-width: 450px;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 2px solid #000;
+    border-radius: 5px;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+
+/* 回答欄を広く */
+textarea {
+    height: 120px;
+    resize: vertical;
+}
+
+/* ボタン共通デザイン（登録・更新・削除） */
+button,
+a[href*="delete_faq"] {
+    display: inline-block;
+    padding: 10px 20px;
+    border: 2px solid #000;
+    border-radius: 6px;
+    background-color: #f8f8f8;
+    color: #000;
+    font-size: 1em;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    margin: 5px;
+}
+
+/* ホバー時の効果 */
+button:hover,
+a[href*="delete_faq"]:hover {
+    background-color: #000;
+    color: #fff;
 }
