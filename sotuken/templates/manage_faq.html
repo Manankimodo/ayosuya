@@ -16,27 +16,25 @@
         <label>回答：</label><br>
         <textarea name="answer" required></textarea><br>
         <button type="submit">登録</button>
+
+            <h2>既存FAQ一覧</h2>
+        <table border="1" cellpadding="5">
+            <tr><th>ID</th><th>質問</th><th>回答</th><th>操作</th></tr>
+            {% for faq in faqs %}
+            <tr>
+                <form action="{{ url_for('shift.edit_faq', id=faq.id) }}" method="POST">
+                    <td>{{ faq.id }}</td>
+                    <td><input type="text" name="question" value="{{ faq.question }}"></td>
+                    <td><textarea name="answer">{{ faq.answer }}</textarea></td>
+                    <td>
+                        <button type="submit">更新</button>
+                        <a href="{{ url_for('shift.delete_faq', id=faq.id) }}" onclick="return confirm('削除しますか？')">削除</a>
+                    </td>
+                </form>
+            </tr>
+            {% endfor %}
+        </table>
     </form>
-
-    <hr>
-
-    <h2>既存FAQ一覧</h2>
-    <table border="1" cellpadding="5">
-        <tr><th>ID</th><th>質問</th><th>回答</th><th>操作</th></tr>
-        {% for faq in faqs %}
-        <tr>
-            <form action="{{ url_for('shift.edit_faq', id=faq.id) }}" method="POST">
-                <td>{{ faq.id }}</td>
-                <td><input type="text" name="question" value="{{ faq.question }}"></td>
-                <td><textarea name="answer">{{ faq.answer }}</textarea></td>
-                <td>
-                    <button type="submit">更新</button>
-                    <a href="{{ url_for('shift.delete_faq', id=faq.id) }}" onclick="return confirm('削除しますか？')">削除</a>
-                </td>
-            </form>
-        </tr>
-        {% endfor %}
-    </table>
 
     <br>
     <a href="/chatbot/">← チャット画面へ戻る</a>
