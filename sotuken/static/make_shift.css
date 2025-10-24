@@ -1,0 +1,34 @@
+
+body {
+    font-family: "Hiragino Sans", sans-serif;
+    margin: 40px;
+    background: #f9f9f9;
+}
+h1 {
+    text-align: center;
+    margin-bottom: 40px;
+}
+.day-box {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+h2 {
+    color: #007bff;
+    margin-bottom: 10px;
+}
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+li {
+    padding: 5px 0;
+}
+.registered {
+    color: #333;
+}
+.free {
+    color: #28a745;
+}

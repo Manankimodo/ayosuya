@@ -1,93 +1,141 @@
 body {
     font-family: "Noto Sans JP", sans-serif;
-    background-color: #ffffff;
-    color: #000000;
+    background-color: #e5ddd5;
     margin: 0;
-    padding: 40px;
-    text-align: center;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
-/* タイトル（上部中央） */
 h1 {
-    font-size: 1.8em;
-    margin-bottom: 50px; /* フォームとの間に余白を追加 */
-    border-bottom: 2px solid #000;
-    display: block; /* ✅ ブロック表示にして横並び防止 */
-    padding-bottom: 5px;
-    width: 100%;
+    background-color: #075e54;
+    color: white;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 1.2em;
+    margin: 0;
 }
 
-/* フォーム全体（中央配置） */
-form {
-    display: block; /* ✅ inline-block → block に変更 */
-    margin: 0 auto; /* ✅ 中央寄せ */
-    text-align: left;
-    padding: 20px 25px;
-    border: 2px solid #000;
-    border-radius: 6px;
+/* 💬 チャットエリア */
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 吹き出し */
+.message {
+    max-width: 75%;
+    padding: 10px 14px;
+    margin: 8px 0;
+    border-radius: 16px;
+    word-wrap: break-word;
+    line-height: 1.5;
+}
+
+.message.user {
+    align-self: flex-end;
+    background-color: #dcf8c6;
+    border-bottom-right-radius: 0;
+}
+
+.message.bot {
+    align-self: flex-start;
     background-color: #fff;
-    width: 100%;
-    max-width: 500px;
-    margin-bottom: 40px;
+    border-bottom-left-radius: 0;
 }
 
-/* ラベル */
-label {
-    font-weight: bold;
-}
-
-/* テキスト入力欄 */
-input[type="text"] {
-    width: 100%;
+/* 入力フォーム */
+form {
+    display: flex;
     padding: 10px;
-    margin: 10px 0 20px;
-    border: 1.5px solid #000;
-    border-radius: 4px;
+    background: #f0f0f0;
+    border-top: 1px solid #ccc;
+}
+
+input[type="text"] {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
     font-size: 1em;
-    box-sizing: border-box;
-}
-
-input[type="text"]:focus {
+    margin-right: 10px;
     outline: none;
-    border-color: #000;
-    box-shadow: 0 0 3px rgba(0,0,0,0.2);
 }
 
-/* 送信ボタン */
 button {
-    background-color: #000;
-    color: #fff;
-    padding: 10px 20px;
+    background-color: #128c7e;
+    color: white;
     border: none;
-    border-radius: 4px;
+    padding: 10px 18px;
+    border-radius: 20px;
     cursor: pointer;
     font-size: 1em;
 }
 
 button:hover {
+    background-color: #0d6e63;
+}
+
+/* 🍔 ハンバーガーメニュー */
+.hamburger {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 28px;
+    height: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    z-index: 1500;
+}
+
+.hamburger span {
+    display: block;
+    height: 3px;
+    width: 100%;
+    background-color: white;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* ✨ アニメーション */
+.hamburger.active span:nth-child(1) {
+    transform: rotate(45deg) translateY(8px);
+}
+.hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+.hamburger.active span:nth-child(3) {
+    transform: rotate(-45deg) translateY(-8px);
+}
+
+/* メニュー */
+.menu {
+    position: fixed;
+    top: 0;
+    left: -220px;
+    width: 200px;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.9);
+    transition: left 0.3s ease;
+    z-index: 1000;
+    padding-top: 70px;
+}
+.menu.active {
+    left: 0;
+}
+.menu a {
+    color: #fff;
+    display: block;
+    padding: 12px 20px;
+    text-decoration: none;
+    font-size: 1.1em;
+}
+.menu a:hover {
     background-color: #333;
-}
-
-/* 区切り線 */
-hr {
-    margin: 40px auto;
-    width: 60%;
-    border: none;
-    border-top: 2px solid #000;
-}
-
-/* 質問・回答セクション */
-h3 {
-    margin-top: 20px;
-    text-align: center;
-}
-
-p {
-    border: 1.5px solid #000;
-    border-radius: 4px;
-    background-color: #fff;
-    padding: 10px 15px;
-    display: inline-block;
-    max-width: 600px;
-    text-align: left;
 }

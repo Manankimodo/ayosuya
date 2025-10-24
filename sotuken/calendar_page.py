@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request
 from sqlalchemy import text
 from extensions import db  # ✅ ← appではなく extensions から import
-
+ 
 calendar_bp = Blueprint("calendar", __name__, url_prefix="/calendar")
-
+ 
 # ==========================
 # 🔹 カレンダー画面-----------------------------------------------------------------------------------------
 # ==========================
@@ -11,18 +11,18 @@ calendar_bp = Blueprint("calendar", __name__, url_prefix="/calendar")
 def calendar():
     if "user_id" not in session:
         return redirect(url_for("login.login"))
-
+ 
     user_id = session["user_id"]
-
+ 
     # ✅ 自分の提出した日付だけ取得
     sql = text("SELECT date FROM calendar WHERE ID = :user_id")
     result = db.session.execute(sql, {"user_id": user_id}).fetchall()
-
+ 
     sent_dates = [row[0].strftime("%Y-%m-%d") for row in result]
-
+ 
     return render_template("calendar.html", sent_dates=sent_dates or [])
-
-
+ 
+ 
 # ==========================
 # 🔹 管理者用カレンダー画面 (/calendar/admin)-----------------------------------------------------------------
 # ==========================
@@ -31,7 +31,7 @@ def admin():
     if "user_id" not in session:
         return redirect(url_for("login.login"))
     return render_template("calendar2.html")
-
+ 
 # ==========================
 # 🔹 希望申請フォーム (/calendar/sinsei/<date>)--------------------------------------------------------------
 # ==========================
@@ -39,13 +39,13 @@ def admin():
 def sinsei(date):
     if "user_id" not in session:
         return redirect(url_for("login.login"))
-
+ 
     if request.method == "POST":
         name = request.form.get("name")
         work = request.form.get("work")
         start_time = request.form.get("start_time")
         end_time = request.form.get("end_time")
-
+ 
         # 入力が出勤不可なら時間はNoneにする
         if work == "0":
             start_time = None
@@ -56,7 +56,7 @@ def sinsei(date):
                 start_time += ":00"
             if end_time:
                 end_time += ":00"
-
+ 
         # SQLでINSERT実行
         sql = text("""
             INSERT INTO calendar (ID, date, work, start_time, end_time)
@@ -70,15 +70,14 @@ def sinsei(date):
             "end_time": end_time
         })
         db.session.commit()
-
+ 
         return redirect(url_for("calendar.calendar"))
-
+ 
     return render_template("sinsei.html", date=date)
-
+ 
 #-----------------------------------------------------------------------------------------------
 @calendar_bp.route("/")
 def calendarr():
     if "user_id" not in session:
         return redirect(url_for("login.login"))
-
-   
+ 
