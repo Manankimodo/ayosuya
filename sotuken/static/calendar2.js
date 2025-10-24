@@ -4,12 +4,6 @@ document.addEventListener("DOMContentLoaded", function() {
     const prevMonthBtn = document.getElementById("prevMonth");
     const nextMonthBtn = document.getElementById("nextMonth");
 
-    // --- モーダル要素を取得 ---
-    const modal = document.getElementById("modal");
-    const modalTitle = document.getElementById("modalTitle");
-    const modalBody = document.getElementById("modalBody");
-    const closeModal = document.getElementById("closeModal");
-
     let currentDate = new Date();
 
     function renderCalendar() {
@@ -23,18 +17,20 @@ document.addEventListener("DOMContentLoaded", function() {
         calendarBody.innerHTML = "";
         let row = document.createElement("tr");
 
+        // 空白セルを最初に追加
         for (let i = 0; i < firstDay.getDay(); i++) {
             row.appendChild(document.createElement("td"));
         }
 
+        // 日付セル生成
         for (let day = 1; day <= lastDay.getDate(); day++) {
             const cell = document.createElement("td");
             cell.textContent = day;
 
             const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            cell.dataset.date = dateStr;
+            cell.dataset.date = dateStr; // ✅ クリック時に使う
 
-            // ✅ チェックマーク表示
+            // ✅ チェックマーク表示（送信済みの日付なら）
             if (sentDates.includes(dateStr)) {
                 const check = document.createElement("span");
                 check.textContent = "✅";
@@ -42,20 +38,18 @@ document.addEventListener("DOMContentLoaded", function() {
                 cell.appendChild(check);
             }
 
-            // ✅ 管理者クリック処理（モーダル表示）
+            // ✅ 管理者：日付クリックで全ユーザーの登録状況を取得
             cell.addEventListener("click", async () => {
                 try {
                     const res = await fetch(`/makeshift/day/${dateStr}`);
                     if (!res.ok) throw new Error("データ取得に失敗しました");
                     const data = await res.json();
 
-                    modalTitle.textContent = `📅 ${data.date} の登録情報`;
+                    let message = `📅 ${data.date} の情報\n\n`;
 
                     if (Object.keys(data.users).length === 0) {
-                        modalBody.textContent = "登録されたデータがありません。";
+                        message += "登録なし";
                     } else {
-                        let message = "";
-
                         for (const [user, times] of Object.entries(data.users)) {
                             message += `👤 ${user}\n`;
                             for (const [s, e] of times) {
@@ -68,17 +62,11 @@ document.addEventListener("DOMContentLoaded", function() {
                         for (const [s, e] of data.free_slots) {
                             message += `  ${s}〜${e}\n`;
                         }
-
-                        modalBody.textContent = message;
                     }
 
-                    // モーダルを表示
-                    modal.style.display = "block";
-
+                    alert(message);
                 } catch (err) {
-                    modalTitle.textContent = "エラー";
-                    modalBody.textContent = err.message;
-                    modal.style.display = "block";
+                    alert("エラーが発生しました：" + err.message);
                 }
             });
 
@@ -101,16 +89,6 @@ document.addEventListener("DOMContentLoaded", function() {
     nextMonthBtn.addEventListener("click", () => {
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
-    });
-
-    // --- モーダル閉じる処理 ---
-    closeModal.addEventListener("click", () => {
-        modal.style.display = "none";
-    });
-    window.addEventListener("click", (e) => {
-        if (e.target === modal) {
-            modal.style.display = "none";
-        }
     });
 
     // ✅ 初期表示
