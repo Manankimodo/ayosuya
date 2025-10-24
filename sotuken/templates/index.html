@@ -9,8 +9,21 @@
 <body>
     <h1>アルバイト教育支援チャットボット</h1>
 
+    <!-- 🍔 ハンバーガーボタン -->
+    <div class="hamburger" id="hamburger">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+
+    <!-- メニュー -->
+    <nav class="menu" id="menu">
+        <ul>
+            <li><a href="{{ url_for('calendar.calendar') }}">📅 カレンダー</a></li>
+        </ul>
+    </nav>
+
     {% if question %}
-        
         <h3>あなたの質問：</h3>
         <p>{{ question }}</p>
 
@@ -24,5 +37,18 @@
         <button type="submit">送信</button>
     </form>
 
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const hamburger = document.getElementById('hamburger');
+            const menu = document.getElementById('menu');
+            const logoutLink = document.getElementById('logout-link');
+
+            // 🍔 メニュー開閉
+            hamburger.addEventListener('click', () => {
+                hamburger.classList.toggle('active');
+                menu.classList.toggle('active');
+            });
+        });
+    </script>
 </body>
 </html>
