@@ -70,9 +70,15 @@ document.addEventListener("DOMContentLoaded", function() {
   // <script>
   //   checkAdminAfterLogin({{ login_success|tojson }});
   // </script>
+<<<<<<< HEAD
  
  
  
+=======
+
+
+
+>>>>>>> 104ac319d3b59e2432915abd3b78ca648f1a4df0
   // 🍔 ハンバーガーメニュー開閉処理
   const hamburger = document.getElementById("hamburger");
   const menu = document.getElementById("menu");

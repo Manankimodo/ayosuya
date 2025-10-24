@@ -29,8 +29,6 @@
     <ul>
       <li><a href="#" id="logout-link">ログアウト</a></li>
       <li><a href="{{ url_for('chatbot.chat') }}">FAQ</a></li>
-      <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
-      <li><a href="{{ url_for('insert.insert') }}">シフト作成</a></li>
     </ul>
   </nav>
  
@@ -63,7 +61,11 @@
     hamburger.addEventListener('click', () => {
       hamburger.classList.toggle('active');
       menu.classList.toggle('active');
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 104ac319d3b59e2432915abd3b78ca648f1a4df0
       // 🔹 ログアウト確認アラート
     const logoutLink = document.getElementById("logout-link");
     logoutLink.addEventListener("click", function (e) {
@@ -72,6 +74,10 @@
         if (confirmed) {
             window.location.href = "{{ url_for('login.logout') }}";
         }
+<<<<<<< HEAD
+=======
+    });
+>>>>>>> 104ac319d3b59e2432915abd3b78ca648f1a4df0
     });
     });
  

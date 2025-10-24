@@ -67,7 +67,12 @@ button {
 }
  
 
+<<<<<<< HEAD
  
+=======
+
+
+>>>>>>> 104ac319d3b59e2432915abd3b78ca648f1a4df0
     /* ▼ メニュー開いたときのアニメーション */
     .hamburger.active span:nth-child(1) {
       transform: translateY(9px) rotate(45deg);
