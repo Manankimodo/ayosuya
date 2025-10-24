@@ -71,7 +71,7 @@ document.addEventListener("DOMContentLoaded", function() {
   //   checkAdminAfterLogin({{ login_success|tojson }});
   // </script>
 
- 
+
 
   // 🍔 ハンバーガーメニュー開閉処理
   const hamburger = document.getElementById("hamburger");
