@@ -1,28 +1,28 @@
-
+ 
 body {
     font-family: sans-serif;
     text-align: center;
     padding: 20px;
     background-color: #fafafa;
 }
-
+ 
 h1 {
     margin-bottom: 10px;
 }
-
+ 
 .calendar {
     width: 100%;
     max-width: 400px;
     margin: auto;
     border-collapse: collapse;
 }
-
+ 
 th {
     background-color: #4CAF50;
     color: white;
     padding: 8px;
 }
-
+ 
 td {
     border: 1px solid #ddd;
     padding: 10px;
@@ -32,31 +32,31 @@ td {
     cursor: pointer;
     transition: background-color 0.3s;
 }
-
+ 
 td:hover {
     background-color: #c8e6c9;
 }
-
+ 
 td.inactive {
     color: #bbb;
     background-color: #f5f5f5;
     cursor: default;
 }
-
+ 
 @media (max-width: 600px) {
     td {
     padding: 6px;
     height: 45px;
     }
 }
-
+ 
 .month-switch {
     display: flex;
     justify-content: center;
     gap: 10px;
     margin-bottom: 10px;
 }
-
+ 
 button {
     background-color: #4CAF50;
     color: white;
@@ -65,69 +65,9 @@ button {
     border-radius: 5px;
     cursor: pointer;
 }
+ 
 
-button:hover {
-    background-color: #45a049;
-}
-    /* ▼ ハンバーガーボタン */
-    .hamburger {
-      position: fixed;
-      top: 15px;
-      left: 15px;
-      width: 30px;
-      height: 22px;
-      cursor: pointer;
-      z-index: 1001;
-    }
-
-    .hamburger span {
-      display: block;
-      height: 4px;
-      background-color: #333;
-      margin: 5px 0;
-      border-radius: 2px;
-      transition: 0.3s;
-    }
-
-    /* ▼ メニュー本体 */
-    .menu {
-      position: fixed;
-      top: 0;
-      left: -250px;
-      width: 220px;
-      height: 100%;
-      background-color: #f8f8f8;
-      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
-      transition: left 0.3s ease;
-      z-index: 1000;
-      padding-top: 60px;
-    }
-
-    .menu.open {
-      left: 0;
-    }
-
-    .menu ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .menu li {
-      padding: 15px;
-      border-bottom: 1px solid #ccc;
-    }
-
-    .menu a {
-      color: #333;
-      text-decoration: none;
-      display: block;
-    }
-
-    .menu a:hover {
-      background-color: #ddd;
-    }
-
+ 
     /* ▼ メニュー開いたときのアニメーション */
     .hamburger.active span:nth-child(1) {
       transform: translateY(9px) rotate(45deg);
@@ -138,9 +78,9 @@ button:hover {
     .hamburger.active span:nth-child(3) {
       transform: translateY(-9px) rotate(-45deg);
     }
-
-
-
+ 
+ 
+ 
     /*---------------------------------------------------------------------------------*/
     
     /* --- Netflix風 基本スタイル --- */
@@ -156,19 +96,19 @@ button:hover {
       min-height: 100vh;
       overflow-x: hidden;
     }
-
+ 
     h1 {
       margin-top: 80px;
       font-size: 2em;
       letter-spacing: 1px;
       color: #fff;
     }
-
+ 
     /* --- 月切り替えボタン --- */
     .month-switch {
       margin: 20px 0;
     }
-
+ 
     .month-switch button {
       background-color: #e50914;
       border: none;
@@ -180,12 +120,12 @@ button:hover {
       font-weight: bold;
       transition: all 0.3s ease;
     }
-
+ 
     .month-switch button:hover {
       background-color: #f6121d;
       transform: scale(1.05);
     }
-
+ 
     /* --- カレンダー --- */
     table.calendar {
       width: 90%;
@@ -196,29 +136,29 @@ button:hover {
       overflow: hidden;
       box-shadow: 0 0 20px rgba(221, 221, 221, 0.2);
     }
-
+ 
     table.calendar th, table.calendar td {
       border: 1px solid rgba(255, 255, 255, 0.1);
       text-align: center;
       padding: 15px;
       color: #fff;
     }
-
+ 
     table.calendar th {
       background-color: #e50914;
       font-weight: bold;
     }
-
+ 
     table.calendar td {
       background-color: rgba(40, 40, 40, 0.9);
       transition: background 0.3s;
     }
-
+ 
     table.calendar td:hover {
       background-color: rgba(229, 9, 20, 0.4);
       cursor: pointer;
     }
-
+ 
     /* --- 🍔 ハンバーガーボタン --- */
     .hamburger {
       position: fixed;
@@ -232,7 +172,7 @@ button:hover {
       cursor: pointer;
       z-index: 1500;
     }
-
+ 
     .hamburger span {
       display: block;
       height: 3px;
@@ -242,7 +182,7 @@ button:hover {
       border-radius: 2px;
       transition: all 0.3s ease;
     }
-
+ 
     /* --- メニュー --- */
     nav.menu {
       position: fixed;
@@ -256,33 +196,33 @@ button:hover {
       z-index: 1000;
       padding-top: 80px;
     }
-
+ 
     nav.menu.active {
       left: 0;
     }
-
+ 
     nav.menu ul {
       list-style: none;
       padding: 0;
       margin: 0;
     }
-
+ 
     nav.menu ul li {
       margin: 20px 0;
       text-align: center;
     }
-
+ 
     nav.menu ul li a {
       color: #fff;
       text-decoration: none;
       font-size: 18px;
       transition: color 0.3s;
     }
-
+ 
     nav.menu ul li a:hover {
       color: #e50914;
     }
-
+ 
     /* --- メニュー開閉アニメーション --- */
     .hamburger.active span:nth-child(1) {
       transform: translateY(11px) rotate(45deg);
@@ -293,20 +233,22 @@ button:hover {
     .hamburger.active span:nth-child(3) {
       transform: translateY(-11px) rotate(-45deg);
     }
-
+ 
     /* --- スマホ対応 --- */
     @media (max-width: 600px) {
       h1 {
         font-size: 1.6em;
       }
-
+ 
       table.calendar td, table.calendar th {
         padding: 10px;
         font-size: 14px;
       }
-
+ 
       .month-switch button {
         padding: 8px 14px;
         margin: 5px;
       }
     }
+ 
+ 
