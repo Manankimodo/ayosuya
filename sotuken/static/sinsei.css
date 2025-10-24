@@ -1,0 +1,121 @@
+/* LINE風ミニマルスタイル（中央寄せ・コンパクト版） */
+:root {
+  --line-green: #00C300;
+  --bg: #f6f8f9;
+  --card: #ffffff;
+  --muted: #7a868e;
+  --radius: 14px;
+  --shadow: 0 6px 18px rgba(15,20,25,0.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Segoe UI", Roboto, "Noto Sans JP", "Helvetica Neue", Arial;
+  background: var(--bg);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 40px;
+}
+
+.card {
+  background: var(--card);
+  width: 360px;               /* ✅ 横幅を固定（スマホサイズ） */
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+h1 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #0b2b1a;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.hicon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--line-green), #00a400);
+  box-shadow: 0 4px 10px rgba(0,195,0,0.12);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  display: block;
+}
+
+input[type="text"],
+input[type="time"],
+select {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(10,20,30,0.06);
+  background: #fff;
+  font-size: 15px;
+  outline: none;
+  transition: 0.1s;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--line-green);
+  box-shadow: 0 0 0 3px rgba(0,195,0,0.1);
+}
+
+button {
+  background: linear-gradient(180deg, var(--line-green), #00a400);
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0,195,0,0.2);
+  transition: transform 0.1s;
+}
+
+button:hover { transform: scale(1.02); }
+
+a {
+  color: var(--line-green);
+  text-decoration: none;
+  font-size: 14px;
+  display: inline-block;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* スマホ対応 */
+@media (max-width: 400px) {
+  body {
+    padding-top: 20px;
+  }
+  .card {
+    width: 90%;
+    padding: 18px;
+  }
+}
