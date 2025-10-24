@@ -1,0 +1,184 @@
+:root {
+  --line-green: #00C300;
+  --bg: #f6f8f9;
+  --card: #ffffff;
+  --muted: #7a868e;
+  --shadow: 0 6px 18px rgba(15,20,25,0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  color: #222;
+  margin: 0;
+  padding: 30px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  padding: 0 16px;
+}
+
+h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  margin: 0 0 18px 0;
+  color: #0b2b1a;
+}
+
+h2 {
+  margin: 28px 0 12px;
+  font-size: 16px;
+  color: #0b2b1a;
+  text-align: center;
+}
+
+.hicon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--line-green), #00a400);
+}
+
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.1);
+  font-size: 15px;
+}
+
+input:focus {
+  border-color: var(--line-green);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,195,0,0.1);
+}
+
+button {
+  background: linear-gradient(180deg, var(--line-green), #00a400);
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+button:hover {
+  transform: scale(1.02);
+}
+
+a {
+  color: var(--line-green);
+  text-decoration: none;
+}
+
+/* 🔹 Flashメッセージ */
+.flash {
+  list-style: none;
+  padding: 8px;
+  margin: 0 0 12px 0;
+  background: rgba(0,195,0,0.08);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+/* 💬 吹き出し風の一覧 */
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-bubble {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border-left: 5px solid var(--line-green);
+  position: relative;
+}
+
+.chat-bubble::after {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 18px;
+  border: 8px solid transparent;
+  border-right-color: #fff;
+}
+
+.chat-bubble p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+/* 操作ボタン */
+.actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.btn-edit, .btn-delete {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.btn-edit {
+  background: rgba(0,195,0,0.1);
+  color: #0a9c0a;
+}
+
+.btn-delete {
+  background: rgba(255,0,0,0.1);
+  color: #c00;
+  border: none;
+  cursor: pointer;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.back {
+  margin-top: 14px;
+  text-align: center;
+}
+
+/* モバイル対応 */
+@media (max-width: 480px) {
+  .card {
+    padding: 16px;
+  }
+}

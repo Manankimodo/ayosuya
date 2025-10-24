@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>従業員編集</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='accountinsert.css') }}">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1><span class="hicon"></span> 従業員情報の編集</h1>
+
+      <form method="POST">
+        <label>名前</label>
+        <input type="text" name="name" value="{{ account.name }}" required>
+
+        <label>パスワード</label>
+        <input type="text" name="password" value="{{ account.password }}" required>
+
+        <label>店舗ID</label>
+        <input type="number" name="store_id" value="{{ account.store_id }}" required>
+
+        <button type="submit">更新する</button>
+      </form>
+
+      <p class="back"><a href="{{ url_for('insert.insert') }}">← 一覧に戻る</a></p>
+    </div>
+  </div>
+</body>
+</html>
