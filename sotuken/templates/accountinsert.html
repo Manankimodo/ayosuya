@@ -55,6 +55,11 @@
       <p class="muted">まだ従業員は登録されていません。</p>
       {% endfor %}
     </div>
+
+    <!-- 🔹 戻るボタン -->
+    <div class="back-container">
+      <a href="{{ url_for('calendar.admin') }}" class="btn-back">← カレンダーに戻る</a>
+    </div>
   </div>
 </body>
 </html>

@@ -1,184 +1,181 @@
-:root {
-  --line-green: #00C300;
-  --bg: #f6f8f9;
-  --card: #ffffff;
-  --muted: #7a868e;
-  --shadow: 0 6px 18px rgba(15,20,25,0.06);
-}
-
-* { box-sizing: border-box; }
-
+/* ===============================
+   🔹 全体レイアウト
+=============================== */
 body {
-  background: var(--bg);
-  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-  color: #222;
+  font-family: "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif;
+  background-color: #f5ffe8;
   margin: 0;
-  padding: 30px 0;
-  display: flex;
-  justify-content: center;
+  padding: 30px;
 }
 
 .container {
-  width: 100%;
-  max-width: 420px;
-  padding: 0 16px;
-}
-
-h1 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  margin: 0 0 18px 0;
-  color: #0b2b1a;
-}
-
-h2 {
-  margin: 28px 0 12px;
-  font-size: 16px;
-  color: #0b2b1a;
-  text-align: center;
-}
-
-.hicon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, var(--line-green), #00a400);
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .card {
-  background: var(--card);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-  border: 1px solid rgba(0,0,0,0.05);
+  background: #e6fbe6;
+  border-radius: 20px;
+  padding: 25px 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* ===============================
+   🔹 タイトル
+=============================== */
+h1 {
+  font-size: 1.6rem;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.hicon::before {
+  content: "📝";
+  margin-right: 8px;
+}
+
+/* ===============================
+   🔹 フォーム部分
+=============================== */
 form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 label {
-  font-size: 13px;
-  color: var(--muted);
+  font-weight: bold;
 }
 
-input {
-  padding: 10px 14px;
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+  padding: 10px;
+  border: 1px solid #ccc;
   border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.1);
-  font-size: 15px;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-input:focus {
-  border-color: var(--line-green);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(0,195,0,0.1);
-}
-
-button {
-  background: linear-gradient(180deg, var(--line-green), #00a400);
-  color: #fff;
-  font-weight: 600;
+/* ===============================
+   🔹 登録ボタン（フォーム専用）
+=============================== */
+form:not(.actions) button[type="submit"] {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  margin: 20px auto 0 auto;
+  background-color: #06c755; /* LINEグリーン */
+  color: white;
+  font-weight: bold;
   border: none;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 999px;
+  padding: 12px 0;
+  font-size: 15px;
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: 0.3s ease;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
 }
 
-button:hover {
-  transform: scale(1.02);
+form:not(.actions) button[type="submit"]:hover {
+  background-color: #04b24c;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
 }
 
-a {
-  color: var(--line-green);
-  text-decoration: none;
+form:not(.actions) button[type="submit"]:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 🔹 Flashメッセージ */
-.flash {
-  list-style: none;
-  padding: 8px;
-  margin: 0 0 12px 0;
-  background: rgba(0,195,0,0.08);
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-/* 💬 吹き出し風の一覧 */
+/* ===============================
+   🔹 登録済みリスト
+=============================== */
 .chat-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  margin-top: 30px;
 }
 
 .chat-bubble {
-  background: #fff;
-  border-radius: 14px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  border-left: 5px solid var(--line-green);
-  position: relative;
-}
-
-.chat-bubble::after {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 18px;
-  border: 8px solid transparent;
-  border-right-color: #fff;
-}
-
-.chat-bubble p {
-  margin: 4px 0;
-  font-size: 14px;
-}
-
-/* 操作ボタン */
-.actions {
-  margin-top: 8px;
-  display: flex;
-  gap: 8px;
-}
-
-.btn-edit, .btn-delete {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.btn-edit {
-  background: rgba(0,195,0,0.1);
-  color: #0a9c0a;
-}
-
-.btn-delete {
-  background: rgba(255,0,0,0.1);
-  color: #c00;
-  border: none;
-  cursor: pointer;
+  background: #e8ffe8;
+  border-radius: 20px;
+  padding: 15px 20px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .muted {
-  color: var(--muted);
-  font-size: 14px;
   text-align: center;
+  color: #777;
 }
 
-.back {
-  margin-top: 14px;
-  text-align: center;
+/* ===============================
+   🔹 編集・削除ボタン
+=============================== */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 
-/* モバイル対応 */
-@media (max-width: 480px) {
-  .card {
-    padding: 16px;
-  }
+.btn-edit,
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  border: none;
+  border-radius: 30px;
+  padding: 10px 20px;
+  font-size: 15px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: 0.3s ease;
+  height: 42px; /* ✅ 高さを完全統一 */
+  line-height: 1;
+}
+
+/* 編集ボタン */
+.btn-edit {
+  background-color: #4aa8ff;
+}
+
+.btn-edit:hover {
+  background-color: #3390e6;
+}
+
+/* 削除ボタン */
+.btn-delete {
+  background-color: #28c76f;
+}
+
+.btn-delete:hover {
+  background-color: #22b164;
+}
+
+/* ===============================
+   🔹 戻るボタン
+=============================== */
+.back-container {
+  text-align: center;
+  margin-top: 30px;
+}
+
+.btn-back {
+  display: inline-block;
+  background-color: #bbb;
+  color: white;
+  font-weight: bold;
+  text-decoration: none;
+  padding: 10px 25px;
+  border-radius: 30px;
+  transition: 0.3s ease;
+}
+
+.btn-back:hover {
+  background-color: #999;
 }
