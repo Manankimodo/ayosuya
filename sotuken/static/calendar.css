@@ -65,6 +65,11 @@ button {
     border-radius: 5px;
     cursor: pointer;
 }
+<<<<<<< HEAD
+
+
+=======
+>>>>>>> 755fb396fc3d330daf510f5303715506742ad07d
 
     /* ▼ メニュー開いたときのアニメーション */
     .hamburger.active span:nth-child(1) {
@@ -77,8 +82,12 @@ button {
       transform: translateY(-9px) rotate(-45deg);
     }
 
+<<<<<<< HEAD
+    
+=======
 
 
+>>>>>>> 755fb396fc3d330daf510f5303715506742ad07d
     /*---------------------------------------------------------------------------------*/
     
     /* --- Netflix風 基本スタイル --- */
@@ -247,4 +256,8 @@ button {
         padding: 8px 14px;
         margin: 5px;
       }
+<<<<<<< HEAD
     }
+=======
+    }
+>>>>>>> 755fb396fc3d330daf510f5303715506742ad07d

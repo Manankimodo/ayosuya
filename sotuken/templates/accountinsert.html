@@ -2,38 +2,59 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>従業員登録フォーム</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <title>従業員登録</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='accountinsert.css') }}">
 </head>
 <body>
-  <h2>従業員登録</h2>
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <ul>
-        {% for msg in messages %}
-          <li>{{ msg }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-  {% endwith %}
+  <div class="container">
+    <div class="card">
+      <h1><span class="hicon"></span> 従業員登録フォーム</h1>
 
-  <form method="POST">
-    <label>名前：</label>
-    <input type="text" name="name" required>
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <ul class="flash">
+            {% for msg in messages %}
+              <li>{{ msg }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
 
-    <label>パスワード：</label>
-    <input type="password" name="password" required>
+      <form method="POST">
+        <label>名前</label>
+        <input type="text" name="name" required>
 
-    <!-- <label>権限：</label>
-    <select name="kengen">
-      <option value="1">管理者</option>
-      <option value="0">一般</option>
-    </select> -->
+        <label>パスワード</label>
+        <input type="password" name="password" required>
 
-    <label>店舗ID：</label>
-    <input type="number" name="store_id" required>
+        <label>店舗ID</label>
+        <input type="number" name="store_id" required>
 
-    <button type="submit">登録する</button>
-  </form>
+        <button type="submit">登録する</button>
+      </form>
+    </div>
+
+    <h2>🧑‍💼 登録済み従業員</h2>
+
+    <div class="chat-list">
+      {% for a in accounts %}
+      <div class="chat-bubble">
+        <p><strong>ID：</strong>{{ a.id }}</p>
+        <p><strong>名前：</strong>{{ a.name }}</p>
+        <p><strong>パスワード：</strong>{{ a.password }}</p>
+        <p><strong>店舗ID：</strong>{{ a.store_id }}</p>
+
+        <div class="actions">
+          <a class="btn-edit" href="{{ url_for('insert.update', id=a.id) }}">✏️ 編集</a>
+          <form action="{{ url_for('insert.delete', id=a.id) }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn-delete" onclick="return confirm('削除しますか？')">🗑️ 削除</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted">まだ従業員は登録されていません。</p>
+      {% endfor %}
+    </div>
+  </div>
 </body>
 </html>
