@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, jsonify, request
 import mysql.connector
 from datetime import datetime, timedelta
 
@@ -108,3 +108,45 @@ def show_free_times():
         })
 
     return render_template("make_shift.html", results=results)
+
+
+#---------------------------------------------------------------------------------------------
+
+@makeshift_bp.route("/day/<date_str>")
+def get_day_details(date_str):
+    """
+    指定された日付（例: 2025-10-25）の全ユーザー登録済み時間と空き時間を返す
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT ID, date, start_time, end_time 
+        FROM calendar 
+        WHERE date = %s 
+        ORDER BY start_time
+    """, (date_str,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        return jsonify({"date": date_str, "users": [], "free_slots": []})
+
+    # --- ユーザーごとに整理 ---
+    user_dict = {}
+    for r in rows:
+        uid = r["ID"]
+        if uid not in user_dict:
+            user_dict[uid] = []
+        user_dict[uid].append((format_time(r["start_time"]), format_time(r["end_time"])))
+
+    # --- 全員分をまとめて空き時間を計算 ---
+    all_registered = [slot for slots in user_dict.values() for slot in slots]
+    free_slots = find_free_times(all_registered)
+
+    return jsonify({
+        "date": date_str,
+        "users": user_dict,
+        "free_slots": free_slots
+    })

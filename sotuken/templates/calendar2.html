@@ -13,13 +13,13 @@
         <div class="bar"></div>
         <div class="bar"></div>
     </div>
- 
+
     <h1 id="monthYear"></h1>
     <div class="month-switch">
         <button id="prevMonth">← 前の月</button>
         <button id="nextMonth">次の月 →</button>
     </div>
- 
+
     <!-- ▼ メニュー本体 -->
     <nav class="menu" id="menu">
         <ul>
@@ -29,8 +29,8 @@
             <li><a href="{{ url_for('insert.insert') }}">シフト作成</a></li>
         </ul>
     </nav>
- 
- 
+
+
     <!-- ▼ カレンダー部分 -->
     <table class="calendar" id="calendar">
         <thead>
@@ -41,7 +41,7 @@
         </thead>
         <tbody id="calendar-body"></tbody>
     </table>
- 
+
     <!-- ✅ 追加（空配列を定義してエラー防止） -->
     <script>
         const sentDates = [];
@@ -51,12 +51,12 @@
     // ハンバーガーメニュー開閉処理
     const hamburger = document.getElementById("hamburger");
     const menu = document.getElementById("menu");
- 
+
     hamburger.addEventListener("click", () => {
         hamburger.classList.toggle("active");
         menu.classList.toggle("open");
     });
- 
+
     // 🔹 ログアウト確認アラート
     const logoutLink = document.getElementById("logout-link");
     logoutLink.addEventListener("click", function (e) {
@@ -67,6 +67,7 @@
         }
     });
 </script>
- 
+
 </body>
 </html>
+
