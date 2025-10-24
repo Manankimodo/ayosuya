@@ -66,6 +66,7 @@ button {
     cursor: pointer;
 }
 
+<<<<<<< HEAD
 button:hover {
     background-color: #45a049;
 }
@@ -129,6 +130,9 @@ button:hover {
       background-color: #ddd;
     }
 
+=======
+
+>>>>>>> e9b3179a09e3a61f0ef8f45f56e8b91f1d3d9453
     /* ▼ メニュー開いたときのアニメーション */
     .hamburger.active span:nth-child(1) {
       transform: translateY(9px) rotate(45deg);
