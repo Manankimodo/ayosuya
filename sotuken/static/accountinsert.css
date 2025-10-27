@@ -1,60 +1,42 @@
-:root {
-  --line-green: #00C300;
-  --bg: #f6f8f9;
-  --card: #ffffff;
-  --muted: #7a868e;
-  --shadow: 0 6px 18px rgba(15,20,25,0.06);
-}
-
-* { box-sizing: border-box; }
-
+/* 全体設定 */
 body {
-  background: var(--bg);
-  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-  color: #222;
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  background-color: #f5f7fa;
   margin: 0;
-  padding: 30px 0;
-  display: flex;
-  justify-content: center;
+  padding: 0;
+  color: #333;
 }
 
+/* コンテナ */
 .container {
-  width: 100%;
-  max-width: 420px;
-  padding: 0 16px;
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 20px;
 }
 
-h1 {
+/* カード */
+.card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  padding: 30px;
+  margin-bottom: 40px;
+}
+
+.card h1 {
+  font-size: 1.6em;
+  color: #2c3e50;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 18px;
-  margin: 0 0 18px 0;
-  color: #0b2b1a;
 }
 
-h2 {
-  margin: 28px 0 12px;
-  font-size: 16px;
-  color: #0b2b1a;
-  text-align: center;
+.hicon::before {
+  content: "📝";
+  font-size: 1.2em;
 }
 
-.hicon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, var(--line-green), #00a400);
-}
-
-.card {
-  background: var(--card);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-  border: 1px solid rgba(0,0,0,0.05);
-}
-
+/* フォーム */
 form {
   display: flex;
   flex-direction: column;
@@ -62,123 +44,136 @@ form {
 }
 
 label {
-  font-size: 13px;
-  color: var(--muted);
+  font-weight: bold;
+  margin-bottom: 4px;
 }
 
-input {
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.1);
-  font-size: 15px;
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  transition: 0.3s;
+  font-size: 1em;
 }
 
 input:focus {
-  border-color: var(--line-green);
+  border-color: #3498db;
+  box-shadow: 0 0 4px rgba(52, 152, 219, 0.4);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(0,195,0,0.1);
 }
 
-button {
-  background: linear-gradient(180deg, var(--line-green), #00a400);
-  color: #fff;
-  font-weight: 600;
+button[type="submit"] {
+  background-color: #3498db;
+  color: white;
   border: none;
-  border-radius: 12px;
-  padding: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 1em;
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: 0.3s;
 }
 
-button:hover {
-  transform: scale(1.02);
+button[type="submit"]:hover {
+  background-color: #2980b9;
 }
 
-a {
-  color: var(--line-green);
-  text-decoration: none;
-}
-
-/* 🔹 Flashメッセージ */
+/* フラッシュメッセージ */
 .flash {
   list-style: none;
-  padding: 8px;
-  margin: 0 0 12px 0;
-  background: rgba(0,195,0,0.08);
+  padding: 10px;
+  margin: 10px 0;
+  background-color: #eaf6ff;
+  border-left: 5px solid #3498db;
   border-radius: 8px;
-  font-size: 14px;
 }
 
-/* 💬 吹き出し風の一覧 */
+.flash li {
+  margin: 4px 0;
+}
+
+/* 登録済み従業員リスト */
 .chat-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 15px;
 }
 
 .chat-bubble {
   background: #fff;
-  border-radius: 14px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  border-left: 5px solid var(--line-green);
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  padding: 15px;
   position: relative;
 }
 
-.chat-bubble::after {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 18px;
-  border: 8px solid transparent;
-  border-right-color: #fff;
-}
-
 .chat-bubble p {
-  margin: 4px 0;
-  font-size: 14px;
+  margin: 5px 0;
 }
 
-/* 操作ボタン */
 .actions {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
-.btn-edit, .btn-delete {
+/* aタグとbuttonを統一 */
+.actions a,
+.actions button {
   display: inline-block;
-  padding: 6px 10px;
+  width: 80px;
+  text-align: center;
+  padding: 8px 0;
   border-radius: 8px;
-  font-size: 13px;
-}
-
-.btn-edit {
-  background: rgba(0,195,0,0.1);
-  color: #0a9c0a;
-}
-
-.btn-delete {
-  background: rgba(255,0,0,0.1);
-  color: #c00;
-  border: none;
+  font-size: 0.9em;
   cursor: pointer;
+  transition: 0.3s;
+  text-decoration: none;
+  color: white;
+  border: none;
 }
 
+/* 編集ボタン */
+.btn-edit {
+  background-color: #27ae60;
+}
+
+.btn-edit:hover {
+  background-color: #1e8449;
+}
+
+/* 削除ボタン */
+.btn-delete {
+  background-color: #e74c3c;
+}
+
+.btn-delete:hover {
+  background-color: #c0392b;
+}
+
+/* 戻るボタン */
+.back-container {
+  text-align: center;
+  margin-top: 40px;
+}
+
+.btn-back {
+  text-decoration: none;
+  background-color: #7f8c8d;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  transition: 0.3s;
+}
+
+.btn-back:hover {
+  background-color: #95a5a6;
+}
+
+/* muted テキスト */
 .muted {
-  color: var(--muted);
-  font-size: 14px;
+  color: #999;
   text-align: center;
-}
-
-.back {
-  margin-top: 14px;
-  text-align: center;
-}
-
-/* モバイル対応 */
-@media (max-width: 480px) {
-  .card {
-    padding: 16px;
-  }
+  font-style: italic;
 }

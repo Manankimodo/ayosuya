@@ -34,7 +34,7 @@
       </form>
     </div>
 
-    <h2>🧑‍💼 登録済み従業員</h2>
+    <h2>登録済み従業員</h2>
 
     <div class="chat-list">
       {% for a in accounts %}
@@ -45,15 +45,21 @@
         <p><strong>店舗ID：</strong>{{ a.store_id }}</p>
 
         <div class="actions">
-          <a class="btn-edit" href="{{ url_for('insert.update', id=a.id) }}">✏️ 編集</a>
+          <a class="btn-edit" href="{{ url_for('insert.update', id=a.id) }}">編集</a>
           <form action="{{ url_for('insert.delete', id=a.id) }}" method="POST" style="display:inline;">
-            <button type="submit" class="btn-delete" onclick="return confirm('削除しますか？')">🗑️ 削除</button>
+            <button type="submit" class="btn-delete" onclick="return confirm('削除しますか？')">削除</button>
           </form>
         </div>
+
       </div>
       {% else %}
       <p class="muted">まだ従業員は登録されていません。</p>
       {% endfor %}
+    </div>
+
+    <!-- 🔹 戻るボタン -->
+    <div class="back-container">
+      <a href="{{ url_for('calendar.admin') }}" class="btn-back">← カレンダーに戻る</a>
     </div>
   </div>
 </body>
