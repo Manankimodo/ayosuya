@@ -1,121 +1,118 @@
-/* LINE風ミニマルスタイル（中央寄せ・コンパクト版） */
-:root {
-  --line-green: #00C300;
-  --bg: #f6f8f9;
-  --card: #ffffff;
-  --muted: #7a868e;
-  --radius: 14px;
-  --shadow: 0 6px 18px rgba(15,20,25,0.06);
-}
-
-* { box-sizing: border-box; }
-
-html, body {
-  height: 100%;
+/* 背景全体：Netflix風 */
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background-color: #000;
+  color: #fff;
+  height: 100vh;
   margin: 0;
-  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Segoe UI", Roboto, "Noto Sans JP", "Helvetica Neue", Arial;
-  background: var(--bg);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 40px;
-}
-
-.card {
-  background: var(--card);
-  width: 360px;               /* ✅ 横幅を固定（スマホサイズ） */
-  padding: 24px;
-  border-radius: 16px;
-  box-shadow: var(--shadow);
-  border: 1px solid rgba(0,0,0,0.04);
-}
-
-h1 {
-  margin: 0 0 16px 0;
-  font-size: 18px;
-  color: #0b2b1a;
   display: flex;
   align-items: center;
-  gap: 10px;
   justify-content: center;
+  overflow: hidden;
+  position: relative;
 }
 
-.hicon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, var(--line-green), #00a400);
-  box-shadow: 0 4px 10px rgba(0,195,0,0.12);
+/* 半透明の背景オーバーレイ（グラデーション風） */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom right, rgba(0,0,0,0.9), rgba(20,20,20,0.8));
+  z-index: 0;
 }
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-label {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 4px;
-  display: block;
-}
-
-input[type="text"],
-input[type="time"],
-select {
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(10,20,30,0.06);
-  background: #fff;
-  font-size: 15px;
-  outline: none;
-  transition: 0.1s;
-}
-
-input:focus,
-select:focus {
-  border-color: var(--line-green);
-  box-shadow: 0 0 0 3px rgba(0,195,0,0.1);
-}
-
-button {
-  background: linear-gradient(180deg, var(--line-green), #00a400);
-  color: white;
-  font-weight: 600;
-  font-size: 15px;
-  border: none;
+/* コンテンツエリア */
+.container {
+  position: relative;
+  z-index: 1;
+  width: 90%;
+  max-width: 420px;
+  background: rgba(25,25,25,0.9);
+  padding: 30px;
   border-radius: 12px;
-  padding: 12px;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(0,195,0,0.2);
-  transition: transform 0.1s;
-}
-
-button:hover { transform: scale(1.02); }
-
-a {
-  color: var(--line-green);
-  text-decoration: none;
-  font-size: 14px;
-  display: inline-block;
-  margin-top: 14px;
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
   text-align: center;
 }
 
-.disabled {
-  opacity: 0.5;
-  pointer-events: none;
+/* タイトル */
+.title {
+  font-size: 1.5em;
+  margin-bottom: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-/* スマホ対応 */
-@media (max-width: 400px) {
-  body {
-    padding-top: 20px;
-  }
-  .card {
-    width: 90%;
-    padding: 18px;
-  }
+/* Netflix風Nロゴ */
+.logo {
+  font-weight: bold;
+  color: #e50914;
+  font-size: 1.7em;
+  letter-spacing: -1px;
+}
+
+/* 入力フォーム全体 */
+.form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* ラベルと入力 */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+label {
+  font-size: 0.9em;
+  margin-bottom: 6px;
+  color: #bbb;
+}
+
+input, select {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background-color: #333;
+  color: #fff;
+  font-size: 1em;
+  transition: background-color 0.3s;
+}
+
+input:focus, select:focus {
+  background-color: #444;
+  outline: none;
+}
+
+/* 保存ボタン */
+.btn {
+  background-color: #e50914;
+  color: #fff;
+  border: none;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: 0.3s;
+  margin-top: 10px;
+}
+
+.btn:hover {
+  background-color: #f6121d;
+}
+
+/* 戻るリンク */
+.back-link {
+  display: inline-block;
+  margin-top: 20px;
+  color: #aaa;
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.back-link:hover {
+  color: #fff;
 }
