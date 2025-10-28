@@ -1,45 +1,113 @@
-/* ===== 全体レイアウト ===== */
+/* 全体設定 */
 body {
-    font-family: sans-serif;
+    font-family: 'Noto Sans JP', sans-serif;
+    background: rgba(81, 78, 78, 0.85);
+    color: #ffffff;
     margin: 0;
     padding: 0;
-}
-
-/* ===== カレンダー ===== */
-.calendar {
-    width: 90%;
-    margin: 80px auto;
-    border-collapse: collapse;
     text-align: center;
 }
 
-.calendar th, .calendar td {
-    border: 1px solid #ccc;
-    padding: 10px;
-    height: 60px;
+/* タイトル */
+h1 {
+    font-size: 2.2rem;
+    margin: 20px 0;
+    color: #ffffff; /* Netflixレッド */
+    letter-spacing: 2px;
 }
 
-/* ===== ハンバーガーアイコン ===== */
+/* 月切り替えボタン */
+.month-switch {
+    margin-bottom: 20px;
+}
+
+.month-switch button {
+    background-color: #e50914;
+    border: none;
+    color: white;
+    font-size: 1rem;
+    padding: 10px 20px;
+    border-radius: 6px;
+    margin: 0 10px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.month-switch button:hover {
+    background-color: #b0060f;
+}
+
+/* カレンダー */
+.calendar {
+    width: 90%;
+    margin: 0 auto;
+    border-collapse: collapse;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(81, 78, 78, 0.85);
+}
+
+.calendar th, .calendar td {
+    padding: 15px;
+    border: 1px solid #333;
+    text-align: center;
+    font-size: 1rem;
+}
+
+.calendar th {
+    background-color: #222;
+    color: #e50914;
+}
+
+.calendar td {
+    transition: background 0.3s ease;
+    cursor: pointer;
+}
+
+.calendar td:hover {
+    background-color: rgba(229, 9, 20, 0.3);
+}
+
+/* 今日の日付を強調 */
+.calendar td.today {
+    background-color: #e50914;
+    color: white;
+    font-weight: bold;
+    border-radius: 6px;
+}
+
+/* 日曜日を赤、土曜日を青 */
+.calendar th:first-child,
+.calendar td:first-child {
+    color: #ff6b6b;
+}
+
+.calendar th:last-child,
+.calendar td:last-child {
+    color: #4da6ff;
+}
+
+/* ▼ ハンバーガーメニュー */
 .hamburger {
-    position: fixed;
-    top: 15px;
-    right: 20px;
     width: 30px;
     height: 25px;
+    position: fixed;
+    top: 20px;
+    left: 20px;
     cursor: pointer;
-    z-index: 1001;
+    z-index: 1000;
 }
 
-.hamburger .bar {
+.bar {
     height: 4px;
     width: 100%;
-    background-color: #333;
+    background-color: white;
     margin: 5px 0;
     border-radius: 2px;
-    transition: 0.3s;
+    transition: all 0.3s ease;
 }
 
-/* クリック時のアニメーション */
 .hamburger.active .bar:nth-child(1) {
     transform: translateY(9px) rotate(45deg);
 }
@@ -50,22 +118,22 @@ body {
     transform: translateY(-9px) rotate(-45deg);
 }
 
-/* ===== メニュー部分 ===== */
+/* ▼ メニュー本体 */
 .menu {
     position: fixed;
     top: 0;
-    right: -200px; /* 初期は非表示 */
-    width: 200px;
+    left: -250px;
+    width: 220px;
     height: 100%;
-    background-color: #333;
-    color: white;
-    transition: right 0.3s ease;
-    padding-top: 60px;
-    z-index: 1000;
+    background-color: rgba(20, 20, 20, 0.95);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.8);
+    transition: left 0.3s ease;
+    z-index: 999;
+    padding-top: 80px;
 }
 
 .menu.open {
-    right: 0;
+    left: 0;
 }
 
 .menu ul {
@@ -74,51 +142,25 @@ body {
     margin: 0;
 }
 
-.menu ul li {
-    padding: 15px;
-    text-align: center;
+.menu li {
+    margin: 20px 0;
 }
 
-.menu ul li a {
-    color: white;
+.menu a {
     text-decoration: none;
-    display: block;
+    color: #fff;
+    font-size: 1.1rem;
+    transition: color 0.3s ease;
 }
 
-.menu ul li a:hover {
-    background-color: #555;
+.menu a:hover {
+    color: #e50914;
 }
 
-/* ===== カレンダー上部の操作ボタンと月表示 ===== */
-.calendar-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 15px;
-    margin-top: 60px; /* ハンバーガー分の余白 */
-    margin-bottom: 10px;
+/* スクロール時も固定 */
+#monthYear {
+    position: sticky;
+    top: 0;
+    padding: 10px 0;
+    z-index: 10;
 }
-
-.calendar-header button {
-    background-color: #f2f2f2;
-    border: 1px solid #ccc;
-    padding: 5px 10px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.calendar-header button:hover {
-    background-color: #ddd;
-}
-
-/* ===== カレンダーセル調整 ===== */
-.calendar th {
-    background-color: #f8f8f8;
-    font-weight: bold;
-}
-
-.calendar td:hover {
-    background-color: #f0f8ff;
-    cursor: pointer;
-}
-
