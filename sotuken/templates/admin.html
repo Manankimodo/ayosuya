@@ -24,7 +24,11 @@
               <h3>登録済み時間</h3>
               <ul>
                 {% for t in item.registered %}
-                  <li>{{ t[0] }}〜{{ t[1] }}</li>
+                  {% if t[0] and t[1] %}
+                    <li>{{ t[0] }}〜{{ t[1] }}</li>
+                  {% else %}
+                    <li class="no-work">出勤できない</li>
+                  {% endif %}
                 {% endfor %}
               </ul>
             </div>
