@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for
 import mysql.connector
 from datetime import datetime, timedelta
 
 makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
 
-# --- データベース接続 ---
+
+# === DB接続 ===
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
@@ -14,8 +15,11 @@ def get_db_connection():
     )
 
 
+# === 時刻フォーマット変換 ===
 def format_time(value):
-    """MySQL TIME型 (timedelta) を HH:MM 形式に変換"""
+    """MySQL TIME型 (timedelta or str) → HH:MM形式に変換"""
+    if not value:
+        return None
     if isinstance(value, str):
         return value[:5]
     elif hasattr(value, "seconds"):
@@ -23,103 +27,84 @@ def format_time(value):
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
-    return "??:??"
+    return None
 
 
-def find_free_times(registered_times, interval_minutes=60):
-    """1日の中の空き時間を返す"""
+# === 空き時間を計算 ===
+def find_free_times(registered_times):
+    """1日の中の空き時間を返す（出勤がない時間帯を全て出す）"""
     full_day_start = datetime.strptime("00:00", "%H:%M")
-    full_day_end = full_day_start + timedelta(days=1)  # 24:00扱い
+    full_day_end = datetime.strptime("23:59", "%H:%M")
 
-    # --- 登録済み時間を datetime 型に変換 ---
-    registered = []
+    # 登録なしなら全日空き
+    if not registered_times:
+        return [(full_day_start.strftime("%H:%M"), full_day_end.strftime("%H:%M"))]
+
+    # 文字列→datetimeに変換
+    intervals = []
     for s, e in registered_times:
-        s_time = datetime.strptime(s, "%H:%M")
-        e_time = datetime.strptime(e, "%H:%M") if e != "00:00" else full_day_end
-        registered.append((s_time, e_time))
+        try:
+            start = datetime.strptime(s, "%H:%M")
+            end = datetime.strptime(e, "%H:%M")
+            if start < end:
+                intervals.append((start, end))
+        except Exception:
+            continue
 
-    # --- 重複をマージ ---
-    registered.sort()
-    merged = []
-    for start, end in registered:
-        if not merged or merged[-1][1] < start:
-            merged.append([start, end])
+    # 時間帯をマージ
+    intervals.sort()
+    merged = [intervals[0]]
+    for start, end in intervals[1:]:
+        if start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
         else:
-            merged[-1][1] = max(merged[-1][1], end)
-    registered = merged
+            merged.append((start, end))
 
-    # --- 空き時間を探す ---
+    # 空き時間を抽出
     free_slots = []
-    current_time = full_day_start
+    current = full_day_start
+    for start, end in merged:
+        if current < start:
+            free_slots.append((current.strftime("%H:%M"), start.strftime("%H:%M")))
+        current = max(current, end)
+    if current < full_day_end:
+        free_slots.append((current.strftime("%H:%M"), "23:59"))
 
-    for start, end in registered:
-        if current_time < start:
-            free_slots.append((current_time.strftime("%H:%M"), start.strftime("%H:%M")))
-        current_time = max(current_time, end)
-
-    # --- 最後の申請後も空きがあれば追加（〜24:00）---
-    if current_time < full_day_end:
-        free_slots.append((current_time.strftime("%H:%M"), "24:00"))
-
-    # --- 空きを指定時間で分割 ---
-    divided_slots = []
-    for s, e in free_slots:
-        st = datetime.strptime(s, "%H:%M")
-        en = full_day_end if e == "24:00" else datetime.strptime(e, "%H:%M")
-        while st < en:
-            next_t = min(st + timedelta(minutes=interval_minutes), en)
-            divided_slots.append((st.strftime("%H:%M"), next_t.strftime("%H:%M")))
-            st = next_t
-    return divided_slots
+    return free_slots
 
 
-@makeshift_bp.route("/")
-def show_free_times():
+# === 管理者画面 ===
+@makeshift_bp.route("/admin")
+def show_admin_shift():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    # --- カレンダーデータ取得 ---
     cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
 
     if not rows:
-        return render_template("make_shift.html", results=[])
+        return render_template("admin.html", results=[])
 
-    # --- 日付別に整理 ---
     days = sorted(set(r["date"].strftime("%Y-%m-%d") for r in rows))
     results = []
-
     for d in days:
-        # その日のデータだけ抽出
         registered = [
             (format_time(r["start_time"]), format_time(r["end_time"]))
-            for r in rows if r["date"].strftime("%Y-%m-%d") == d
+            for r in rows
+            if r["date"].strftime("%Y-%m-%d") == d and r["start_time"] and r["end_time"]
         ]
+        free_slots = find_free_times(registered)
+        results.append({"date": d, "registered": registered, "free_slots": free_slots})
 
-        # 空き時間を計算
-        free_slots = find_free_times(registered, interval_minutes=60)
-
-        results.append({
-            "date": d,
-            "registered": registered,
-            "free_slots": free_slots
-        })
-
-    return render_template("make_shift.html", results=results)
+    return render_template("admin.html", results=results)
 
 
-#---------------------------------------------------------------------------------------------
-
+# === 日付クリック時の詳細 ===
 @makeshift_bp.route("/day/<date_str>")
 def get_day_details(date_str):
-    """
-    指定された日付（例: 2025-10-25）の全ユーザー登録済み時間と空き時間を返す
-    """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT ID, date, start_time, end_time 
         FROM calendar 
@@ -131,18 +116,23 @@ def get_day_details(date_str):
     conn.close()
 
     if not rows:
-        return jsonify({"date": date_str, "users": [], "free_slots": []})
+        return jsonify({"date": date_str, "users": {}, "free_slots": [("00:00", "23:59")]})
 
-    # --- ユーザーごとに整理 ---
     user_dict = {}
     for r in rows:
         uid = r["ID"]
         if uid not in user_dict:
             user_dict[uid] = []
-        user_dict[uid].append((format_time(r["start_time"]), format_time(r["end_time"])))
 
-    # --- 全員分をまとめて空き時間を計算 ---
-    all_registered = [slot for slots in user_dict.values() for slot in slots]
+        if r["start_time"] and r["end_time"]:
+            user_dict[uid].append((format_time(r["start_time"]), format_time(r["end_time"])))
+        else:
+            user_dict[uid].append(("出勤できない", ""))
+
+    # 全ユーザーの登録時間（出勤できないを除外）
+    all_registered = [
+        slot for slots in user_dict.values() for slot in slots if slot[0] != "出勤できない"
+    ]
     free_slots = find_free_times(all_registered)
 
     return jsonify({
@@ -151,10 +141,12 @@ def get_day_details(date_str):
         "free_slots": free_slots
     })
 
+
+# === シフト自動作成 ===
 @makeshift_bp.route("/generate", methods=["GET", "POST"])
 def generate_shift():
-    """
-    仮のシフト自動作成API（あとでロジックを追加）
-    """
-    return render_template("admin.html")
-
+    if request.method == "POST":
+        print("🧮 シフトを自動作成しました！")
+        return jsonify({"status": "ok", "redirect": url_for('makeshift.show_admin_shift')})
+    else:
+        return redirect(url_for('makeshift.show_admin_shift'))
