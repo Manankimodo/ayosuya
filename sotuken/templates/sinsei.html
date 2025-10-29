@@ -1,21 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>希望入力</title>
+  <title>希望入力 | ShiftForm</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='sinsei.css') }}">
 </head>
 <body>
-  <div class="card">
-    <h1><span class="hicon"></span> {{ date }} の希望入力</h1>
+  <div class="overlay"></div>
 
-    <form method="POST">
-      <div>
+  <div class="container">
+    <h1 class="title"><span class="logo">N</span>{{ date }} の希望入力</h1>
+
+    <form method="POST" class="form-card">
+      <div class="form-group">
         <label>ID</label>
         <input type="text" name="name" required>
       </div>
 
-      <div>
+      <div class="form-group">
         <label>出勤有無</label>
         <select name="work" onchange="toggleTimeInputs()">
           <option value="1">○ 出勤可能</option>
@@ -23,20 +25,20 @@
         </select>
       </div>
 
-      <div>
+      <div class="form-group">
         <label>開始時間</label>
         <input type="time" name="start_time" required>
       </div>
 
-      <div>
+      <div class="form-group">
         <label>終了時間</label>
         <input type="time" name="end_time" required>
       </div>
 
-      <button type="submit">保存</button>
+      <button type="submit" class="btn">保存</button>
     </form>
 
-    <a href="{{ url_for('calendar.calendar') }}">カレンダーに戻る</a>
+    <a href="{{ url_for('calendar.calendar') }}" class="back-link">← カレンダーに戻る</a>
   </div>
 
   <script src="{{ url_for('static', filename='shinsei.js') }}"></script>

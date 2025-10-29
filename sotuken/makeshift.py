@@ -150,3 +150,11 @@ def get_day_details(date_str):
         "users": user_dict,
         "free_slots": free_slots
     })
+
+@makeshift_bp.route("/generate", methods=["GET", "POST"])
+def generate_shift():
+    """
+    仮のシフト自動作成API（あとでロジックを追加）
+    """
+    return render_template("admin.html")
+

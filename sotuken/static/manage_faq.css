@@ -1,36 +1,36 @@
 /* 全体のラッパー */
 body {
     font-family: "Noto Sans JP", sans-serif;
-    background-color: #ffffff;
-    color: #000000;
+    background-color: #3c3c3c; /* 背景をダークグレーに */
+    color: #fff; /* 文字を白に */
     margin: 0;
     padding: 0;
-
     display: flex;
-    justify-content: center;  /* 横方向中央 */
-    align-items: center;      /* 縦方向中央 */
+    justify-content: center;
+    align-items: center;
     flex-direction: column;
-    min-height: 100vh;        /* 画面高さ以上はスクロールさせる */
+    min-height: 100vh;
     text-align: center;
 }
 
-/* ページ全体を包むコンテナ */
+/* コンテナ */
 .container {
     width: 90%;
-    max-width: 900px;   /* 最大幅 */
+    max-width: 900px;
     display: flex;
     flex-direction: column;
-    align-items: center; /* 子要素も中央揃え */
+    align-items: center;
 }
 
 /* タイトル */
 h1 {
     font-size: 1.8em;
     margin-bottom: 40px;
-    border-bottom: 2px solid #000;
+    border-bottom: 2px solid #e53935; /* 赤ライン */
     padding-bottom: 5px;
     width: 100%;
     text-align: center;
+    color: #fff;
 }
 
 /* フォーム全体 */
@@ -40,27 +40,37 @@ form {
     align-items: center;
     text-align: left;
     padding: 20px 25px;
-    border: 2px solid #000;
+    border: 2px solid #555;
     border-radius: 6px;
-    background-color: #fff;
+    background-color: #444; /* 少し明るいグレー */
     width: 100%;
     max-width: 500px;
     margin-bottom: 40px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
 }
 
-/* 既存FAQ一覧のテーブルを中央寄せ */
+/* テーブル */
 table {
-    margin: 0 auto; /* 上下マージン0、左右マージンautoで中央寄せ */
+    margin: 0 auto;
     border-collapse: collapse;
     width: 100%;
     max-width: 800px;
-    text-align: left;
-    margin-bottom: 40px;
+    background-color: #444;
+    color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
 }
 
 th, td {
     padding: 10px;
-    border: 1px solid #000;
+    border: 1px solid #666;
+    text-align: left;
+}
+
+/* テーブルヘッダー */
+th {
+    background-color: #222;
+    color: #ffffff;
 }
 
 /* 区切り線 */
@@ -68,48 +78,39 @@ hr {
     margin: 40px auto;
     width: 60%;
     border: none;
-    border-top: 2px solid #000;
+    border-top: 2px solid #e53935;
 }
 
-/* リンク中央揃え */
-a {
-    text-decoration: none;
-    color: #0000EE;
-    margin-bottom: 20px;
-}
-
-a:hover {
-    text-decoration: underline;
-}
-
-/* 入力欄共通デザイン（質問・回答） */
+/* 入力欄 */
 input[type="text"],
 textarea {
     width: 90%;
     max-width: 450px;
     padding: 10px;
     margin-bottom: 15px;
-    border: 2px solid #000;
+    border: 2px solid #666;
     border-radius: 5px;
     font-size: 1em;
+    background-color: #333;
+    color: #fff;
     box-sizing: border-box;
 }
 
-/* 回答欄を広く */
+/* 回答欄 */
 textarea {
     height: 120px;
     resize: vertical;
 }
 
-/* ボタン共通デザイン（登録・更新・削除） */
+/* ボタン共通デザイン */
 button,
 a[href*="delete_faq"] {
     display: inline-block;
     padding: 10px 20px;
-    border: 2px solid #000;
+    border: none;
     border-radius: 6px;
-    background-color: #f8f8f8;
-    color: #000;
+    background-color: #e53935; /* 赤 */
+    color: #fff;
     font-size: 1em;
     cursor: pointer;
     text-decoration: none;
@@ -117,9 +118,19 @@ a[href*="delete_faq"] {
     margin: 5px;
 }
 
-/* ホバー時の効果 */
+/* ホバー時 */
 button:hover,
 a[href*="delete_faq"]:hover {
-    background-color: #000;
-    color: #fff;
+    background-color: #b71c1c; /* 濃い赤 */
+}
+
+/* 戻るリンク */
+a[href="/calendar/admin"] {
+    color: #e53935;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+a[href="/calendar/admin"]:hover {
+    text-decoration: underline;
 }
