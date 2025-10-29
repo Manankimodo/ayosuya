@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for
 import mysql.connector
 from datetime import datetime, timedelta
 
@@ -73,88 +73,74 @@ def find_free_times(registered_times, interval_minutes=60):
     return divided_slots
 
 
-@makeshift_bp.route("/")
-def show_free_times():
+# ---------------------------------------------------------------------
+# 管理者画面（希望時間と空き時間の一覧）
+# ---------------------------------------------------------------------
+@makeshift_bp.route("/admin")
+def show_admin_shift():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    # --- カレンダーデータ取得 ---
     cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
 
     if not rows:
-        return render_template("make_shift.html", results=[])
+        print("⚠️ rows が空です")
+        return render_template("admin.html", results=[])
 
-    # --- 日付別に整理 ---
     days = sorted(set(r["date"].strftime("%Y-%m-%d") for r in rows))
     results = []
-
     for d in days:
-        # その日のデータだけ抽出
         registered = [
             (format_time(r["start_time"]), format_time(r["end_time"]))
             for r in rows if r["date"].strftime("%Y-%m-%d") == d
         ]
-
-        # 空き時間を計算
         free_slots = find_free_times(registered, interval_minutes=60)
-
         results.append({
             "date": d,
             "registered": registered,
             "free_slots": free_slots
         })
 
-    return render_template("make_shift.html", results=results)
+    print("✅ results生成完了 件数:", len(results))
+    return render_template("admin.html", results=results)
 
 
-#---------------------------------------------------------------------------------------------
-
-@makeshift_bp.route("/day/<date_str>")
-def get_day_details(date_str):
-    """
-    指定された日付（例: 2025-10-25）の全ユーザー登録済み時間と空き時間を返す
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT ID, date, start_time, end_time 
-        FROM calendar 
-        WHERE date = %s 
-        ORDER BY start_time
-    """, (date_str,))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    if not rows:
-        return jsonify({"date": date_str, "users": [], "free_slots": []})
-
-    # --- ユーザーごとに整理 ---
-    user_dict = {}
-    for r in rows:
-        uid = r["ID"]
-        if uid not in user_dict:
-            user_dict[uid] = []
-        user_dict[uid].append((format_time(r["start_time"]), format_time(r["end_time"])))
-
-    # --- 全員分をまとめて空き時間を計算 ---
-    all_registered = [slot for slots in user_dict.values() for slot in slots]
-    free_slots = find_free_times(all_registered)
-
-    return jsonify({
-        "date": date_str,
-        "users": user_dict,
-        "free_slots": free_slots
-    })
-
+# ---------------------------------------------------------------------
+# シフト自動作成API
+# ---------------------------------------------------------------------
 @makeshift_bp.route("/generate", methods=["GET", "POST"])
 def generate_shift():
-    """
-    仮のシフト自動作成API（あとでロジックを追加）
-    """
-    return render_template("admin.html")
+    if request.method == "POST":
+        print("🧮 シフトを自動作成しました！")
+        return jsonify({"status": "ok", "redirect": url_for('makeshift.show_admin_shift')})
+    else:
+        # GETは /admin に直接リダイレクト
+        return redirect(url_for('makeshift.show_admin_shift'))
 
+
+# ---------------------------------------------------------------------
+# イベント表示用API（今はコメントアウトでOK）
+# ---------------------------------------------------------------------
+# @makeshift_bp.route("/events")
+# def get_events():
+#     conn = get_db_connection()
+#     cursor = conn.cursor(dictionary=True)
+#     cursor.execute("""
+#         SELECT date, start_time, end_time, ID
+#         FROM calendar
+#         ORDER BY date, start_time
+#     """)
+#     rows = cursor.fetchall()
+#     cursor.close()
+#     conn.close()
+
+#     events = []
+#     for r in rows:
+#         events.append({
+#             "title": f"ID: {r['ID']}",
+#             "start": f"{r['date']}T{r['start_time']}",
+#             "end": f"{r['date']}T{r['end_time']}"
+#         })
+#     return jsonify(events)
