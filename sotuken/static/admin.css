@@ -1,22 +1,154 @@
-#free-time-section {
-  margin-top: 30px;
-  padding: 10px;
-  background: #f8fafc;
-  border-radius: 10px;
+/* === 全体レイアウト === */
+body {
+  font-family: "Noto Sans JP", sans-serif;
+  background-color: #f8f9fa;
+  margin: 0;
+  padding: 0;
+  color: #333;
 }
 
-.day-box {
-  border: 1px solid #ccc;
+/* === ヘッダー === */
+header {
+  background-color: #007bff;
+  color: white;
+  text-align: center;
+  padding: 1rem 0;
+  font-size: 1.4rem;
+  letter-spacing: 1px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* === コンテナ === */
+.container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+
+/* === 日付カード === */
+.day-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: transform 0.2s ease;
+}
+
+.day-card:hover {
+  transform: translateY(-3px);
+}
+
+/* === 日付タイトル === */
+.day-card h2 {
+  font-size: 1.2rem;
+  color: #007bff;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 0.3rem;
+}
+
+/* === 登録・空き時間リスト === */
+.time-section {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.time-list {
+  width: 48%;
+}
+
+.time-list h3 {
+  font-size: 1rem;
+  border-left: 4px solid #007bff;
+  padding-left: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.time-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.time-list li {
+  background-color: #f1f3f5;
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+/* === ボタン === */
+#make-shift-btn {
+  display: block;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.2rem;
   border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 15px;
-  background: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  margin: 2rem auto;
+  transition: 0.2s;
 }
 
-.registered {
-  color: #ef4444; /* 赤 */
+#make-shift-btn:hover {
+  background-color: #218838;
 }
 
-.free {
-  color: #16a34a; /* 緑 */
+#make-shift-btn:active {
+  transform: scale(0.98);
 }
+
+/* === レスポンシブ対応 === */
+@media (max-width: 600px) {
+  .time-section {
+    flex-direction: column;
+  }
+  .time-list {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+}
+
+/* === コントロールボタン === */
+#controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem auto;
+}
+
+#controls button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.4rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+#controls button:hover {
+  opacity: 0.85;
+}
+
+#make-shift-btn {
+  background-color: #28a745; /* 緑色 */
+}
+
+#make-shift-btn:hover {
+  background-color: #218838;
+}
+
+#back-btn {
+  background-color: #6c757d; /* グレー */
+}
+
+#back-btn:hover {
+  background-color: #5a6268;
+}
+

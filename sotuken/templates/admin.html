@@ -2,56 +2,47 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>管理者画面</title>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+  <title>管理シフト画面</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+  <script src="{{ url_for('static', filename='js/admin.js') }}" defer></script>
 </head>
 <body>
-  <h1>管理者ページ</h1>
-
+  <header>希望シフト一覧</header>
+    <!-- ✅ ボタンコントロール部分 -->
   <div id="controls">
     <button id="make-shift-btn">🗓️ シフト自動作成</button>
-    <button onclick="location.href='/calendar/admin'">👥 前のページへ戻る</button>
+    <button id="back-btn" onclick="location.href='/calendar/admin'">👥 前のページへ戻る</button>
   </div>
 
-  <!-- 🗓️ シフト空き時間一覧をここに表示 -->
-  <section id="free-time-section">
-    <h2>シフト空き時間一覧</h2>
-
+  <div class="container">
     {% if results %}
-      {% for day in results %}
-        <div class="day-box">
-          <h3>{{ day.date }}</h3>
+      {% for item in results %}
+        <div class="day-card">
+          <h2>{{ item.date }}</h2>
+          <div class="time-section">
+            <div class="time-list">
+              <h3>登録済み時間</h3>
+              <ul>
+                {% for t in item.registered %}
+                  <li>{{ t[0] }}〜{{ t[1] }}</li>
+                {% endfor %}
+              </ul>
+            </div>
 
-          <h4>申請あり：</h4>
-          <ul>
-            {% for s, e in day.registered %}
-              <li class="registered">🕒 {{ s }}〜{{ e }}</li>
-            {% else %}
-              <li>（登録なし）</li>
-            {% endfor %}
-          </ul>
-
-          <h4>空き時間：</h4>
-          <ul>
-            {% for s, e in day.free_slots %}
-              <li class="free">✅ {{ s }}〜{{ e }}</li>
-            {% else %}
-              <li>（終日埋まり）</li>
-            {% endfor %}
-          </ul>
+            <div class="time-list">
+              <h3>空き時間</h3>
+              <ul>
+                {% for f in item.free_slots %}
+                  <li>{{ f[0] }}〜{{ f[1] }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
         </div>
       {% endfor %}
     {% else %}
       <p>データがありません。</p>
     {% endif %}
-  </section>
-
-  <!-- カレンダー表示領域（必要ならここに FullCalendar） -->
-  <div id="calendar"></div>
-
-  <!-- ✅ JS読み込み -->
-  <script src="{{ url_for('static', filename='admin.js') }}"></script>
+  </div>
 </body>
 </html>
