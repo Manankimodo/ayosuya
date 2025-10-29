@@ -118,6 +118,44 @@ def generate_shift():
     else:
         # GETは /admin に直接リダイレクト
         return redirect(url_for('makeshift.show_admin_shift'))
+    
+# ---------------------------------------------------------------------
+# 日付ごとの登録状況を返すAPI（カレンダーで日付クリック時に使用）
+# ---------------------------------------------------------------------
+@makeshift_bp.route("/day/<date_str>")
+def get_day_details(date_str):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # 指定日付の全登録データを取得
+    cursor.execute("""
+        SELECT ID, start_time, end_time
+        FROM calendar
+        WHERE date = %s
+        ORDER BY start_time
+    """, (date_str,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    # 結果をユーザーごとにまとめる
+    users = {}
+    for r in rows:
+        uid = r["ID"]
+        st = format_time(r["start_time"])
+        et = format_time(r["end_time"])
+        users.setdefault(uid, []).append((st, et))
+
+    # 登録済み時間を全て集めて空き時間を計算
+    registered_times = [(format_time(r["start_time"]), format_time(r["end_time"])) for r in rows]
+    free_slots = find_free_times(registered_times)
+
+    return jsonify({
+        "date": date_str,
+        "users": users,
+        "free_slots": free_slots
+    })
+
 
 
 # ---------------------------------------------------------------------
