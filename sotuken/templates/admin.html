@@ -14,8 +14,44 @@
     <button id="make-shift-btn">🗓️ シフト自動作成</button>
     <button onclick="location.href='/calendar/admin'">👥 前のページへ戻る</button>
   </div>
+
+  <!-- 🗓️ シフト空き時間一覧をここに表示 -->
+  <section id="free-time-section">
+    <h2>シフト空き時間一覧</h2>
+
+    {% if results %}
+      {% for day in results %}
+        <div class="day-box">
+          <h3>{{ day.date }}</h3>
+
+          <h4>申請あり：</h4>
+          <ul>
+            {% for s, e in day.registered %}
+              <li class="registered">🕒 {{ s }}〜{{ e }}</li>
+            {% else %}
+              <li>（登録なし）</li>
+            {% endfor %}
+          </ul>
+
+          <h4>空き時間：</h4>
+          <ul>
+            {% for s, e in day.free_slots %}
+              <li class="free">✅ {{ s }}〜{{ e }}</li>
+            {% else %}
+              <li>（終日埋まり）</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>データがありません。</p>
+    {% endif %}
+  </section>
+
+  <!-- カレンダー表示領域（必要ならここに FullCalendar） -->
   <div id="calendar"></div>
-  <!-- ✅ calendar.js はこの下で読み込む -->
+
+  <!-- ✅ JS読み込み -->
   <script src="{{ url_for('static', filename='admin.js') }}"></script>
 </body>
 </html>

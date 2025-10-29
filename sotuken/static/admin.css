@@ -1,27 +1,22 @@
-body {
-    font-family: "Segoe UI", "Hiragino Sans", sans-serif;
-    margin: 40px;
+#free-time-section {
+  margin-top: 30px;
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 10px;
 }
-h1 {
-    color: #333;
-    margin-bottom: 10px;
+
+.day-box {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 15px;
+  background: #fff;
 }
-#controls {
-    margin-bottom: 20px;
+
+.registered {
+  color: #ef4444; /* 赤 */
 }
-button {
-    background-color: #3B82F6;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-}
-button:hover {
-    background-color: #2563EB;
-}
-#calendar {
-    max-width: 900px;
-    margin: 0 auto;
+
+.free {
+  color: #16a34a; /* 緑 */
 }

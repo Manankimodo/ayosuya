@@ -1,29 +1,24 @@
 document.addEventListener('DOMContentLoaded', function() {
-// --- カレンダー初期化 ---
-const calendarEl = document.getElementById('calendar');
-const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
-    locale: 'ja',
-    height: 'auto',
-    events: '/makeshift/events',  // Flask側から取得
-    eventColor: '#3B82F6',
-    eventDisplay: 'block',
-    eventClick: function(info) {
-    alert(info.event.title + "： " + info.event.startStr + "〜" + info.event.endStr);
-    }
-});
-calendar.render();
+  console.log("✅ admin.js loaded"); // ← これ追加
+  const btn = document.getElementById('make-shift-btn');
+  if (!btn) {
+    console.error("❌ make-shift-btn が見つかりません！");
+    return;
+  }
 
-// --- シフト作成ボタン処理 ---
-document.getElementById('make-shift-btn').addEventListener('click', async () => {
-    if (!confirm("AIで新しいシフトを作成しますか？")) return;
+  btn.addEventListener('click', async () => {
+    console.log("🖱️ シフト自動作成ボタンが押されました"); // ← これ追加
     const res = await fetch('/makeshift/generate', { method: 'POST' });
     const data = await res.json();
+    console.log("📡 fetch result:", data); // ← これ追加
+
     if (data.status === 'ok') {
-    alert('シフトを作成しました！');
-    calendar.refetchEvents(); // カレンダー更新
+      alert('✅ シフトを作成しました！');
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      }
     } else {
-    alert('シフト作成に失敗しました。');
+      alert('❌ シフト作成に失敗しました。');
     }
-});
+  });
 });
