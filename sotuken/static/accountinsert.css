@@ -1,128 +1,149 @@
-/* 全体設定 */
+/* === 全体設定（Netflix風） === */
 body {
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
-  background-color: #f5f7fa;
+  background-color: #141414;
   margin: 0;
   padding: 0;
-  color: #333;
+  color: #e5e5e5;
 }
 
-/* コンテナ */
+/* === コンテナ === */
 .container {
-  max-width: 800px;
-  margin: 40px auto;
-  padding: 20px;
+  max-width: 850px;
+  margin: 50px auto;
+  padding: 25px;
 }
 
-/* カード */
+/* === カード === */
 .card {
-  background: #fff;
+  background: #1c1c1c;
   border-radius: 16px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
   padding: 30px;
   margin-bottom: 40px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(229, 9, 20, 0.4);
 }
 
 .card h1 {
   font-size: 1.6em;
-  color: #2c3e50;
+  color: #e50914;
   display: flex;
   align-items: center;
   gap: 8px;
+  border-bottom: 2px solid #2a2a2a;
+  padding-bottom: 8px;
 }
 
 .hicon::before {
-  content: "📝";
+  content: "🎬";
   font-size: 1.2em;
 }
 
-/* フォーム */
+/* === フォーム === */
 form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 label {
   font-weight: bold;
   margin-bottom: 4px;
+  color: #e5e5e5;
 }
 
 input[type="text"],
 input[type="password"],
 input[type="number"] {
   padding: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid #333;
   border-radius: 8px;
+  background-color: #2a2a2a;
+  color: #e5e5e5;
   transition: 0.3s;
   font-size: 1em;
 }
 
 input:focus {
-  border-color: #3498db;
-  box-shadow: 0 0 4px rgba(52, 152, 219, 0.4);
+  border-color: #e50914;
+  box-shadow: 0 0 6px rgba(229, 9, 20, 0.5);
   outline: none;
 }
 
+/* === 送信ボタン === */
 button[type="submit"] {
-  background-color: #3498db;
+  background-color: #e50914;
   color: white;
   border: none;
-  padding: 10px;
+  padding: 12px;
   border-radius: 8px;
   font-size: 1em;
   cursor: pointer;
+  font-weight: bold;
   transition: 0.3s;
 }
 
 button[type="submit"]:hover {
-  background-color: #2980b9;
+  background-color: #b20710;
+  transform: scale(1.05);
 }
 
-/* フラッシュメッセージ */
+/* === フラッシュメッセージ === */
 .flash {
   list-style: none;
-  padding: 10px;
-  margin: 10px 0;
-  background-color: #eaf6ff;
-  border-left: 5px solid #3498db;
+  padding: 12px;
+  margin: 15px 0;
+  background-color: rgba(229, 9, 20, 0.15);
+  border-left: 5px solid #e50914;
   border-radius: 8px;
+  color: #ff8080;
 }
 
 .flash li {
   margin: 4px 0;
 }
 
-/* 登録済み従業員リスト */
+/* === 登録済み従業員リスト === */
 .chat-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 18px;
 }
 
 .chat-bubble {
-  background: #fff;
+  background: #1e1e1e;
   border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  padding: 15px;
-  position: relative;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+  padding: 18px;
+  transition: 0.3s;
+}
+
+.chat-bubble:hover {
+  box-shadow: 0 6px 20px rgba(229, 9, 20, 0.3);
+  transform: translateY(-3px);
 }
 
 .chat-bubble p {
   margin: 5px 0;
 }
 
+/* === アクションボタン === */
 .actions {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   gap: 10px;
+  justify-content: flex-end;
 }
 
-/* aタグとbuttonを統一 */
 .actions a,
 .actions button {
   display: inline-block;
-  width: 80px;
+  width: 90px;
   text-align: center;
   padding: 8px 0;
   border-radius: 8px;
@@ -132,6 +153,8 @@ button[type="submit"]:hover {
   text-decoration: none;
   color: white;
   border: none;
+  font-weight: bold;
+  letter-spacing: 0.5px;
 }
 
 /* 編集ボタン */
@@ -141,39 +164,43 @@ button[type="submit"]:hover {
 
 .btn-edit:hover {
   background-color: #1e8449;
+  transform: scale(1.05);
 }
 
 /* 削除ボタン */
 .btn-delete {
-  background-color: #e74c3c;
+  background-color: #e50914;
 }
 
 .btn-delete:hover {
-  background-color: #c0392b;
+  background-color: #b20710;
+  transform: scale(1.05);
 }
 
 /* 戻るボタン */
 .back-container {
   text-align: center;
-  margin-top: 40px;
+  margin-top: 50px;
 }
 
 .btn-back {
   text-decoration: none;
-  background-color: #7f8c8d;
+  background-color: #333;
   color: white;
-  padding: 10px 20px;
+  padding: 12px 24px;
   border-radius: 8px;
   transition: 0.3s;
+  font-weight: bold;
 }
 
 .btn-back:hover {
-  background-color: #95a5a6;
+  background-color: #444;
+  transform: scale(1.05);
 }
 
 /* muted テキスト */
 .muted {
-  color: #999;
+  color: #888;
   text-align: center;
   font-style: italic;
 }
