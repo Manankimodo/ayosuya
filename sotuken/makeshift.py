@@ -100,7 +100,6 @@ def show_admin_shift():
     return render_template("admin.html", results=results)
 
 
-# === 日付クリック時の詳細 ===
 @makeshift_bp.route("/day/<date_str>")
 def get_day_details(date_str):
     conn = get_db_connection()
@@ -116,7 +115,11 @@ def get_day_details(date_str):
     conn.close()
 
     if not rows:
-        return jsonify({"date": date_str, "users": {}, "free_slots": [("00:00", "23:59")]})
+        return jsonify({
+            "date": date_str,
+            "users": {},
+            "free_slots": [["00:00", "23:59"]]
+        })
 
     user_dict = {}
     for r in rows:
@@ -125,15 +128,19 @@ def get_day_details(date_str):
             user_dict[uid] = []
 
         if r["start_time"] and r["end_time"]:
-            user_dict[uid].append((format_time(r["start_time"]), format_time(r["end_time"])))
+            user_dict[uid].append([
+                format_time(r["start_time"]),
+                format_time(r["end_time"])
+            ])
         else:
-            user_dict[uid].append(("出勤できない", ""))
+            user_dict[uid].append(["出勤できない", ""])
 
     # 全ユーザーの登録時間（出勤できないを除外）
     all_registered = [
         slot for slots in user_dict.values() for slot in slots if slot[0] != "出勤できない"
     ]
-    free_slots = find_free_times(all_registered)
+    # free_slotsもリスト形式に統一
+    free_slots = [list(fs) for fs in find_free_times(all_registered)]
 
     return jsonify({
         "date": date_str,
@@ -142,11 +149,91 @@ def get_day_details(date_str):
     })
 
 
-# === シフト自動作成 ===
-@makeshift_bp.route("/generate", methods=["GET", "POST"])
+# === シフト遷移 ===
+@makeshift_bp.route("/generate")
 def generate_shift():
-    if request.method == "POST":
-        print("🧮 シフトを自動作成しました！")
-        return jsonify({"status": "ok", "redirect": url_for('makeshift.show_admin_shift')})
-    else:
-        return redirect(url_for('makeshift.show_admin_shift'))
+    print("🧮 シフト自動作成画面に遷移しました！")
+    return redirect(url_for('makeshift.show_admin_shift'))
+#------------------------------------------------------------------------------------------
+
+@makeshift_bp.route("/auto_calendar")
+def auto_calendar():
+    """
+    シフト自動作成を実行し、結果をカレンダー画面で表示
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # --- 全希望データを取得 ---
+    cursor.execute("""
+        SELECT ID as user_id, date, start_time, end_time
+        FROM calendar
+        ORDER BY date, start_time
+    """)
+    rows = cursor.fetchall()
+
+    if not rows:
+        cursor.close()
+        conn.close()
+        return render_template("auto_calendar.html", shifts=[], message="希望データがありません。")
+
+    # --- shift_table を作成（なければ） ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shift_table (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id VARCHAR(255),
+            date DATE,
+            start_time TIME,
+            end_time TIME
+        )
+    """)
+
+    # --- 既存シフトを全削除して再生成 ---
+    cursor.execute("DELETE FROM shift_table")
+
+    # --- 日付ごとにOR-Toolsでシフト作成 ---
+    from ortools.sat.python import cp_model
+    days = sorted(set(r["date"] for r in rows))
+    result_all = []
+
+    for day in days:
+        day_requests = [r for r in rows if r["date"] == day]
+        users = list(set([r["user_id"] for r in day_requests]))
+
+        model = cp_model.CpModel()
+        x = {u: model.NewBoolVar(f"x_{u}") for u in users}
+
+        # 必要人数（仮に2人）
+        needed = min(len(users), 2)
+        model.Add(sum(x[u] for u in users) == needed)
+
+        solver = cp_model.CpSolver()
+        solver.Solve(model)
+
+        # 保存
+        for u in users:
+            if solver.Value(x[u]) == 1:
+                target = next((r for r in day_requests if r["user_id"] == u), None)
+                start_time = target["start_time"] if target else None
+                end_time = target["end_time"] if target else None
+                cursor.execute("""
+                    INSERT INTO shift_table (user_id, date, start_time, end_time)
+                    VALUES (%s, %s, %s, %s)
+                """, (u, day, start_time, end_time))
+                result_all.append({
+                    "date": day.strftime("%Y-%m-%d"),
+                    "user_id": u,
+                    "start_time": format_time(start_time),
+                    "end_time": format_time(end_time)
+                })
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return render_template("auto_calendar.html", shifts=result_all, message="自動作成が完了しました！")
+
+
+
+
+
