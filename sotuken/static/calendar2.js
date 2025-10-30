@@ -3,8 +3,12 @@ document.addEventListener("DOMContentLoaded", function() {
     const monthYear = document.getElementById("monthYear");
     const prevMonthBtn = document.getElementById("prevMonth");
     const nextMonthBtn = document.getElementById("nextMonth");
+    const modal = document.getElementById("shift-modal");
+    const modalText = document.getElementById("modal-text");
+    const closeBtn = document.getElementById("modal-close");
 
     let currentDate = new Date();
+    const sentDates = window.sentDates || [];
 
     function renderCalendar() {
         const year = currentDate.getFullYear();
@@ -28,9 +32,9 @@ document.addEventListener("DOMContentLoaded", function() {
             cell.textContent = day;
 
             const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            cell.dataset.date = dateStr; // ✅ クリック時に使う
+            cell.dataset.date = dateStr;
 
-            // ✅ チェックマーク表示（送信済みの日付なら）
+            // ✅ チェックマーク表示
             if (sentDates.includes(dateStr)) {
                 const check = document.createElement("span");
                 check.textContent = "✅";
@@ -38,34 +42,51 @@ document.addEventListener("DOMContentLoaded", function() {
                 cell.appendChild(check);
             }
 
-            // ✅ 管理者：日付クリックで全ユーザーの登録状況を取得
+            // ✅ クリックイベント
             cell.addEventListener("click", async () => {
                 try {
                     const res = await fetch(`/makeshift/day/${dateStr}`);
                     if (!res.ok) throw new Error("データ取得に失敗しました");
                     const data = await res.json();
+                    console.log("✅ 取得データ:", data);
 
+                    // ====== モーダル内容を構築 ======
                     let message = `📅 ${data.date} の情報\n\n`;
 
-                    if (Object.keys(data.users).length === 0) {
-                        message += "登録なし";
+                    // --- 登録ユーザー一覧 ---
+                    if (!data.users || Object.keys(data.users).length === 0) {
+                        message += "👥 登録なし\n\n";
                     } else {
                         for (const [user, times] of Object.entries(data.users)) {
-                            message += `👤 ${user}\n`;
+                            message += `👤 ユーザーID: ${user}\n`;
                             for (const [s, e] of times) {
-                                message += `  登録: ${s}〜${e}\n`;
+                                if (s === "出勤できない") {
+                                    message += `  ❌ 出勤できない\n`;
+                                } else {
+                                    message += `  🕒 ${s}〜${e}\n`;
+                                }
                             }
                             message += "\n";
                         }
-
-                        message += `🕒 空き時間:\n`;
-                        for (const [s, e] of data.free_slots) {
-                            message += `  ${s}〜${e}\n`;
-                        }
                     }
 
-                    alert(message);
+                    // --- 空き時間一覧 ---
+                    message += `🕓 空き時間:\n`;
+                    if (data.free_slots && data.free_slots.length > 0) {
+                        for (const [s, e] of data.free_slots) {
+                            message += `  ✅ ${s}〜${e}\n`;
+                        }
+                    } else {
+                        message += "  （空きなし）";
+                    }
+
+                    // ✅ モーダルに反映（改行保持）
+                    // ✅ モーダルに反映（改行と絵文字保持）
+                    modalText.innerHTML = message.replace(/\n/g, "<br>");
+                    modal.style.display = "flex";
+
                 } catch (err) {
+                    console.error("❌ エラー:", err);
                     alert("エラーが発生しました：" + err.message);
                 }
             });
@@ -89,6 +110,15 @@ document.addEventListener("DOMContentLoaded", function() {
     nextMonthBtn.addEventListener("click", () => {
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
+    });
+
+    // === モーダル閉じる処理 ===
+    closeBtn.addEventListener("click", () => {
+        modal.style.display = "none";
+    });
+
+    window.addEventListener("click", (e) => {
+        if (e.target === modal) modal.style.display = "none";
     });
 
     // ✅ 初期表示

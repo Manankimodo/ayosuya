@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>自動作成シフトカレンダー</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='auto_calendar.css') }}">
+</head>
+<body>
+  <header>自動作成シフトカレンダー</header>
+
+  {% if message %}
+    <p class="message">{{ message }}</p>
+  {% endif %}
+
+  {% if shifts %}
+    <div class="calendar">
+      {% for shift in shifts %}
+        <div class="day-card">
+          <h3>{{ shift.date }}</h3>
+          <p><strong>👤 {{ shift.user_id }}</strong></p>
+          <p>{{ shift.start_time }}〜{{ shift.end_time }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>シフトがありません。</p>
+  {% endif %}
+
+  <div class="back">
+    <button onclick="location.href='/makeshift/admin'">🔙 戻る</button>
+  </div>
+</body>
+</html>

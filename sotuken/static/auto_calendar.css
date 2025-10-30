@@ -1,0 +1,36 @@
+body {
+    font-family: "Hiragino Sans", sans-serif;
+    background-color: #f4f6fa;
+    text-align: center;
+  }
+  
+  header {
+    background-color: #0078ff;
+    color: white;
+    padding: 15px;
+    font-size: 22px;
+  }
+  
+  .calendar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 15px;
+    padding: 20px;
+  }
+  
+  .day-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    padding: 10px;
+  }
+  
+  .message {
+    color: green;
+    margin: 10px;
+  }
+  
+  .back {
+    margin: 20px;
+  }
+  
