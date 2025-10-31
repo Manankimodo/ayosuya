@@ -36,6 +36,7 @@
     <form id="chat-form" method="POST" action="/chatbot/">
         <input type="text" id="question" name="question" placeholder="質問を入力..." required>
         <button type="submit">送信</button>
+        <button type="button" id="clear-btn">履歴を消す</button>
     </form>
 
     <script>
@@ -77,6 +78,16 @@
             const newChat = doc.querySelector("#chat-container").innerHTML;
             chatContainer.innerHTML = newChat;
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        });
+
+        // 🗑 履歴削除ボタン
+        document.getElementById("clear-btn").addEventListener("click", async () => {
+            if (!confirm("チャット履歴を本当に消しますか？")) return;
+
+            await fetch("/chatbot/clear", { method: "POST" });
+
+            const chatContainer = document.getElementById("chat-container");
+            chatContainer.innerHTML = '<div class="message bot">こんにちは！ご質問をどうぞ 😊</div>';
         });
     </script>
 </body>
