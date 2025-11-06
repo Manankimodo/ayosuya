@@ -55,7 +55,8 @@ def chat():
         save_chat(user_name, "bot", answer)
 
         chat_history.append({"role": "user", "text": user_question})
-        chat_history.append({"role": "bot", "text": answer})
+
+        # chat_history.append({"role": "bot", "text": answer})
 
     return render_template("index.html", chat_history=chat_history)
 
