@@ -1,9 +1,9 @@
-from flask import Blueprint, render_template, request, session
+from flask import Blueprint, render_template, request, session, jsonify
 from sentence_transformers import SentenceTransformer
 import chromadb
 import ollama
 from extensions import db
-from sqlalchemy import text as sql_text  # text と被らないように別名で import
+from sqlalchemy import text as sql_text
 
 chatbot_bp = Blueprint("chatbot", __name__, url_prefix="/chatbot")
 
@@ -12,7 +12,7 @@ embedder = SentenceTransformer("all-MiniLM-L6-v2")
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection("faq_collection")
 
-# --- Ollama応答キャッシュ（同じ質問で再生成を避ける） ---
+# --- Ollama応答キャッシュ ---
 answer_cache = {}
 
 # ===========================
@@ -43,30 +43,14 @@ def chat():
     if request.method == "POST":
         user_question = request.form["question"]
 
+        # キャッシュを確認
         if user_question in answer_cache:
             answer = answer_cache[user_question]
         else:
-            query_emb = embedder.encode(user_question).tolist()
-            results = collection.query(query_embeddings=[query_emb], n_results=2)
+            answer = generate_answer(user_question)
+            answer_cache[user_question] = answer
 
-            if not results["documents"] or len(results["documents"][0]) == 0:
-                answer = "FAQがまだ登録されていません。"
-            else:
-                context = "\n".join([
-                    f"Q: {d}\nA: {m['answer']}"
-                    for d, m in zip(results["documents"][0], results["metadatas"][0])
-                ])
-                prompt = f"""
-以下はFAQです。ユーザーの質問に最も関連する回答を出してください。
-
-{context}
-
-ユーザーの質問: {user_question}
-"""
-                response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
-                answer = response["message"]["content"]
-                answer_cache[user_question] = answer
-
+        # 履歴保存
         save_chat(user_name, "user", user_question)
         save_chat(user_name, "bot", answer)
 
@@ -77,15 +61,54 @@ def chat():
     return render_template("index.html", chat_history=chat_history)
 
 # ===========================
-# チャット履歴削除
+# 回答再生成（Ajax用）
+# ===========================
+@chatbot_bp.route("/regenerate", methods=["POST"])
+def regenerate():
+    user_name = session.get("user", "guest")
+    user_question = request.form["question"]
+
+    # キャッシュを無視して再生成
+    answer = generate_answer(user_question)
+
+    # 保存
+    save_chat(user_name, "bot", answer)
+    answer_cache[user_question] = answer
+
+    return jsonify({"answer": answer})
+
+# ===========================
+# 共通：回答生成関数
+# ===========================
+def generate_answer(user_question):
+    query_emb = embedder.encode(user_question).tolist()
+    results = collection.query(query_embeddings=[query_emb], n_results=2)
+
+    if not results["documents"] or len(results["documents"][0]) == 0:
+        return "FAQがまだ登録されていません。"
+
+    context = "\n".join([
+        f"Q: {d}\nA: {m['answer']}"
+        for d, m in zip(results["documents"][0], results["metadatas"][0])
+    ])
+
+    prompt = f"""
+以下はFAQです。ユーザーの質問に最も関連する回答を出してください。
+
+{context}
+
+ユーザーの質問: {user_question}
+"""
+    response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
+    return response["message"]["content"]
+
+# ===========================
+# 履歴削除
 # ===========================
 @chatbot_bp.route("/clear", methods=["POST"])
 def clear_history():
     user_name = session.get("user", "guest")
-    db.session.execute(
-        sql_text("DELETE FROM chat_history WHERE user_name=:u"),
-        {"u": user_name}
-    )
+    db.session.execute(sql_text("DELETE FROM chat_history WHERE user_name=:u"), {"u": user_name})
     db.session.commit()
     answer_cache.clear()
     return "", 204
