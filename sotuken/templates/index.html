@@ -25,7 +25,13 @@
     <div class="chat-container" id="chat-container">
         {% if chat_history %}
             {% for msg in chat_history %}
-                <div class="message {{ 'user' if msg.role == 'user' else 'bot' }}">{{ msg.text }}</div>
+                <div class="message {{ 'user' if msg.role == 'user' else 'bot' }}">
+                    {{ msg.text }}
+                    {% if msg.role == 'bot' and loop.previtem and loop.previtem.role == 'user' %}
+                        <!-- 🔄 再生成ボタン -->
+                        <button class="regen-btn" data-question="{{ loop.previtem.text }}">🔄再生成</button>
+                    {% endif %}
+                </div>
             {% endfor %}
         {% else %}
             <div class="message bot">こんにちは！ご質問をどうぞ 😊</div>
@@ -88,6 +94,34 @@
 
             const chatContainer = document.getElementById("chat-container");
             chatContainer.innerHTML = '<div class="message bot">こんにちは！ご質問をどうぞ 😊</div>';
+        });
+
+        // 🔄 再生成ボタン機能（Ajax）
+        document.addEventListener("click", async (e) => {
+            if (e.target.classList.contains("regen-btn")) {
+                const btn = e.target;
+                const question = btn.dataset.question;
+                const botMessage = btn.closest(".message");
+
+                btn.disabled = true;
+                btn.textContent = "再生成中...";
+
+                try {
+                    const res = await fetch("/chatbot/regenerate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({ question })
+                    });
+
+                    const data = await res.json();
+                    botMessage.childNodes[0].textContent = data.answer;
+                } catch {
+                    alert("再生成に失敗しました。");
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = "🔄再生成";
+                }
+            }
         });
     </script>
 </body>
