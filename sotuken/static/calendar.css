@@ -247,3 +247,26 @@ button {
         margin: 5px;
       }
     }
+
+    /*--------------------------------------------------------------------------------------*/
+.flash-messages {
+  margin: 10px auto;
+  width: 80%;
+  text-align: center;
+}
+
+.flash.success {
+  background-color: #d4edda;
+  color: #686b69;
+  border: 1px solid #c3e6cb;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.flash.info {
+  background-color: #cce5ff;
+  color: #004085;
+  border: 1px solid #b8daff;
+  padding: 10px;
+  border-radius: 5px;
+}

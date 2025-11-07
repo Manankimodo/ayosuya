@@ -159,14 +159,31 @@ def generate_shift():
 @makeshift_bp.route("/auto_calendar")
 def auto_calendar():
     """
-    シフト自動作成を実行し、結果をカレンダー画面で表示
+    設定を反映してシフト自動作成を実行し、結果をカレンダー画面で表示
     """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # --- 全希望データを取得 ---
+    # --- ✅ 最新の設定を取得 ---
+    cursor.execute("SELECT * FROM shift_settings ORDER BY updated_at DESC LIMIT 1")
+    settings = cursor.fetchone()
+
+    # デフォルト設定（未設定時）
+    if not settings:
+        settings = {
+            "start_time": "09:00:00",
+            "end_time": "18:00:00",
+            "break_minutes": 60,
+            "interval_minutes": 60,
+            "max_hours_per_day": 8,
+            "min_hours_per_day": 4,
+            "max_people_per_shift": 2,
+            "auto_mode": "balance"
+        }
+
+    # --- 希望データを取得 ---
     cursor.execute("""
-        SELECT ID as user_id, date, start_time, end_time
+        SELECT ID AS user_id, date, start_time, end_time
         FROM calendar
         ORDER BY date, start_time
     """)
@@ -177,7 +194,7 @@ def auto_calendar():
         conn.close()
         return render_template("auto_calendar.html", shifts=[], message="希望データがありません。")
 
-    # --- shift_table を作成（なければ） ---
+    # --- shift_table を初期化 ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS shift_table (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -187,53 +204,196 @@ def auto_calendar():
             end_time TIME
         )
     """)
-
-    # --- 既存シフトを全削除して再生成 ---
     cursor.execute("DELETE FROM shift_table")
 
-    # --- 日付ごとにOR-Toolsでシフト作成 ---
     from ortools.sat.python import cp_model
+    from datetime import datetime, timedelta
+    import random
+
     days = sorted(set(r["date"] for r in rows))
     result_all = []
 
+    # --- 各日ごとのシフト作成 ---
     for day in days:
         day_requests = [r for r in rows if r["date"] == day]
-        users = list(set([r["user_id"] for r in day_requests]))
+        users = list(set(r["user_id"] for r in day_requests))
 
         model = cp_model.CpModel()
         x = {u: model.NewBoolVar(f"x_{u}") for u in users}
 
-        # 必要人数（仮に2人）
-        needed = min(len(users), 2)
+        # ✅ 各日ごとの人数制限（設定反映）
+        needed = min(len(users), settings["max_people_per_shift"])
         model.Add(sum(x[u] for u in users) == needed)
+
+        # --- モード別処理 ---
+        if settings["auto_mode"] == "random":
+            for u in users:
+                if random.random() > 0.5:
+                    model.Add(x[u] == 1)
 
         solver = cp_model.CpSolver()
         solver.Solve(model)
 
-        # 保存
-        for u in users:
-            if solver.Value(x[u]) == 1:
-                target = next((r for r in day_requests if r["user_id"] == u), None)
-                start_time = target["start_time"] if target else None
-                end_time = target["end_time"] if target else None
-                cursor.execute("""
-                    INSERT INTO shift_table (user_id, date, start_time, end_time)
-                    VALUES (%s, %s, %s, %s)
-                """, (u, day, start_time, end_time))
-                result_all.append({
-                    "date": day.strftime("%Y-%m-%d"),
-                    "user_id": u,
-                    "start_time": format_time(start_time),
-                    "end_time": format_time(end_time)
-                })
+
+        # MySQL TIME型はtimedeltaとして返ることがあるため文字列に変換
+        def to_time_str(value):
+            if isinstance(value, timedelta):
+                total_seconds = int(value.total_seconds())
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                return f"{hours:02d}:{minutes:02d}:00"
+            elif isinstance(value, str):
+                return value
+            else:
+                return "00:00:00"
+
+        shift_start_str = to_time_str(settings["start_time"])
+        shift_end_str = to_time_str(settings["end_time"])
+
+        shift_start = datetime.strptime(shift_start_str, "%H:%M:%S")
+        shift_end = datetime.strptime(shift_end_str, "%H:%M:%S")
+        interval = timedelta(minutes=settings["interval_minutes"])
+        break_time = timedelta(minutes=settings["break_minutes"])
+
+
+        current_start = shift_start
+
+        while current_start + interval <= shift_end:
+            current_end = current_start + interval
+            for u in users:
+                if solver.Value(x[u]) == 1:
+                    cursor.execute("""
+                        INSERT INTO shift_table (user_id, date, start_time, end_time)
+                        VALUES (%s, %s, %s, %s)
+                    """, (u, day, current_start.time(), current_end.time()))
+
+                    result_all.append({
+                        "date": day.strftime("%Y-%m-%d"),
+                        "user_id": u,
+                        "start_time": current_start.strftime("%H:%M"),
+                        "end_time": current_end.strftime("%H:%M")
+                    })
+            # 休憩を考慮して次の時間帯へ
+            current_start = current_end + break_time
 
     conn.commit()
     cursor.close()
     conn.close()
 
-    return render_template("auto_calendar.html", shifts=result_all, message="自動作成が完了しました！")
+    return render_template(
+        "auto_calendar.html",
+        shifts=result_all,
+        message="✅ 設定を反映して自動作成が完了しました！",
+        settings=settings
+    )
 
+#-----------------------------------------------------------------------------------------------------
+# === 管理者シフト設定画面 ===
+@makeshift_bp.route("/setting", methods=["GET", "POST"])
+def shift_setting():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
+    if request.method == "POST":
+        try:
+            # 現在のレコード件数を確認
+            cursor.execute("SELECT COUNT(*) AS cnt FROM shift_settings")
+            count = cursor.fetchone()["cnt"]
 
+            # 値を取得
+            data = (
+                request.form["start_time"],
+                request.form["end_time"],
+                request.form["break_minutes"],
+                request.form["interval_minutes"],
+                request.form["max_hours_per_day"],
+                request.form["min_hours_per_day"],
+                request.form["max_people_per_shift"],
+                request.form["auto_mode"]
+            )
 
+            # 新規 or 更新
+            if count == 0:
+                cursor.execute("""
+                    INSERT INTO shift_settings (
+                        start_time, end_time, break_minutes, interval_minutes,
+                        max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """, data)
+            else:
+                cursor.execute("""
+                    UPDATE shift_settings
+                    SET start_time=%s, end_time=%s, break_minutes=%s, interval_minutes=%s,
+                        max_hours_per_day=%s, min_hours_per_day=%s,
+                        max_people_per_shift=%s, auto_mode=%s
+                """, data)
+
+            conn.commit()
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+
+    # 最新設定を取得して表示
+    cursor.execute("SELECT * FROM shift_settings LIMIT 1")
+    setting = cursor.fetchone()
+    conn.close()
+
+    if not setting:
+        setting = {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "break_minutes": 60,
+            "interval_minutes": 60,
+            "max_hours_per_day": 8,
+            "min_hours_per_day": 4,
+            "max_people_per_shift": 3,
+            "auto_mode": "balance"
+        }
+
+    return render_template("shift_setting.html", settings=setting)
+#------------------------------------------------------------------------------------------------------------
+def get_shift_settings():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM shift_settings ORDER BY updated_at DESC LIMIT 1")
+    settings = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return settings
+
+def generate_auto_shifts(settings):
+    """設定を反映した自動シフト生成"""
+    start_time = datetime.strptime(settings["start_time"], "%H:%M")
+    end_time = datetime.strptime(settings["end_time"], "%H:%M")
+    interval = timedelta(minutes=settings["interval_minutes"])
+    break_minutes = settings["break_minutes"]
+    max_hours = settings["max_hours_per_day"]
+    min_hours = settings["min_hours_per_day"]
+    mode = settings["auto_mode"]
+
+    shifts = []
+
+    current_time = start_time
+    while current_time < end_time:
+        next_time = current_time + interval
+        shifts.append({
+            "start": current_time.strftime("%H:%M"),
+            "end": next_time.strftime("%H:%M"),
+            "max_people": settings["max_people_per_shift"],
+        })
+        current_time = next_time
+
+    # mode に応じたロジックを追加（例）
+    if mode == "balance":
+        # 全員のシフト時間を均等にする処理
+        pass
+    elif mode == "preference":
+        # 希望を優先した割り当て処理
+        pass
+    elif mode == "random":
+        # ランダム割り当て処理
+        pass
+
+    return shifts
 

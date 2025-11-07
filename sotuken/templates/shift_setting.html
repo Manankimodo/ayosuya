@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>シフト自動生成設定</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>🛠 シフト自動生成 設定</h1>
+
+    <form method="POST">
+      <label>開始時間：</label>
+      <input type="time" name="start_time" value="{{ settings.start_time }}"><br>
+
+      <label>終了時間：</label>
+      <input type="time" name="end_time" value="{{ settings.end_time }}"><br>
+
+      <label>休憩時間（分）：</label>
+      <input type="number" name="break_minutes" value="{{ settings.break_minutes }}"><br>
+
+      <label>シフト間隔（分）：</label>
+      <input type="number" name="interval_minutes" value="{{ settings.interval_minutes }}"><br>
+
+      <label>1人あたり最大勤務時間（h）：</label>
+      <input type="number" name="max_hours_per_day" value="{{ settings.max_hours_per_day }}"><br>
+
+      <label>1人あたり最小勤務時間（h）：</label>
+      <input type="number" name="min_hours_per_day" value="{{ settings.min_hours_per_day }}"><br>
+
+      <label>各時間帯の最大人数：</label>
+      <input type="number" name="max_people_per_shift" value="{{ settings.max_people_per_shift }}"><br>
+
+      <label>自動生成モード：</label>
+      <select name="auto_mode">
+        <option value="balance" {% if settings.auto_mode == 'balance' %}selected{% endif %}>バランス</option>
+        <option value="preference" {% if settings.auto_mode == 'preference' %}selected{% endif %}>希望優先</option>
+        <option value="random" {% if settings.auto_mode == 'random' %}selected{% endif %}>ランダム</option>
+      </select><br>
+
+      <!-- ✅ 二重クリック防止 -->
+      <button type="submit" onclick="this.disabled=true; this.form.submit();">💾 保存</button>
+    </form>
+
+    {% if settings.updated_at %}
+      <p>最終更新：{{ settings.updated_at }}</p>
+    {% endif %}
+  </div>
+</body>
+</html>
