@@ -20,6 +20,12 @@ def calendar():
 
     return render_template("calendar.html", sent_dates=sent_dates or [])
 
+
+@calendar_bp.route("/admin") 
+def admin(): 
+    if "user_id" not in session: return redirect(url_for("login.login")) 
+    return render_template("calendar2.html")
+
 # ==========================
 # 🔹 希望申請フォーム
 # ==========================
