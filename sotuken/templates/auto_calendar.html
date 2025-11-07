@@ -19,6 +19,22 @@
 </head>
 <body>
   <header>自動作成シフトカレンダー</header>
+  {% if settings %}
+  <div style="margin:20px; padding:10px; background:#eef; border-radius:8px;">
+    <h3>現在の自動生成設定</h3>
+    <ul>
+      <li>開始時間: {{ settings.start_time }}</li>
+      <li>終了時間: {{ settings.end_time }}</li>
+      <li>休憩時間: {{ settings.break_minutes }}分</li>
+      <li>シフト間隔: {{ settings.interval_minutes }}分</li>
+      <li>最大勤務時間: {{ settings.max_hours_per_day }}時間</li>
+      <li>最小勤務時間: {{ settings.min_hours_per_day }}時間</li>
+      <li>時間帯最大人数: {{ settings.max_people_per_shift }}</li>
+      <li>モード: {{ settings.auto_mode }}</li>
+    </ul>
+  </div>
+{% endif %}
+
 
   {% if message %}
     <p class="message">{{ message }}</p>
