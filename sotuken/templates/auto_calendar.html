@@ -47,79 +47,85 @@
   {% endif %}
 
   <script>
-    // ✅ Flaskから受け取ったデータ
-    const shiftData = JSON.parse('{{ shifts|tojson|safe }}');
-    console.log("✅ shiftData:", shiftData);
+      const shiftData = JSON.parse('{{ shifts|tojson|safe }}');
+  console.log("✅ shiftData:", shiftData);
 
-    // 無効データ（開始・終了がnull）を除外
-    const validData = shiftData.filter(s => s.start_time && s.end_time);
+  // 無効データ（開始・終了がnull）を除外
+  const validData = shiftData.filter(s => s.start_time && s.end_time);
 
-    if (validData.length === 0) {
-      document.getElementById("charts").innerHTML = "<p>有効なシフトがありません。</p>";
-    } else {
-      // 日付ごとにグループ化
-      const grouped = {};
-      validData.forEach(s => {
-        if (!grouped[s.date]) grouped[s.date] = [];
-        grouped[s.date].push(s);
+  if (validData.length === 0) {
+    document.getElementById("charts").innerHTML = "<p>有効なシフトがありません。</p>";
+  } else {
+    // 日付ごとにグループ化
+    const grouped = {};
+    validData.forEach(s => {
+      if (!grouped[s.date]) grouped[s.date] = [];
+      grouped[s.date].push(s);
+    });
+
+    const chartsDiv = document.getElementById("charts");
+
+    // 日付ごとにグラフを作成
+    Object.entries(grouped).forEach(([date, items], idx) => {
+      const container = document.createElement("div");
+      container.classList.add("chart-container");
+      container.innerHTML = `<h2>${date}</h2><canvas id="chart_${idx}"></canvas>`;
+      chartsDiv.appendChild(container);
+
+      const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
+
+      // 🎨 データセット構築（typeによって色を分ける）
+      const datasets = items.map((s, i) => {
+        const start = new Date(`1970-01-01T${s.start_time}:00`);
+        const end = new Date(`1970-01-01T${s.end_time}:00`);
+
+        // 💡 typeに応じて色と表示名を変更
+        const isBreak = s.type === "break";
+        const color = isBreak ? "rgba(255, 180, 80, 0.7)" : `hsl(${i * 70 % 360}, 70%, 60%)`;
+        const label = isBreak ? `${s.user_id}（休憩）` : s.user_id;
+
+        return {
+          label: label,
+          data: [{ x: [start, end], y: s.user_id }],
+          backgroundColor: color,
+          borderColor: isBreak ? "rgba(255,140,0,1)" : "rgba(0,0,0,0.2)",
+          borderWidth: 1,
+        };
       });
 
-      const chartsDiv = document.getElementById("charts");
-
-      // 日付ごとにグラフを作成
-      Object.entries(grouped).forEach(([date, items], idx) => {
-        // コンテナ作成
-        const container = document.createElement("div");
-        container.classList.add("chart-container");
-        container.innerHTML = `<h2>${date}</h2><canvas id="chart_${idx}"></canvas>`;
-        chartsDiv.appendChild(container);
-
-        const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
-
-        // データセットを構築
-        const datasets = items.map((s, i) => {
-          const start = new Date(`1970-01-01T${s.start_time}:00`);
-          const end = new Date(`1970-01-01T${s.end_time}:00`);
-          return {
-            label: s.user_id,
-            data: [{ x: [start, end], y: s.user_id }],
-            backgroundColor: `hsl(${i * 70 % 360}, 70%, 60%)`
-          };
-        });
-
-        // グラフ描画
-        new Chart(ctx, {
-          type: "bar",
-          data: { datasets },
-          options: {
-            indexAxis: "y",
-            responsive: true,
-            scales: {
-              x: {
-                type: "time",
-                time: {
-                  unit: "hour",
-                  displayFormats: { hour: "HH:mm" }
-                },
-                min: new Date("1970-01-01T00:00:00"),
-                max: new Date("1970-01-01T23:59:00"),
-                title: { display: true, text: "勤務時間" }
-              },
-              y: { title: { display: true, text: "スタッフ" } }
+      // Chart.js で描画
+      new Chart(ctx, {
+        type: "bar",
+        data: { datasets },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          scales: {
+            x: {
+              type: "time",
+              time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+              min: new Date("1970-01-01T00:00:00"),
+              max: new Date("1970-01-01T23:59:00"),
+              title: { display: true, text: "勤務時間" }
             },
-            plugins: {
-              legend: { display: true, position: "bottom" },
-              tooltip: {
-                callbacks: {
-                  label: ctx =>
-                    `${ctx.dataset.label}: ${ctx.raw.x[0].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}〜${ctx.raw.x[1].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
+            y: { title: { display: true, text: "スタッフ" } }
+          },
+          plugins: {
+            legend: { display: true, position: "bottom" },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const start = ctx.raw.x[0].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                  const end = ctx.raw.x[1].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                  return `${ctx.dataset.label}: ${start}〜${end}`;
                 }
               }
             }
           }
-        });
+        }
       });
-    }
+    });
+  }
   </script>
 
   <div class="back">
