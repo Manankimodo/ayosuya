@@ -403,5 +403,65 @@ def generate_auto_shifts(settings):
         pass
  
     return shifts
- 
- 
+
+#------------------------------------------------------------------------------------------------------------
+
+@makeshift_bp.route("/settings", methods=["GET", "POST"])
+def settings():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # --- 現在の設定を取得 ---
+    cursor.execute("SELECT * FROM shift_settings LIMIT 1")
+    settings = cursor.fetchone()
+
+    # --- データが存在しない場合の初期化 ---
+    if not settings:
+        settings = {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "break_minutes": 60,
+            "interval_minutes": 60,
+            "max_hours_per_day": 8,
+            "min_hours_per_day": 4,
+            "max_people_per_shift": 3,
+            "auto_mode": "balance",
+            "updated_at": None,
+        }
+
+    # --- POST（更新処理） ---
+    if request.method == "POST":
+        start_time = request.form["start_time"]
+        end_time = request.form["end_time"]
+        break_minutes = request.form["break_minutes"]
+        interval_minutes = request.form["interval_minutes"]
+        max_hours_per_day = request.form["max_hours_per_day"]
+        min_hours_per_day = request.form["min_hours_per_day"]
+        max_people_per_shift = request.form["max_people_per_shift"]
+        auto_mode = request.form["auto_mode"]
+
+        cursor.execute("""
+            UPDATE shift_settings
+            SET start_time=%s, end_time=%s, break_minutes=%s, interval_minutes=%s,
+                max_hours_per_day=%s, min_hours_per_day=%s, max_people_per_shift=%s,
+                auto_mode=%s, updated_at=NOW()
+        """, (
+            start_time, end_time, break_minutes, interval_minutes,
+            max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode
+        ))
+        conn.commit()
+        conn.close()
+        return redirect(url_for("makeshift.settings"))  # 保存後に再表示
+
+    conn.close()
+
+    # --- 🕒 時刻を文字列フォーマットに変換（--:--対策） ---
+    for key in ["start_time", "end_time"]:
+        if settings[key]:
+            # 例: datetime.time(9, 0, 0) → "09:00"
+            settings[key] = str(settings[key])[:5]
+        else:
+            # デフォルト値を設定
+            settings[key] = "09:00" if key == "start_time" else "18:00"
+
+    return render_template("shift_setting.html", settings=settings)
