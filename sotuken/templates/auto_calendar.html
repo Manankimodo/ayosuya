@@ -6,22 +6,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='auto_calendar.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-  <style>
-    .chart-container {
-      width: 90%;
-      margin: 30px auto;
-      padding: 20px;
-      background: #f9f9f9;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-  </style>
+
 </head>
 <body>
   <header>自動作成シフトカレンダー</header>
+
   {% if settings %}
-  <div style="margin:20px; padding:10px; background:#eef; border-radius:8px;">
-    <h3>現在の自動生成設定</h3>
+  <div class="settings-box">
+    <h3>🛠 現在の自動生成設定</h3>
     <ul>
       <li>開始時間: {{ settings.start_time }}</li>
       <li>終了時間: {{ settings.end_time }}</li>
@@ -33,103 +25,97 @@
       <li>モード: {{ settings.auto_mode }}</li>
     </ul>
   </div>
-{% endif %}
-
+  {% endif %}
 
   {% if message %}
     <p class="message">{{ message }}</p>
   {% endif %}
 
   {% if shifts %}
-    <div id="charts"></div> <!-- グラフがここに挿入されます -->
+    <div id="charts"></div> <!-- グラフ描画エリア -->
   {% else %}
     <p>シフトがありません。</p>
   {% endif %}
 
+  <!-- 🎯 ここを追加：ボタン群 -->
+  <div class="button-group">
+    <!-- ✅ 再編集ボタン -->
+  <a href="{{ url_for('makeshift.auto_calendar') }}" class="btn secondary">♻️ 再編集（再生成）</a>
+  </div>
+  <div class="back">
+    <button class="btn secondary" onclick="location.href='/makeshift/admin'">🔙 戻る</button>
+  </div>
+
+  <!-- Chart.js スクリプト部分（変更なし） -->
   <script>
-      const shiftData = JSON.parse('{{ shifts|tojson|safe }}');
-  console.log("✅ shiftData:", shiftData);
+    const shiftData = JSON.parse('{{ shifts|tojson|safe }}');
+    console.log("✅ shiftData:", shiftData);
+    const validData = shiftData.filter(s => s.start_time && s.end_time);
 
-  // 無効データ（開始・終了がnull）を除外
-  const validData = shiftData.filter(s => s.start_time && s.end_time);
-
-  if (validData.length === 0) {
-    document.getElementById("charts").innerHTML = "<p>有効なシフトがありません。</p>";
-  } else {
-    // 日付ごとにグループ化
-    const grouped = {};
-    validData.forEach(s => {
-      if (!grouped[s.date]) grouped[s.date] = [];
-      grouped[s.date].push(s);
-    });
-
-    const chartsDiv = document.getElementById("charts");
-
-    // 日付ごとにグラフを作成
-    Object.entries(grouped).forEach(([date, items], idx) => {
-      const container = document.createElement("div");
-      container.classList.add("chart-container");
-      container.innerHTML = `<h2>${date}</h2><canvas id="chart_${idx}"></canvas>`;
-      chartsDiv.appendChild(container);
-
-      const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
-
-      // 🎨 データセット構築（typeによって色を分ける）
-      const datasets = items.map((s, i) => {
-        const start = new Date(`1970-01-01T${s.start_time}:00`);
-        const end = new Date(`1970-01-01T${s.end_time}:00`);
-
-        // 💡 typeに応じて色と表示名を変更
-        const isBreak = s.type === "break";
-        const color = isBreak ? "rgba(255, 180, 80, 0.7)" : `hsl(${i * 70 % 360}, 70%, 60%)`;
-        const label = isBreak ? `${s.user_id}（休憩）` : s.user_id;
-
-        return {
-          label: label,
-          data: [{ x: [start, end], y: s.user_id }],
-          backgroundColor: color,
-          borderColor: isBreak ? "rgba(255,140,0,1)" : "rgba(0,0,0,0.2)",
-          borderWidth: 1,
-        };
+    if (validData.length === 0) {
+      document.getElementById("charts").innerHTML = "<p>有効なシフトがありません。</p>";
+    } else {
+      const grouped = {};
+      validData.forEach(s => {
+        if (!grouped[s.date]) grouped[s.date] = [];
+        grouped[s.date].push(s);
       });
+      const chartsDiv = document.getElementById("charts");
+      Object.entries(grouped).forEach(([date, items], idx) => {
+        const container = document.createElement("div");
+        container.classList.add("chart-container");
+        container.innerHTML = `<h2>${date}</h2><canvas id="chart_${idx}"></canvas>`;
+        chartsDiv.appendChild(container);
 
-      // Chart.js で描画
-      new Chart(ctx, {
-        type: "bar",
-        data: { datasets },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          scales: {
-            x: {
-              type: "time",
-              time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
-              min: new Date("1970-01-01T00:00:00"),
-              max: new Date("1970-01-01T23:59:00"),
-              title: { display: true, text: "勤務時間" }
+        const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
+        const datasets = items.map((s, i) => {
+          const start = new Date(`1970-01-01T${s.start_time}:00`);
+          const end = new Date(`1970-01-01T${s.end_time}:00`);
+          const isBreak = s.type === "break";
+          const color = isBreak ? "rgba(255, 180, 80, 0.7)" : `hsl(${i * 70 % 360}, 70%, 60%)`;
+          const label = isBreak ? `${s.user_id}（休憩）` : s.user_id;
+
+          return {
+            label: label,
+            data: [{ x: [start, end], y: s.user_id }],
+            backgroundColor: color,
+            borderColor: isBreak ? "rgba(255,140,0,1)" : "rgba(0,0,0,0.2)",
+            borderWidth: 1,
+          };
+        });
+
+        new Chart(ctx, {
+          type: "bar",
+          data: { datasets },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            scales: {
+              x: {
+                type: "time",
+                time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+                min: new Date("1970-01-01T00:00:00"),
+                max: new Date("1970-01-01T23:59:00"),
+                title: { display: true, text: "勤務時間" }
+              },
+              y: { title: { display: true, text: "スタッフ" } }
             },
-            y: { title: { display: true, text: "スタッフ" } }
-          },
-          plugins: {
-            legend: { display: true, position: "bottom" },
-            tooltip: {
-              callbacks: {
-                label: ctx => {
-                  const start = ctx.raw.x[0].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                  const end = ctx.raw.x[1].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                  return `${ctx.dataset.label}: ${start}〜${end}`;
+            plugins: {
+              legend: { display: true, position: "bottom" },
+              tooltip: {
+                callbacks: {
+                  label: ctx => {
+                    const start = ctx.raw.x[0].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    const end = ctx.raw.x[1].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    return `${ctx.dataset.label}: ${start}〜${end}`;
+                  }
                 }
               }
             }
           }
-        }
+        });
       });
-    });
-  }
+    }
   </script>
-
-  <div class="back">
-    <button onclick="location.href='/makeshift/admin'">🔙 戻る</button>
-  </div>
 </body>
 </html>
