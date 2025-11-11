@@ -6,6 +6,21 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
 </head>
 <body>
+  <!-- ▼ ハンバーガーメニュー -->
+  <div class="menu-btn" id="menuBtn">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <nav class="side-menu" id="sideMenu">
+    <ul>
+      <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
+      <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
+      <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
+      <li><a href="{{ url_for('makeshift.generate_shift') }}">シフト作成</a></li>
+    </ul>
+  </nav>
   <div class="container">
     <h1>🛠 シフト自動生成 設定</h1>
 
@@ -47,4 +62,15 @@
     {% endif %}
   </div>
 </body>
+  <script>
+    const menuBtn = document.getElementById('menuBtn');
+    const sideMenu = document.getElementById('sideMenu');
+    const body = document.body;
+
+    menuBtn.addEventListener('click', () => {
+      menuBtn.classList.toggle('active');
+      sideMenu.classList.toggle('active');
+      body.classList.toggle('menu-open');
+    });
+  </script>
 </html>
