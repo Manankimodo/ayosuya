@@ -186,7 +186,7 @@ def auto_calendar():
 
     # --- ✅ 希望シフト取得 ---
     cursor.execute("""
-        SELECT ID AS user_id, date, start_time, end_time
+        SELECT user_id AS user_id, date, start_time, end_time
         FROM calendar
         ORDER BY date, start_time
     """)
@@ -245,7 +245,7 @@ def auto_calendar():
     # --- OR-Toolsで日ごとに最適化 ---
     days = sorted(set(r["date"] for r in rows))
     result_all = []
-
+    
     for day in days:
         day_requests = [r for r in rows if r["date"] == day]
         users = list(set(r["user_id"] for r in day_requests))
