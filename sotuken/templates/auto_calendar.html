@@ -46,44 +46,81 @@
     <button class="btn secondary" onclick="location.href='/makeshift/admin'">🔙 戻る</button>
   </div>
 
-  <!-- Chart.js スクリプト部分（変更なし） -->
   <script>
     const shiftData = JSON.parse('{{ shifts|tojson|safe }}');
-    console.log("✅ shiftData:", shiftData);
     const validData = shiftData.filter(s => s.start_time && s.end_time);
 
     if (validData.length === 0) {
       document.getElementById("charts").innerHTML = "<p>有効なシフトがありません。</p>";
     } else {
-      const grouped = {};
+      const groupedByDateAndUser = {};
+      
+      // データを日付ごとにグループ化し、さらにユーザーIDごとにマージする
       validData.forEach(s => {
-        if (!grouped[s.date]) grouped[s.date] = [];
-        grouped[s.date].push(s);
+        const date = s.date;
+        const userId = s.user_id;
+        
+        if (!groupedByDateAndUser[date]) groupedByDateAndUser[date] = {};
+        if (!groupedByDateAndUser[date][userId]) groupedByDateAndUser[date][userId] = [];
+        
+        groupedByDateAndUser[date][userId].push(s);
       });
+
       const chartsDiv = document.getElementById("charts");
-      Object.entries(grouped).forEach(([date, items], idx) => {
+      
+      // 描画用のカラーパレット
+      const colors = {};
+      let colorIndex = 0;
+      const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
+
+      Object.entries(groupedByDateAndUser).forEach(([date, userShifts], idx) => {
         const container = document.createElement("div");
         container.classList.add("chart-container");
         container.innerHTML = `<h2>${date}</h2><canvas id="chart_${idx}"></canvas>`;
         chartsDiv.appendChild(container);
 
         const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
-        const datasets = items.map((s, i) => {
-          const start = new Date(`1970-01-01T${s.start_time}:00`);
-          const end = new Date(`1970-01-01T${s.end_time}:00`);
-          const isBreak = s.type === "break";
-          const color = isBreak ? "rgba(255, 180, 80, 0.7)" : `hsl(${i * 70 % 360}, 70%, 60%)`;
-          const label = isBreak ? `${s.user_id}（休憩）` : s.user_id;
+        
+        const datasets = [];
+        const yAxisLabels = []; // Y軸のラベル順序を保持
 
-          return {
-            label: label,
-            data: [{ x: [start, end], y: s.user_id }],
-            backgroundColor: color,
-            borderColor: isBreak ? "rgba(255,140,0,1)" : "rgba(0,0,0,0.2)",
-            borderWidth: 1,
-          };
+        Object.entries(userShifts).forEach(([userId, shifts], i) => {
+          // ユーザーIDに色を割り当て
+          if (!colors[userId]) {
+            colors[userId] = baseColors[colorIndex % baseColors.length];
+            colorIndex++;
+          }
+          const userColor = colors[userId];
+          
+          // Y軸のラベルリストに追加
+          if (!yAxisLabels.includes(userId)) {
+              yAxisLabels.push(userId);
+          }
+
+          shifts.forEach((s) => {
+            // X軸を正しく時間オブジェクトとしてパース
+            const start = new Date(`1970-01-01T${s.start_time}:00`);
+            const end = new Date(`1970-01-01T${s.end_time}:00`);
+            const isBreak = s.type === "break";
+            
+            const dataPoint = {
+              x: [start, end], 
+              y: userId // Y軸の値はユーザーID文字列のまま
+            };
+
+            datasets.push({
+              label: isBreak ? `${userId}（休憩）` : userId,
+              data: [dataPoint],
+              backgroundColor: isBreak ? "rgba(255, 180, 80, 0.9)" : userColor,
+              borderColor: isBreak ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.2)",
+              borderWidth: 1,
+              userLabel: userId, 
+              breakFlag: isBreak
+            });
+          });
         });
 
+        // Chart.jsのインスタンス作成
         new Chart(ctx, {
           type: "bar",
           data: { datasets },
@@ -92,22 +129,33 @@
             responsive: true,
             scales: {
               x: {
+                // X軸を「時間(time)」タイプに設定
                 type: "time",
-                time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
-                min: new Date("1970-01-01T00:00:00"),
-                max: new Date("1970-01-01T23:59:00"),
+                time: { 
+                    unit: "hour", 
+                    displayFormats: { hour: "HH:mm" } 
+                },
+                min: new Date("1970-01-01T08:00:00"), 
+                max: new Date("1970-01-01T19:00:00"), 
                 title: { display: true, text: "勤務時間" }
               },
-              y: { title: { display: true, text: "スタッフ" } }
+              y: { 
+                // Y軸を「category」タイプに設定し、デフォルトのカテゴリ処理に任せる
+                type: 'category', 
+                labels: yAxisLabels, // ラベルは明示的に渡すが、複雑なコールバックは使用しない
+                grid: { display: true },
+                title: { display: true, text: "スタッフ" } 
+              }
             },
             plugins: {
-              legend: { display: true, position: "bottom" },
+              legend: { display: false }, 
               tooltip: {
                 callbacks: {
                   label: ctx => {
-                    const start = ctx.raw.x[0].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                    const end = ctx.raw.x[1].toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                    return `${ctx.dataset.label}: ${start}〜${end}`;
+                    const start = new Date(ctx.raw.x[0]).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    const end = new Date(ctx.raw.x[1]).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    const type = ctx.dataset.breakFlag ? "休憩" : "勤務";
+                    return `${ctx.dataset.userLabel} (${type}): ${start}〜${end}`;
                   }
                 }
               }
