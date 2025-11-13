@@ -258,7 +258,7 @@ def auto_calendar():
         settings['start_time'] = format_time(settings.get('start_time'))
         settings['end_time'] = format_time(settings.get('end_time'))
         if settings.get('updated_at') and isinstance(settings['updated_at'], (datetime, date_cls)):
-             settings['updated_at'] = settings['updated_at'].strftime("%Y-%m-%d %H:%M:%S")
+            settings['updated_at'] = settings['updated_at'].strftime("%Y-%m-%d %H:%M:%S")
 
         cursor.execute("SELECT ID, name FROM account")
         users_data = cursor.fetchall()
@@ -441,10 +441,10 @@ def auto_calendar():
                 status_name = solver.StatusName(status)
                 conn.close()
                 return render_template("auto_calendar.html", 
-                                       settings=settings, 
-                                       shifts=[],
-                                       message=f"最適な解が見つかりませんでした。(Status: {status_name})。これは、**人数、希望、最大勤務時間**の制約が同時に満たせないことを意味します。",
-                                       error_details=f"Target Date: {target_date_str}, Status: {status_name}")
+                settings=settings, 
+                shifts=[],
+                message=f"最適な解が見つかりませんでした。(Status: {status_name})。これは、**人数、希望、最大勤務時間**の制約が同時に満たせないことを意味します。",
+                error_details=f"Target Date: {target_date_str}, Status: {status_name}")
 
 
         # === 4. ループ終了後の最終処理 ===
@@ -467,9 +467,9 @@ def auto_calendar():
             } for s in final_shifts]
 
             return render_template("auto_calendar.html", 
-                                   settings=settings, 
-                                   shifts=formatted_shifts,
-                                   message=f"{len(formatted_shifts)} 件のシフトを{len(target_dates)}日分自動生成しました。")
+            settings=settings, 
+            shifts=formatted_shifts,
+            message=f"{len(formatted_shifts)} 件のシフトを{len(target_dates)}日分自動生成しました。")
 
         else:
             conn.close()
@@ -483,10 +483,10 @@ def auto_calendar():
         print("------------------------------")
         
         return render_template("auto_calendar.html", 
-                                   settings=settings, 
-                                   shifts=[],
-                                   message=f"予期せぬエラーが発生しました: {str(e)}",
-                                   error_details=error_trace)
+        settings=settings, 
+        shifts=[],
+        message=f"予期せぬエラーが発生しました: {str(e)}",
+        error_details=error_trace)
 # === 設定画面 ===----------------------------------------------------------------------------------------------
 @makeshift_bp.route("/settings", methods=["GET", "POST"])
 def settings():
@@ -563,3 +563,100 @@ def settings():
             settings[key] = "09:00" if key == "start_time" else "18:00"
 
     return render_template("shift_setting.html", settings=settings)
+
+#----------------------------------------------------------------------------------------------------------------------------
+
+# === 既存の /api/shifts/all ルートを修正 ===
+@makeshift_bp.route("/api/shifts/all")
+def get_all_confirmed_shifts():
+    """全ての日付・全ユーザーの確定シフトをJSON形式で返すAPI (user_nameを必ず取得)"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # ユーザー名を取得するためのJOINが必須
+    cursor.execute("""
+        SELECT 
+            s.user_id, a.name AS user_name, s.date, s.start_time, s.end_time, s.type
+        FROM shift_table s
+        JOIN account a ON s.user_id = a.ID
+        ORDER BY s.date, s.start_time
+    """)
+    confirmed_shifts = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    formatted_shifts = []
+    for shift in confirmed_shifts:
+        formatted_shifts.append({
+            "user_id": shift["user_id"],
+            "user_name": shift["user_name"],
+            "date": shift["date"].strftime("%Y-%m-%d"),
+            "start_time": format_time(shift["start_time"]),
+            "end_time": format_time(shift["end_time"]),
+            "type": shift["type"]
+        })
+        
+    return jsonify({"shifts": formatted_shifts})
+
+@makeshift_bp.route("/api/shifts/user/<int:user_id>")
+def get_user_shifts(user_id):
+    """特定のユーザーIDの確定シフトをJSON形式で返すAPI"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
+    user_data = cursor.fetchone()
+    if not user_data:
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+        
+    cursor.execute("""
+        SELECT date, start_time, end_time, type
+        FROM shift_table
+        WHERE user_id = %s
+        ORDER BY date, start_time
+    """, (user_id,))
+    user_shifts = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    formatted_shifts = []
+    for shift in user_shifts:
+        formatted_shifts.append({
+            "date": shift["date"].strftime("%Y-%m-%d"),
+            "start_time": format_time(shift["start_time"]),
+            "end_time": format_time(shift["end_time"]),
+            "type": shift["type"]
+        })
+        
+    return jsonify({
+        "user_id": user_id,
+        "user_name": user_data["name"],
+        "shifts": formatted_shifts
+    })
+
+# === 従業員向けシフト確認画面 ===
+@makeshift_bp.route("/user_shift_view/<int:user_id>")
+def show_user_shift_view(user_id):
+    """
+    指定されたユーザーIDのシフトを確認するためのテンプレートを表示するルート。
+    この画面のJavaScriptからAPIを呼び出してシフトデータを取得します。
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # ユーザー名を取得
+    cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
+    user_data = cursor.fetchone()
+    conn.close()
+    
+    if not user_data:
+        return "ユーザーが見つかりません。", 404
+
+    # テンプレートをレンダリングし、ユーザーIDとユーザー名を渡す
+    return render_template("user_shift_view.html", 
+    user_id=user_id, 
+    user_name=user_data['name'])
+
