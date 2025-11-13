@@ -3,13 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ user_name }}さんのシフト一覧/title>
+    <title>{{ user_name }}さんのシフト一覧</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='user_shift_view.css') }}">
 </head>
 <body>
     <div class="header">
         <h2>{{ user_name }}さんのシフト一覧</h2>
         <p>ユーザーID: {{ user_id }}</p>
+    </div>
+    
+    <div class="week-controls">
+        <button id="prevWeek">← 前の週</button>
+        <h3 id="currentWeekRange"></h3>
+        <button id="nextWeek">次の週 →</button>
     </div>
 
     <div id="shift-container">

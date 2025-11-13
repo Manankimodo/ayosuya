@@ -1,31 +1,60 @@
+// user_shift_view.js
 
-// Flaskから渡されたログイン中のユーザーID
-const userId = "{{ user_id }}"; 
+// FlaskからHTMLテンプレート経由で渡された変数を取得します。
+// HTML側で設定されていないため、ここではDOMから取得する形式を仮定します。
+// 理想的には、HTMLのscriptタグ内で変数定義（例: const userId = {{ user_id }};）を行うべきですが、
+// HTML構造を変更しないため、ここではDOMから取得するロジックを簡略化します。
+// ただし、正確な user_id が取得できない可能性があるため、暫定的な措置としてHTMLから取得する要素のtextContentを使います。
+const userIdElement = document.querySelector('.header p');
+const userId = userIdElement ? userIdElement.textContent.replace('ユーザーID: ', '').trim() : '';
+
 const shiftContainer = document.getElementById('shift-container');
+const prevWeekBtn = document.getElementById('prevWeek');
+const nextWeekBtn = document.getElementById('nextWeek');
+const currentWeekRange = document.getElementById('currentWeekRange');
 
-async function fetchShifts() {
-    try {
-        // ★ 変更点1: 全シフト取得APIを呼び出す ★
-        const response = await fetch(`/makeshift/api/shifts/all`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTPエラー: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // 取得した全シフトを日付ごとにグルーピング
-        const groupedShifts = groupShiftsByDate(data.shifts);
-        
-        renderShifts(groupedShifts);
+let allGroupedShifts = {}; // 全シフトデータ (日付でグループ化済み)
+let datesByWeek = [];     // 週ごとの日付配列
+let currentWeekIndex = 0; // 現在表示している週のインデックス
 
-    } catch (error) {
-        console.error("シフトデータの取得に失敗しました:", error);
-        shiftContainer.innerHTML = `<p class="error">エラーが発生しました: シフトを読み込めません。</p>`;
-    }
+
+// --- ユーティリティ関数 ---
+
+// user_shift_view.js 内の getWeekStartDate 関数
+
+// 週の開始日（月曜日）を取得
+function getWeekStartDate(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0); // 時刻をリセット
+    
+    // 0:日曜, 1:月曜, ..., 6:土曜
+    let day = d.getDay(); 
+    
+    // ISO 8601 (国際標準) に合わせ、月曜を 1 とし、日曜を 7 として計算します
+    // JavaScriptのgetDay()は日曜が 0 なので、月曜を 0 に調整（-1）
+    let dayOfWeek = day === 0 ? 6 : day - 1; 
+
+    // 現在の日付から、週の開始日（月曜日）までの日数を引く
+    d.setDate(d.getDate() - dayOfWeek);
+    
+    return d;
 }
 
-// データを日付ごとにグルーピングするヘルパー関数
+// Dateオブジェクトを YYYY-MM-DD 形式にフォーマット
+function formatDate(dateObj) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// 日付を MM/DD 形式で表示用にフォーマット
+function formatDisplayDate(dateStr) {
+    const parts = dateStr.split('-');
+    return `${parts[1]}/${parts[2]}`;
+}
+
+// シフトデータを日付ごとにグルーピング
 function groupShiftsByDate(shifts) {
     const grouped = {};
     shifts.forEach(shift => {
@@ -35,93 +64,182 @@ function groupShiftsByDate(shifts) {
         }
         grouped[date].push(shift);
     });
-    // 日付でソート
-    return Object.keys(grouped).sort().reduce((obj, key) => {
-        obj[key] = grouped[key];
-        return obj;
-    }, {});
+    return grouped;
 }
 
-function renderShifts(groupedShifts) {
-    shiftContainer.innerHTML = ''; // ローディングメッセージをクリア
+// 取得した全ての日付を週ごとに分割
+function generateDatesByWeek(dates) {
+    if (dates.length === 0) return;
+    dates.sort();
+    
+    const weekMap = new Map();
+    dates.forEach(dateStr => {
+        const weekStart = getWeekStartDate(dateStr);
+        const weekStartStr = formatDate(weekStart);
+        if (!weekMap.has(weekStartStr)) {
+            weekMap.set(weekStartStr, []);
+        }
+        weekMap.get(weekStartStr).push(dateStr);
+    });
 
-    const dates = Object.keys(groupedShifts);
+    // 週の開始日でソートして配列化
+    datesByWeek = Array.from(weekMap.keys()).sort().map(key => weekMap.get(key));
 
-    if (dates.length === 0) {
-        shiftContainer.innerHTML = '<p style="text-align: center; color: #6c757d;">現在、確定しているシフトはありません。</p>';
+    // 初期表示を「今日」が含まれる週に設定
+    const today = formatDate(new Date());
+    currentWeekIndex = datesByWeek.findIndex(week => week.includes(today));
+    if (currentWeekIndex === -1) {
+        currentWeekIndex = 0;
+    }
+}
+
+
+// === メインロジック (データ取得) ===
+
+async function fetchShifts() {
+    try {
+        const response = await fetch(`/makeshift/api/shifts/all`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTPエラー: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        allGroupedShifts = groupShiftsByDate(data.shifts);
+        
+        const uniqueDates = Array.from(new Set(data.shifts.map(s => s.date)));
+        
+        generateDatesByWeek(uniqueDates);
+        
+        displayCurrentWeekShifts(); // 初回表示
+        
+        attachEventListeners(); // イベントリスナー登録
+
+    } catch (error) {
+        console.error("シフトデータの取得に失敗しました:", error);
+        shiftContainer.innerHTML = `<p class="error">エラーが発生しました: シフトを読み込めません。</p>`;
+        currentWeekRange.textContent = 'エラー';
+    }
+}
+
+// === シフト表示ロジック ===
+
+function displayCurrentWeekShifts() {
+    if (datesByWeek.length === 0) {
+         shiftContainer.innerHTML = '<p style="text-align: center; color: #6c757d;">現在、確定しているシフトはありません。</p>';
+        currentWeekRange.textContent = 'データなし';
         return;
     }
 
+    const currentWeekDates = datesByWeek[currentWeekIndex];
+    
+    const firstDate = currentWeekDates[0];
+    const lastDate = currentWeekDates[currentWeekDates.length - 1];
+
+    // 週の範囲を更新
+    currentWeekRange.textContent = `${formatDisplayDate(firstDate)} 〜 ${formatDisplayDate(lastDate)}`;
+
     const ul = document.createElement('ul');
     ul.className = 'shift-list';
-    
-    dates.forEach(date => {
-        const shiftsOfDay = groupedShifts[date];
+    shiftContainer.innerHTML = ''; // クリア
+
+    currentWeekDates.forEach(date => {
+        const shiftsOfDay = allGroupedShifts[date] || [];
         
         // --- 日付ヘッダー ---
         const dateHeader = document.createElement('div');
         dateHeader.className = 'shift-date-header';
-        dateHeader.innerHTML = `<h3>📅 ${date}</h3>`;
+        dateHeader.innerHTML = `<h3>📅 ${formatDisplayDate(date)}</h3>`;
         ul.appendChild(dateHeader);
         
         // --- その日のシフト一覧 ---
-        shiftsOfDay
-            .filter(shift => shift.type === 'work') // 'work'タイプのみ表示
-            .forEach(shift => {
-            
-            const li = document.createElement('li');
-            li.className = 'shift-item';
+        const workShifts = shiftsOfDay.filter(shift => shift.type === 'work');
 
-            // 自分のシフトは強調表示
-            const isCurrentUser = String(shift.user_id) === String(userId);
-            if (isCurrentUser) {
-                // 自分のシフトは分かりやすいようにスタイルを上書き
-                li.style.borderLeftColor = '#28a745'; 
-                li.style.backgroundColor = '#e6ffed';
-            }
-            
-            const time_display = shift.start_time && shift.end_time ? 
-                                `${shift.start_time} - ${shift.end_time}` : 
-                                '時間未定';
-            
-            // ★ 変更点2: ユーザー名と時間を表示 ★
-            li.innerHTML = `
-                <p><strong>${shift.user_name}</strong>: ${time_display} ${isCurrentUser ? ' (あなた)' : ''}</p>
-            `;
-            ul.appendChild(li);
-        });
-        
-        // 日付の区切り線
-        const hr = document.createElement('hr');
-        hr.style.margin = '20px 0';
-        ul.appendChild(hr);
+        if (workShifts.length === 0) {
+             const emptyLi = document.createElement('li');
+             emptyLi.className = 'shift-item';
+             emptyLi.innerHTML = `<p style="color: #6c757d;">出勤者なし</p>`;
+             ul.appendChild(emptyLi);
+        } else {
+            workShifts.forEach(shift => {
+                const li = document.createElement('li');
+                li.className = 'shift-item';
 
-    });
-
-    shiftContainer.appendChild(ul);
-}
-// 🍔 ハンバーガーメニュー動作
-const hamburger = document.getElementById('hamburger');
-const menu = document.getElementById('menu');
-
-hamburger.addEventListener('click', () => {
-    // activeクラスをトグル
-    hamburger.classList.toggle('active');
-    menu.classList.toggle('active');
-});
-
-// 🔹 ログアウト確認アラート (必要であれば)
-const logoutLink = document.getElementById("logout-link-confirm");
-if (logoutLink) {
-    logoutLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        const confirmed = confirm("ログアウトしますか？");
-        if (confirmed) {
-            // ⚠️ ログアウトURLを適宜修正してください
-            window.location.href = "{{ url_for('login.logout') }}"; 
+                // 自分のシフトを強調表示
+                const isCurrentUser = String(shift.user_id) === String(userId);
+                if (isCurrentUser) {
+                    // スタイルはCSSファイル (user_shift_view.css) で定義することを推奨
+                    li.classList.add('current-user-shift');
+                }
+                
+                const time_display = shift.start_time && shift.end_time ? 
+                `${shift.start_time} - ${shift.end_time}` : 
+                '時間未定';
+                
+                li.innerHTML = `
+                    <p><strong>${shift.user_name}</strong>: ${time_display} ${isCurrentUser ? ' (あなた)' : ''}</p>
+                `;
+                ul.appendChild(li);
+            });
         }
     });
+
+    const hr = document.createElement('hr');
+    hr.style.margin = '20px 0';
+    ul.appendChild(hr);
+
+    shiftContainer.appendChild(ul);
+    updateButtonState();
+}
+
+// ボタンの活性/非活性を制御
+function updateButtonState() {
+    prevWeekBtn.disabled = currentWeekIndex === 0;
+    nextWeekBtn.disabled = currentWeekIndex === datesByWeek.length - 1;
+}
+
+// === イベントリスナーの登録 ===
+
+function attachEventListeners() {
+    // 週切り替えボタン
+    prevWeekBtn.addEventListener('click', () => {
+        if (currentWeekIndex > 0) {
+            currentWeekIndex--;
+            displayCurrentWeekShifts();
+        }
+    });
+
+    nextWeekBtn.addEventListener('click', () => {
+        if (currentWeekIndex < datesByWeek.length - 1) {
+            currentWeekIndex++;
+            displayCurrentWeekShifts();
+        }
+    });
+    
+    // ハンバーガーメニュー
+    const hamburger = document.getElementById('hamburger');
+    const menu = document.getElementById('menu');
+
+    if (hamburger && menu) {
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('active');
+            menu.classList.toggle('active');
+        });
+    }
+
+    // ログアウトリンク
+    const logoutLink = document.getElementById("logout-link-confirm");
+    if (logoutLink) {
+        logoutLink.addEventListener("click", function (e) {
+            e.preventDefault();
+            const confirmed = confirm("ログアウトしますか？");
+            if (confirmed) {
+                // FlaskのログアウトURLへ遷移
+                window.location.href = "{{ url_for('login.logout') }}"; 
+            }
+        });
+    }
 }
 
 fetchShifts();
-
