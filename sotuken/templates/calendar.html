@@ -9,7 +9,7 @@
 </head>
 <body>
 
-  <h1 id="monthYear"></h1>
+  <h1 id="monthYear">希望スケジュール入力</h1>
 
   <!-- 🍔 ハンバーガーボタン -->
   <div class="hamburger" id="hamburger">
@@ -64,29 +64,37 @@
     {{ sent_dates | tojson | safe }}
   </script>
 
-  <script>
+<script>
+    // データベースから提出済み日付を取得する処理はそのまま維持
     const sentDates = JSON.parse(document.getElementById("sentDatesData").textContent);
 
-    // 🍔 ハンバーガーメニュー動作
+    // === 🍔 ハンバーガーメニュー動作 (初期化時に一度だけ登録) ===
     const hamburger = document.getElementById('hamburger');
     const menu = document.getElementById('menu');
-    hamburger.addEventListener('click', () => {
-      hamburger.classList.toggle('active');
-      menu.classList.toggle('active');
 
-      // 🔹 ログアウト確認アラート
+    if (hamburger && menu) {
+        hamburger.addEventListener('click', () => {
+            // メニューとアイコンの状態を切り替える
+            hamburger.classList.toggle('active');
+            menu.classList.toggle('active');
+        });
+    }
+
+    // === 🔹 ログアウト確認アラート (初期化時に一度だけ登録) ===
     const logoutLink = document.getElementById("logout-link");
-    logoutLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        const confirmed = confirm("ログアウトしますか？");
-        if (confirmed) {
-            window.location.href = "{{ url_for('login.logout') }}";
-        }
-    });
-    });
+    
+    if (logoutLink) {
+        logoutLink.addEventListener("click", function (e) {
+            e.preventDefault(); // デフォルトのリンク遷移を停止
+            const confirmed = confirm("ログアウトしますか？");
+            if (confirmed) {
+                // FlaskのログアウトURLへ遷移
+                window.location.href = "{{ url_for('login.logout') }}";
+            }
+        });
+    }
+</script>
 
-      
-  </script>
 
   <!-- ✅ calendar.js はこの下で読み込む -->
   <script src="{{ url_for('static', filename='calendar.js') }}"></script>

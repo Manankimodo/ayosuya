@@ -6,7 +6,7 @@ body {
     background-color: #fafafa;
 }
 
-h1 {
+h1{
     margin-bottom: 10px;
 }
 
@@ -95,15 +95,21 @@ button {
     }
 
     h1 {
-      margin-top: 80px;
+      /* 既存のmargin-topを維持 */
+      margin-top: 80px; 
+      
+      /* ★ 修正: 下側のマージンを追加 ★ */
+      margin-bottom: 10px;
+      
       font-size: 2em;
       letter-spacing: 1px;
       color: #fff;
     }
 
     /* --- 月切り替えボタン --- */
+    /* .month-switch は h1 の下にあるため、このマージンは残します */
     .month-switch {
-      margin: 20px 0;
+      margin: 20px 0; 
     }
 
     .month-switch button {
