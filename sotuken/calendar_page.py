@@ -90,3 +90,21 @@ def sinsei(date):
         return redirect(url_for("calendar.calendar"))
 
     return render_template("sinsei.html", date=date)
+
+# ==========================
+# 🔹 確定シフト確認へのリダイレクト
+# ==========================
+@calendar_bp.route("/my_confirmed_shift")
+def my_confirmed_shift():
+    """
+    セッションからIDを取得し、makeshiftブループリントの確認画面へ遷移させる。
+    """
+    if "user_id" not in session:
+        # ログインしていない場合はログインページへ
+        return redirect(url_for("login.login"))
+        
+    user_id = session["user_id"]
+    
+    # makeshift_bpで定義したシフト確認ビューへリダイレクト
+    # user_idを引数として渡します。
+    return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
