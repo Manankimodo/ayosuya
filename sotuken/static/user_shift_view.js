@@ -1,10 +1,6 @@
 // user_shift_view.js
 
-// FlaskからHTMLテンプレート経由で渡された変数を取得します。
-// HTML側で設定されていないため、ここではDOMから取得する形式を仮定します。
-// 理想的には、HTMLのscriptタグ内で変数定義（例: const userId = {{ user_id }};）を行うべきですが、
-// HTML構造を変更しないため、ここではDOMから取得するロジックを簡略化します。
-// ただし、正確な user_id が取得できない可能性があるため、暫定的な措置としてHTMLから取得する要素のtextContentを使います。
+// ユーザーIDの取得 (HTMLのpタグから取得する暫定ロジックを維持)
 const userIdElement = document.querySelector('.header p');
 const userId = userIdElement ? userIdElement.textContent.replace('ユーザーID: ', '').trim() : '';
 
@@ -20,9 +16,7 @@ let currentWeekIndex = 0; // 現在表示している週のインデックス
 
 // --- ユーティリティ関数 ---
 
-// user_shift_view.js 内の getWeekStartDate 関数
-
-// 週の開始日（月曜日）を取得
+// 週の開始日（月曜日）を取得 (ISO 8601準拠)
 function getWeekStartDate(date) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0); // 時刻をリセット
@@ -30,8 +24,7 @@ function getWeekStartDate(date) {
     // 0:日曜, 1:月曜, ..., 6:土曜
     let day = d.getDay(); 
     
-    // ISO 8601 (国際標準) に合わせ、月曜を 1 とし、日曜を 7 として計算します
-    // JavaScriptのgetDay()は日曜が 0 なので、月曜を 0 に調整（-1）
+    // 月曜を0日目とするために調整
     let dayOfWeek = day === 0 ? 6 : day - 1; 
 
     // 現在の日付から、週の開始日（月曜日）までの日数を引く
@@ -134,18 +127,33 @@ function displayCurrentWeekShifts() {
 
     const currentWeekDates = datesByWeek[currentWeekIndex];
     
-    const firstDate = currentWeekDates[0];
-    const lastDate = currentWeekDates[currentWeekDates.length - 1];
+    // ★ 修正1: 週の開始日（月曜日）を正確に計算
+    const weekStartObj = getWeekStartDate(currentWeekDates[0]); 
+    
+    // ★ 修正2: 週の最終日（日曜日）を計算 (開始日の6日後)
+    const weekEndObj = new Date(weekStartObj);
+    weekEndObj.setDate(weekEndObj.getDate() + 6);
 
-    // 週の範囲を更新
-    currentWeekRange.textContent = `${formatDisplayDate(firstDate)} 〜 ${formatDisplayDate(lastDate)}`;
+    const firstDateStr = formatDate(weekStartObj);
+    const lastDateStr = formatDate(weekEndObj);
+
+    // 週の範囲を更新 (データに関わらず、月曜〜日曜を表示)
+    currentWeekRange.textContent = `${formatDisplayDate(firstDateStr)} 〜 ${formatDisplayDate(lastDateStr)}`;
 
     const ul = document.createElement('ul');
     ul.className = 'shift-list';
     shiftContainer.innerHTML = ''; // クリア
 
-    currentWeekDates.forEach(date => {
-        const shiftsOfDay = allGroupedShifts[date] || [];
+    // 月曜日から日曜日までの7日間の日付配列を作成
+    const displayDates = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStartObj);
+        d.setDate(d.getDate() + i);
+        displayDates.push(formatDate(d));
+    }
+
+    displayDates.forEach(date => {
+        const shiftsOfDay = allGroupedShifts[date] || []; // データがない日(shiftsOfDay=[]となる)も処理
         
         // --- 日付ヘッダー ---
         const dateHeader = document.createElement('div');
@@ -169,7 +177,6 @@ function displayCurrentWeekShifts() {
                 // 自分のシフトを強調表示
                 const isCurrentUser = String(shift.user_id) === String(userId);
                 if (isCurrentUser) {
-                    // スタイルはCSSファイル (user_shift_view.css) で定義することを推奨
                     li.classList.add('current-user-shift');
                 }
                 
@@ -235,7 +242,6 @@ function attachEventListeners() {
             e.preventDefault();
             const confirmed = confirm("ログアウトしますか？");
             if (confirmed) {
-                // FlaskのログアウトURLへ遷移
                 window.location.href = "{{ url_for('login.logout') }}"; 
             }
         });
