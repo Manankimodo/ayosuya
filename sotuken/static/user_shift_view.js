@@ -1,6 +1,6 @@
 // user_shift_view.js
 
-// ユーザーIDの取得 (HTMLのpタグから取得する暫定ロジックを維持)
+// ユーザーIDの取得 (HTMLのpタグから取得)
 const userIdElement = document.querySelector('.header p');
 const userId = userIdElement ? userIdElement.textContent.replace('ユーザーID: ', '').trim() : '';
 
@@ -91,7 +91,8 @@ function generateDatesByWeek(dates) {
 
 async function fetchShifts() {
     try {
-        const response = await fetch(`/makeshift/api/shifts/all`);
+        // APIエンドポイントはFlaskアプリケーションに合わせてください
+        const response = await fetch(`/makeshift/api/shifts/all`); 
         
         if (!response.ok) {
             throw new Error(`HTTPエラー: ${response.status}`);
@@ -127,17 +128,15 @@ function displayCurrentWeekShifts() {
 
     const currentWeekDates = datesByWeek[currentWeekIndex];
     
-    // ★ 修正1: 週の開始日（月曜日）を正確に計算
     const weekStartObj = getWeekStartDate(currentWeekDates[0]); 
     
-    // ★ 修正2: 週の最終日（日曜日）を計算 (開始日の6日後)
     const weekEndObj = new Date(weekStartObj);
     weekEndObj.setDate(weekEndObj.getDate() + 6);
 
     const firstDateStr = formatDate(weekStartObj);
     const lastDateStr = formatDate(weekEndObj);
 
-    // 週の範囲を更新 (データに関わらず、月曜〜日曜を表示)
+    // 週の範囲を更新 (月曜〜日曜を表示)
     currentWeekRange.textContent = `${formatDisplayDate(firstDateStr)} 〜 ${formatDisplayDate(lastDateStr)}`;
 
     const ul = document.createElement('ul');
@@ -153,7 +152,7 @@ function displayCurrentWeekShifts() {
     }
 
     displayDates.forEach(date => {
-        const shiftsOfDay = allGroupedShifts[date] || []; // データがない日(shiftsOfDay=[]となる)も処理
+        const shiftsOfDay = allGroupedShifts[date] || []; 
         
         // --- 日付ヘッダー ---
         const dateHeader = document.createElement('div');
@@ -232,18 +231,6 @@ function attachEventListeners() {
         hamburger.addEventListener('click', () => {
             hamburger.classList.toggle('active');
             menu.classList.toggle('active');
-        });
-    }
-
-    // ログアウトリンク
-    const logoutLink = document.getElementById("logout-link-confirm");
-    if (logoutLink) {
-        logoutLink.addEventListener("click", function (e) {
-            e.preventDefault();
-            const confirmed = confirm("ログアウトしますか？");
-            if (confirmed) {
-                window.location.href = "{{ url_for('login.logout') }}"; 
-            }
         });
     }
 }
