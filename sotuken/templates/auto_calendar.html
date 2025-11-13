@@ -47,7 +47,15 @@
   </div>
 
   <script>
+    // FlaskのPython変数から取得（settings変数がテンプレートに渡されていることが前提）
     const shiftData = JSON.parse('{{ shifts|tojson|safe }}');
+    const settings = JSON.parse('{{ settings|tojson|safe }}'); 
+    
+    // Y軸の表示範囲を設定から取得
+    const minTime = settings ? new Date(`1970-01-01T${settings.start_time}:00`) : new Date("1970-01-01T08:00:00");
+    const maxTime = settings ? new Date(`1970-01-01T${settings.end_time}:00`) : new Date("1970-01-01T19:00:00");
+
+
     const validData = shiftData.filter(s => s.start_time && s.end_time);
 
     if (validData.length === 0) {
@@ -55,7 +63,6 @@
     } else {
       const groupedByDateAndUser = {};
       
-      // データを日付ごとにグループ化し、さらにユーザーIDごとにマージする
       validData.forEach(s => {
         const date = s.date;
         const userId = s.user_id;
@@ -68,7 +75,6 @@
 
       const chartsDiv = document.getElementById("charts");
       
-      // 描画用のカラーパレット
       const colors = {};
       let colorIndex = 0;
       const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
@@ -76,15 +82,15 @@
       Object.entries(groupedByDateAndUser).forEach(([date, userShifts], idx) => {
         const container = document.createElement("div");
         container.classList.add("chart-container");
-        container.innerHTML = `<h2>${date}</h2><canvas id="chart_${idx}"></canvas>`;
+        container.innerHTML = `<h2>📅 ${date} のシフト（ガントチャート）</h2><canvas id="chart_${idx}"></canvas>`;
         chartsDiv.appendChild(container);
 
         const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
         
-        const datasets = [];
-        const yAxisLabels = []; // Y軸のラベル順序を保持
+        const chartDataPoints = []; // 👈 全データポイントをここに集約
+        const yAxisLabels = []; // Y軸のラベル順序を保持 (表示順)
 
-        Object.entries(userShifts).forEach(([userId, shifts], i) => {
+        Object.entries(userShifts).forEach(([userId, shifts]) => {
           // ユーザーIDに色を割り当て
           if (!colors[userId]) {
             colors[userId] = baseColors[colorIndex % baseColors.length];
@@ -92,59 +98,66 @@
           }
           const userColor = colors[userId];
           
-          // Y軸のラベルリストに追加
           if (!yAxisLabels.includes(userId)) {
               yAxisLabels.push(userId);
           }
 
           shifts.forEach((s) => {
             // X軸を正しく時間オブジェクトとしてパース
+            // Chart.jsはDateオブジェクトを期待
             const start = new Date(`1970-01-01T${s.start_time}:00`);
             const end = new Date(`1970-01-01T${s.end_time}:00`);
             const isBreak = s.type === "break";
             
-            const dataPoint = {
-              x: [start, end], 
-              y: userId // Y軸の値はユーザーID文字列のまま
-            };
-
-            datasets.push({
-              label: isBreak ? `${userId}（休憩）` : userId,
-              data: [dataPoint],
-              backgroundColor: isBreak ? "rgba(255, 180, 80, 0.9)" : userColor,
-              borderColor: isBreak ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.2)",
-              borderWidth: 1,
-              userLabel: userId, 
-              breakFlag: isBreak
+            chartDataPoints.push({
+                x: [start, end], 
+                y: userId, // Y軸の値はユーザーID文字列のまま
+                userLabel: userId,
+                type: s.type,
+                backgroundColor: isBreak ? "rgba(255, 180, 80, 0.9)" : userColor
             });
           });
+        });
+
+        // 🎯 ユーザーの登場順にソート（安定した表示のため）
+        chartDataPoints.sort((a, b) => {
+            return yAxisLabels.indexOf(a.userLabel) - yAxisLabels.indexOf(b.userLabel);
         });
 
         // Chart.jsのインスタンス作成
         new Chart(ctx, {
           type: "bar",
-          data: { datasets },
+          data: { 
+            // データを単一のデータセットとして渡す
+            datasets: [{
+                label: "勤務・休憩",
+                data: chartDataPoints,
+                backgroundColor: chartDataPoints.map(d => d.backgroundColor), // データポイントごとに色を適用
+                borderColor: "rgba(0,0,0,0.2)",
+                borderWidth: 1,
+            }]
+          },
           options: {
             indexAxis: "y",
             responsive: true,
             scales: {
               x: {
-                // X軸を「時間(time)」タイプに設定
                 type: "time",
                 time: { 
                     unit: "hour", 
                     displayFormats: { hour: "HH:mm" } 
                 },
-                min: new Date("1970-01-01T08:00:00"), 
-                max: new Date("1970-01-01T19:00:00"), 
-                title: { display: true, text: "勤務時間" }
+                min: minTime, 
+                max: maxTime, 
+                title: { display: true, text: "時間" }
               },
               y: { 
-                // Y軸を「category」タイプに設定し、デフォルトのカテゴリ処理に任せる
                 type: 'category', 
-                labels: yAxisLabels, // ラベルは明示的に渡すが、複雑なコールバックは使用しない
+                labels: yAxisLabels, 
+                // Y軸の順序を反転して、最初に登場したユーザーを上にする
+                reverse: true, 
                 grid: { display: true },
-                title: { display: true, text: "スタッフ" } 
+                title: { display: true, text: "スタッフ ID" } 
               }
             },
             plugins: {
@@ -152,18 +165,85 @@
               tooltip: {
                 callbacks: {
                   label: ctx => {
-                    const start = new Date(ctx.raw.x[0]).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                    const end = new Date(ctx.raw.x[1]).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                    const type = ctx.dataset.breakFlag ? "休憩" : "勤務";
-                    return `${ctx.dataset.userLabel} (${type}): ${start}〜${end}`;
+                    // ctx.raw は chartDataPoints の要素にアクセスできる
+                    const rawData = ctx.raw;
+                    const start = new Date(rawData.x[0]).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    const end = new Date(rawData.x[1]).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    const type = rawData.type === "break" ? "休憩" : "勤務";
+                    return `${rawData.userLabel} (${type}): ${start}〜${end}`;
                   }
                 }
               }
             }
           }
         });
+        
+        // 🚨 補足グラフ: 時間帯別必要人数と実際の人数 (ヒートマップ/ライングラフも有用ですが、ここでは簡単のため省略)
+        // 卒業研究では、この下に Line Chart で時間帯の人数超過/不足を表示すると説得力が増します。
       });
+      // --- ユーザー別合計勤務時間グラフの追加 ---
+const totalHoursByUser = {};
+
+// 勤務時間と休憩時間を集計
+validData.forEach(s => {
+    if (s.type !== 'work') return; // 休憩時間は含めない
+
+    const start = new Date(`1970-01-01T${s.start_time}:00`);
+    const end = new Date(`1970-01-01T${s.end_time}:00`);
+    // 勤務時間（分）を計算
+    const durationMinutes = (end - start) / (1000 * 60); 
+
+    const userId = s.user_id;
+    if (!totalHoursByUser[userId]) {
+        totalHoursByUser[userId] = 0;
     }
-  </script>
+    totalHoursByUser[userId] += durationMinutes;
+});
+
+// データを Chart.js 形式に変換
+const userLabels = Object.keys(totalHoursByUser);
+const totalHoursData = userLabels.map(userId => totalHoursByUser[userId] / 60); // 時間単位に変換
+
+if (userLabels.length > 0) {
+    const totalChartContainer = document.createElement("div");
+    totalChartContainer.classList.add("chart-container", "total-chart");
+    totalChartContainer.innerHTML = `<h2>⚖️ 全体の勤務時間バランス</h2><canvas id="total_hours_chart"></canvas>`;
+    chartsDiv.appendChild(totalChartContainer);
+
+    const totalCtx = document.getElementById("total_hours_chart").getContext("2d");
+
+    new Chart(totalCtx, {
+        type: "bar",
+        data: {
+            labels: userLabels,
+            datasets: [{
+                label: "合計勤務時間（時間）",
+                data: totalHoursData,
+                backgroundColor: 'rgba(54, 162, 235, 0.8)', // 青色系の単色
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    title: { display: true, text: "スタッフ ID" },
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: "合計勤務時間 (H)" },
+                    // 最大勤務時間を設定値から動的に設定するとさらに良い
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                title: { display: true, text: '各スタッフの合計勤務時間' }
+            }
+        }
+    });
+}
+    }
+</script>
 </body>
 </html>

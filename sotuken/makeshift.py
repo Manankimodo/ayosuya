@@ -20,18 +20,26 @@ def get_db_connection():
     )
 
 # 時刻フォーマット変換
+# === ユーティリティ関数 (修正案) ===
+# ... (他のコードはそのまま) ...
+# 時刻フォーマット変換
 def format_time(value):
-    """MySQL TIME型 (timedelta or str) → HH:MM形式に変換"""
+    """MySQL TIME型 (timedelta, time, or str) → HH:MM形式に変換"""
     if not value:
         return None
     if isinstance(value, str):
         return value[:5]
-    elif hasattr(value, "seconds"):
+    elif hasattr(value, "seconds"): # timedelta の処理
         total_seconds = value.seconds
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
+    # ✅ 追加: datetime.time オブジェクトの場合の処理
+    elif isinstance(value, time_cls):
+        return value.strftime("%H:%M")
+    
     return None
+# ... (他のコードはそのまま) ...
 
 # datetime.timeオブジェクトへの変換を保証
 def ensure_time_obj(v):
@@ -213,373 +221,273 @@ def generate_shift():
 # === 自動生成ロジック（希望時刻絶対優先ロジックを統合） ===
 # ... (makeshift_bp.route("/generate") の定義まで省略) ...
 
-# === 自動生成ロジック（複合目標関数に修正） ===
+# === 自動生成ロジック（複合目標関数に修正） ===----------------------------------------------------------------------
+from ortools.sat.python import cp_model
+from datetime import datetime, time as time_cls, timedelta, date as date_cls
+import traceback
+from flask import jsonify, render_template
+
+# ⚠️ 注意: 以下のユーティリティ関数は、あなたの環境で定義されている必要があります
+# def get_db_connection(): ...
+# def ensure_time_obj(time_data): ...
+# def to_time_str(time_obj): ...
+# def format_time(time_obj): ...
+
+# 'balance'モードの場合に、勤務時間の公平性を評価するためのペナルティ重み
+FAIRNESS_PENALTY_WEIGHT = 100
+# 'preference'モードの場合に、希望充足度を最大化するための重み
+PREFERENCE_REWARD_WEIGHT = 1000  
+
+# 🚨 注意: このコードは、元のファイルで定義されている helper functions (get_db_connection, format_time, ensure_time_obj, to_time_str) が既に存在し、インポートされていることを前提としています。
+# from datetime import datetime, time as time_cls, timedelta, date as date_cls
+# from ortools.sat.python import cp_model
+# import traceback
+
 @makeshift_bp.route("/auto_calendar")
 def auto_calendar():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # 0. 初期データ取得と設定の準備
+        cursor.execute("SELECT * FROM shift_settings LIMIT 1")
+        settings = cursor.fetchone()
+        if not settings:
+            return render_template("auto_calendar.html", message="シフト設定が未登録です。", shifts=[], settings={})
 
-    # --- 1. 設定取得 ---
-    cursor.execute("SELECT * FROM shift_settings ORDER BY updated_at DESC LIMIT 1")
-    settings = cursor.fetchone()
-    if not settings:
-        settings = {
-            "start_time": "09:00:00",
-            "end_time": "18:00:00",
-            "break_minutes": 60,
-            "interval_minutes": 60,
-            "max_hours_per_day": 8,
-            "min_hours_per_day": 4,
-            "max_people_per_shift": 2,
-            "auto_mode": "balance"
-        }
+        settings['start_time'] = format_time(settings.get('start_time'))
+        settings['end_time'] = format_time(settings.get('end_time'))
+        if settings.get('updated_at') and isinstance(settings['updated_at'], (datetime, date_cls)):
+             settings['updated_at'] = settings['updated_at'].strftime("%Y-%m-%d %H:%M:%S")
 
-    if settings.get("max_people_per_shift", 0) < 1:
-        settings["max_people_per_shift"] = 1
-    if settings.get("interval_minutes", 0) <= 0:
-        settings["interval_minutes"] = 60
+        cursor.execute("SELECT ID, name FROM account")
+        users_data = cursor.fetchall()
+        user_ids = [str(u['ID']) for u in users_data]
+        num_users = len(user_ids)
+        user_map = {user_id: i for i, user_id in enumerate(user_ids)}
+        if num_users == 0:
+            return render_template("auto_calendar.html", message="登録ユーザーがいません。", shifts=[], settings=settings)
 
-    # --- 2. 希望取得 ---
-    cursor.execute("""
-        SELECT ID AS user_id, date, start_time, end_time
-        FROM calendar
-        ORDER BY date, start_time
-    """)
-    rows = cursor.fetchall()
-    if not rows:
-        cursor.close()
-        conn.close()
-        return render_template("auto_calendar.html", shifts=[], message="希望データがありません。")
+        # 1. 処理対象となる全ての日付を取得 (希望が登録されている日付のみ)
+        cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
+        target_dates = [row['date'] for row in cursor.fetchall()]
 
-    cursor.execute("DELETE FROM shift_table")
-    conn.commit()
+        # ⚠️ 修正: シフト生成前にshift_table全体をクリアし、古いシフト表示を防ぐ
+        cursor.execute("DELETE FROM shift_table")
+        conn.commit()
+        
+        if not target_dates:
+            conn.close()
+            return render_template("auto_calendar.html", message="希望シフトが登録されていません。", shifts=[], settings=settings)
 
-    days = sorted(set(r["date"] for r in rows))
-    result_all = []
+        all_generated_shifts = []
 
-    # --- 3. 日ごとのシフト生成（CP-SAT）---
-    for day in days:
-        try:
-            print(f"\n--- {day} の処理開始 ---")
-            day_requests = [r for r in rows if r["date"] == day]
-            users = list({str(r["user_id"]) for r in day_requests if r.get("user_id") is not None})
+        # === 3. 日付ごとのシフト生成ループ ===
+        for target_date_obj in target_dates:
+            target_date_str = target_date_obj.strftime("%Y-%m-%d")
 
-            if not users:
-                continue
+            # 3.1. その日付の希望シフトのみを取得
+            cursor.execute("""
+                SELECT ID, date, start_time, end_time, work 
+                FROM calendar 
+                WHERE date = %s AND work = 1
+            """, (target_date_str,))
+            preference_rows = cursor.fetchall()
+            
+            # 3.2. 時間枠の定義と定数化
+            SHIFT_START = ensure_time_obj(settings['start_time'])
+            SHIFT_END = ensure_time_obj(settings['end_time'])
+            INTERVAL_MINUTES = settings['interval_minutes']
+            MAX_PEOPLE = settings['max_people_per_shift']
 
-            shift_start = datetime.strptime(to_time_str(settings["start_time"]), "%H:%M:%S")
-            shift_end = datetime.strptime(to_time_str(settings["end_time"]), "%H:%M:%S")
-            interval = timedelta(minutes=settings["interval_minutes"])
-            interval_minutes = settings["interval_minutes"]
+            # ⚠️ 最小勤務時間制約を完全に解除 (0時間)
+            MIN_WORK_INTERVALS = 0 
+            
+            MAX_WORK_INTERVALS = settings['max_hours_per_day'] * 60 // INTERVAL_MINUTES
+            
+            # ⚠️ 休憩制約は無効化するため、関連定数も無視
+            BREAK_MINUTES = settings['break_minutes']
+            BREAK_REQUIRED_HOURS = 5 
+            BREAK_REQUIRED_INTERVALS = BREAK_REQUIRED_HOURS * 60 // INTERVAL_MINUTES
+            BREAK_INTERVALS = BREAK_MINUTES // INTERVAL_MINUTES
+            # ---------------------------------------------------------------------
 
-            # timeslots 作成
-            timeslots = []
-            current = shift_start
-            while current + interval <= shift_end:
-                timeslots.append((current, current + interval))
-                current += interval
-            if not timeslots:
-                timeslots = [(shift_start, shift_end if shift_end > shift_start else shift_start + timedelta(hours=1))]
+            time_intervals = []
+            current_time_dt = datetime.combine(date_cls.today(), SHIFT_START)
+            end_time_dt = datetime.combine(date_cls.today(), SHIFT_END)
+            while current_time_dt < end_time_dt:
+                time_intervals.append(current_time_dt.time())
+                current_time_dt += timedelta(minutes=INTERVAL_MINUTES)
+            num_intervals = len(time_intervals)
 
-            # モデル
+            if num_intervals == 0: continue 
+
+            # 3.3. OR-Tools モデル構築と決定変数定義
             model = cp_model.CpModel()
-            x = {(u, t): model.NewBoolVar(f"x_{u}_{t}") for u in users for t in range(len(timeslots))}
-
-            # 制約1: 人数制限 (ハード制約)
-            for t in range(len(timeslots)):
-                model.Add(sum(x[(u, t)] for u in users) <= settings["max_people_per_shift"])
-
-            # --- 勤務連続性制約と総勤務時間の定義 (ハード制約) ---
-            has_shift = {u: model.NewBoolVar(f"has_shift_{u}") for u in users}
-            total_work = {u: model.NewIntVar(0, len(timeslots), f"total_{u}") for u in users}
-            slot_indices = list(range(len(timeslots)))
-            
-            for u in users:
-                # has_shift と total_work の定義
-                model.Add(sum(x[(u, t)] for t in range(len(timeslots))) >= 1).OnlyEnforceIf(has_shift[u])
-                model.Add(sum(x[(u, t)] for t in range(len(timeslots))) == 0).OnlyEnforceIf(has_shift[u].Not())
-                model.Add(total_work[u] == sum(x[(u, t)] for t in range(len(timeslots))))
-
-                # 勤務の連続性 (ハード制約)
-                active_indices = [t for t in slot_indices if (u, t) in x]
-                if active_indices:
-                    active_start = model.NewIntVar(0, len(timeslots) - 1, f"active_start_{u}")
-                    active_end = model.NewIntVar(0, len(timeslots) - 1, f"active_end_{u}")
+            shifts = {}
+            break_starts = {} 
+            for u_idx in range(num_users):
+                for t_idx in range(num_intervals):
+                    shifts[u_idx, t_idx] = model.NewBoolVar(f's_{u_idx}_{t_idx}_{target_date_str}')
+                    break_starts[u_idx, t_idx] = model.NewBoolVar(f'b_start_{u_idx}_{t_idx}_{target_date_str}')
                     
-                    model.AddMinEquality(active_start, active_indices).OnlyEnforceIf(has_shift[u])
-                    model.AddMaxEquality(active_end, active_indices).OnlyEnforceIf(has_shift[u])
-                    
-                    total_slots_span = model.NewIntVar(0, len(timeslots), f"span_{u}")
-                    model.Add(total_slots_span == active_end - active_start + 1).OnlyEnforceIf(has_shift[u])
-                    model.Add(total_work[u] == total_slots_span).OnlyEnforceIf(has_shift[u])
+            total_work_intervals = {}
+            for u_idx in range(num_users):
+                total_work_intervals[u_idx] = model.NewIntVar(0, num_intervals, f'total_w_{u_idx}_{target_date_str}')
+                model.Add(total_work_intervals[u_idx] == sum(shifts[u_idx, t_idx] for t_idx in range(num_intervals)))
+
+            # 3.4. 制約の追加
             
-            # --- 複合目標関数の定義 ---
-            
-            # 希望スロットを定義（全モードで利用）
-            user_pref_slots = {}
-            for u in users:
-                user_pref_slots[u] = set()
-                u_requests = [r for r in day_requests if str(r.get("user_id")) == u]
+            # 4-1. 時間帯最大人数制約 (MAX_PEOPLEは上限として機能)
+            for t_idx in range(num_intervals):
+                model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= MAX_PEOPLE)
                 
-                for r in u_requests:
-                    try:
-                        req_start = datetime.combine(datetime.today(), ensure_time_obj(r["start_time"]))
-                        req_end = datetime.combine(datetime.today(), ensure_time_obj(r["end_time"]))
+            # 4-2. 最小・最大勤務時間制約 (最小勤務は0時間に設定)
+            for u_idx in range(num_users):
+                model.Add(total_work_intervals[u_idx] >= MIN_WORK_INTERVALS) # 0時間
+                model.Add(total_work_intervals[u_idx] <= MAX_WORK_INTERVALS) # 最大時間
+
+            # 4-3. ユーザーの希望シフト制約 (厳格な禁止制約を復活 + バグ修正)
+            user_preferences_map = {} 
+            preference_fulfillment = []
+            
+            # ⚠️ 最終バグ修正: 希望シフトが全くないユーザーを特定し、全時間帯を禁止する
+            users_with_preference = {row['ID'] for row in preference_rows}
+            
+            for u_idx, u_id in enumerate(user_ids):
+                if u_id not in users_with_preference:
+                    # このユーザーは希望シフトを登録していないため、全ての時間帯を勤務禁止
+                    for t_idx in range(num_intervals):
+                        model.Add(shifts[u_idx, t_idx] == 0)
+
+
+            for row in preference_rows:
+                u_id = row['ID']
+                if u_id not in user_map: continue
+                u_idx = user_map[u_id]
+                start_t = ensure_time_obj(row['start_time'])
+                end_t = ensure_time_obj(row['end_time'])
+                
+                if u_idx not in user_preferences_map: user_preferences_map[u_idx] = set()
+
+                for t_idx, t_time in enumerate(time_intervals):
+                    # 勤務希望時間帯
+                    if start_t <= t_time < end_t:
+                        user_preferences_map[u_idx].add(t_idx)
+                        preference_fulfillment.append(shifts[u_idx, t_idx])
+                    # 勤務禁止時間帯
+                    else:
+                        # ⚠️ 厳格な制約: 希望外は勤務不可
+                        model.Add(shifts[u_idx, t_idx] == 0)
                         
-                        for t, (s, e) in enumerate(timeslots):
-                            # 希望開始時間 s から 希望終了時間 e までのスロットを希望スロットとする
-                            if s >= req_start and e <= req_end:
-                                user_pref_slots[u].add(t)
-                    except Exception:
-                        continue
+            # 4-4. 休憩時間制約 (完全に無効化)
+            pass
+
+            # 3.5. 目的関数の定義 (バランスモードのみ使用、希望充足度と公平性)
+            min_work = model.NewIntVar(0, num_intervals, 'min_work')
+            max_work = model.NewIntVar(0, num_intervals, 'max_work')
             
-            # スコアリングとペナルティ (balanceモード用)
-            positive_score_terms = []
-            negative_penalty_terms = []
-            
-            for u in users:
-                for t in range(len(timeslots)):
-                    if (u, t) in x:
-                        if t in user_pref_slots[u]:
-                            # 希望スロットでの勤務: +100 ポイント
-                            positive_score_terms.append(x[(u, t)] * 100)
-                        else:
-                            # 希望外スロットでの勤務: -10000 の超ペナルティ
-                            negative_penalty_terms.append(x[(u, t)] * 10000)
+            if total_work_intervals:
+                model.AddMaxEquality(max_work, total_work_intervals.values())
+                model.AddMinEquality(min_work, total_work_intervals.values())
+                fairness_cost = max_work - min_work 
+            else:
+                fairness_cost = 0
 
+            # ⚠️ モードはバランスモードのみ使用
+            model.Maximize(
+                sum(preference_fulfillment) * PREFERENCE_REWARD_WEIGHT - 
+                fairness_cost * FAIRNESS_PENALTY_WEIGHT
+            )
 
-            # --- ✅ 目標関数をモードごとに設定 ---
-            
-            if settings["auto_mode"] == "balance":
-                # balanceモード: (希望スコア) - (希望外ペナルティ) の最大化
-                model.Maximize(sum(positive_score_terms) - sum(negative_penalty_terms))
-            
-            else: # "random" モードを含むその他のモードの場合
-                # randomモード: 勤務時間（スロット数）の総和を最大化
-                total_slots_sum = sum(total_work[u] for u in users)
-                model.Maximize(total_slots_sum)
-
-
-            # --- 最小・最大勤務時間制約 (ハード制約) ---
-            min_slots = int(settings["min_hours_per_day"] * 60 / interval_minutes)
-            global_max_slots = int(settings["max_hours_per_day"] * 60 / interval_minutes)
-
-            user_max_slots = {}
-            for u in users:
-                # ユーザーの希望総時間に基づいて、最大スロット数を計算
-                total_requested_minutes = sum((datetime.combine(datetime.today(), ensure_time_obj(r["end_time"])) - datetime.combine(datetime.today(), ensure_time_obj(r["start_time"]))).total_seconds() / 60
-                                              for r in [r for r in day_requests if str(r.get("user_id")) == u and datetime.combine(datetime.today(), ensure_time_obj(r["end_time"])) > datetime.combine(datetime.today(), ensure_time_obj(r["start_time"]))])
-                max_slots_based_on_request = int(total_requested_minutes / interval_minutes)
-                user_max_slots[u] = min(max_slots_based_on_request, global_max_slots)
-
-            for u in users:
-                # 勤務が割り当てられた場合のみ、最小時間を強制
-                model.Add(total_work[u] >= min_slots).OnlyEnforceIf(has_shift[u])
-                # 勤務時間は、設定と希望の範囲内であること
-                model.Add(total_work[u] <= user_max_slots[u])
-                
-            # ソルバー実行
+            # 3.6. ソルバー実行と結果処理
             solver = cp_model.CpSolver()
-            solver.parameters.max_time_in_seconds = 10
-            
-            # ソルバー探索パラメータの調整
-            solver.parameters.random_seed = random.randint(0, 1000)
-            solver.parameters.num_workers = 4
-            
+            solver.parameters.max_time_in_seconds = 5.0
             status = solver.Solve(model)
-            print("  Solver Status:", solver.StatusName(status))
-
-            inserted_any = False
-
-            # --- 4. SOLUTION 登録 (連続スロット結合ロジック) ---
-            if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-                
-                user_slots = {u: [] for u in users}
-                for u in users:
-                    for t in range(len(timeslots)):
-                        if (u, t) in x and solver.Value(x[(u, t)]) == 1:
-                            user_slots[u].append(t)
-                
-                # 連続するスロットを結合し、シフトとして登録
-                for u, slots in user_slots.items():
-                    if not slots:
-                        continue
-                    
-                    slots.sort()
-                    merged_shifts = []
-                    
-                    current_start_index = slots[0]
-                    current_end_index = slots[0]
-                    
-                    for i in range(1, len(slots)):
-                        if slots[i] == current_end_index + 1:
-                            current_end_index = slots[i]
-                        else:
-                            merged_shifts.append((current_start_index, current_end_index))
-                            current_start_index = slots[i]
-                            current_end_index = slots[i]
-                    
-                    merged_shifts.append((current_start_index, current_end_index))
-
-                    # 結合されたシフトをDBに挿入
-                    for start_t, end_t in merged_shifts:
-                        shift_start_time = timeslots[start_t][0]
-                        shift_end_time = timeslots[end_t][1]
-                        
-                        try:
-                            cursor.execute("""
-                                INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-                                VALUES (%s, %s, %s, %s, 'work')
-                            """, (u, day, shift_start_time.time(), shift_end_time.time()))
-                            result_all.append({
-                                "date": str(day),
-                                "user_id": u,
-                                "start_time": shift_start_time.strftime("%H:%M"),
-                                "end_time": shift_end_time.strftime("%H:%M"),
-                                "type": "work"
-                            })
-                            inserted_any = True
-                        except Exception as ex:
-                            print("  DB Insert Error (Merged):", ex)
-
-            # --- 5. Fallbackロジック (変更なし) ---
-            # ... (Fallbackロジックと休憩ロジックはそのまま維持) ...
             
-            # fallback1: 希望ベースの貪欲割当
-            if not inserted_any:
-                print("  ⚠️ ソルバーで割り当てが行われなかったため、希望ベースで貪欲に割当を行います。")
+            shifts_to_save_day = []
+            if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
                 
-                for t, (s, e) in enumerate(timeslots):
-                    want_users = []
-                    for r in day_requests:
-                        uid = str(r["user_id"])
-                        req_start = datetime.combine(datetime.today(), ensure_time_obj(r["start_time"]))
-                        req_end = datetime.combine(datetime.today(), ensure_time_obj(r["end_time"]))
-                        if s >= req_start and e <= req_end:
-                            want_users.append(uid)
+                for u_idx in range(num_users):
+                    user_id = user_ids[u_idx]
+                    current_shift_start_time = None
                     
-                    if want_users:
-                        chosen = random.sample(want_users, min(len(want_users), settings["max_people_per_shift"]))
-                        for u in chosen:
-                            try:
-                                cursor.execute("""
-                                    INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-                                    VALUES (%s, %s, %s, %s, 'work')
-                                """, (u, day, s.time(), e.time()))
-                                result_all.append({
-                                    "date": str(day),
-                                    "user_id": u,
-                                    "start_time": s.strftime("%H:%M"),
-                                    "end_time": e.strftime("%H:%M"),
+                    # 勤務時間 (work) の保存
+                    for t_idx in range(num_intervals):
+                        is_working = solver.Value(shifts[u_idx, t_idx]) == 1
+                        t_time = time_intervals[t_idx]
+                        
+                        if is_working:
+                            if current_shift_start_time is None:
+                                current_shift_start_time = t_time
+                            
+                            # シフトの終わりを判定
+                            if t_idx == num_intervals - 1 or solver.Value(shifts[u_idx, t_idx + 1]) == 0:
+                                end_t_dt = datetime.combine(target_date_obj, t_time) + timedelta(minutes=INTERVAL_MINUTES)
+                                shifts_to_save_day.append({
+                                    "user_id": user_id, "date": target_date_str,
+                                    "start_time": to_time_str(current_shift_start_time),
+                                    "end_time": to_time_str(end_t_dt.time()),
                                     "type": "work"
                                 })
-                                inserted_any = True
-                            except Exception as ex:
-                                print("  DB Insert Error (fallback1):", ex)
-
-            # fallback2: それでも無ければ、各 timeslot にランダムで割当
-            if not inserted_any:
-                print("  ⚠️ それでも割当なし。timeslotごとに強制割当（ランダム）を行います。")
-                for t, (s, e) in enumerate(timeslots):
-                    chosen = random.sample(users, min(len(users), settings["max_people_per_shift"]))
-                    for u in chosen:
-                        try:
-                            cursor.execute("""
-                                INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-                                VALUES (%s, %s, %s, %s, 'work')
-                            """, (u, day, s.time(), e.time()))
-                            result_all.append({
-                                "date": str(day),
-                                "user_id": u,
-                                "start_time": s.strftime("%H:%M"),
-                                "end_time": e.strftime("%H:%M"),
-                                "type": "work"
-                            })
-                            inserted_any = True
-                        except Exception as ex:
-                            print("  DB Insert Error (fallback2):", ex)
-
-            # 日ごとにコミット
-            try:
-                conn.commit()
-                print(f"  {day} の登録をコミットしました。挿入件数累計: {len(result_all)}")
-            except Exception as ex:
-                print("  Commit Error:", ex)
-
-        except Exception as e:
-            print(f"  エラー（{day}）：", e)
-            print(traceback.format_exc())
-
-    # --- 6. 休憩追加 (変更なし) ---
-    try:
-        cursor.execute("""
-            SELECT user_id, date, MIN(start_time) AS start_time, MAX(end_time) AS end_time
-            FROM shift_table
-            WHERE type = 'work'
-            GROUP BY user_id, date
-        """)
-        work_blocks = cursor.fetchall()
-
-        break_duration_minutes = int(settings.get("break_minutes", 60))
-
-        for block in work_blocks:
-            start_time = ensure_time_obj(block["start_time"])
-            end_time = ensure_time_obj(block["end_time"])
-            start = datetime.combine(block["date"], start_time)
-            end = datetime.combine(block["date"], end_time)
-            total_hours = (end - start).total_seconds() / 3600
-
-            if total_hours >= 6 and break_duration_minutes > 0:
-                duration = end - start
-                center_point = start + (duration / 2) 
-                half_break_td = timedelta(minutes=break_duration_minutes / 2)
-                break_start = center_point - half_break_td
-                break_end = center_point + half_break_td
-                
-                random_offset_minutes = random.choice([-15, -10, -5, 0, 5, 10, 15])
-                random_offset_td = timedelta(minutes=random_offset_minutes)
-                
-                break_start += random_offset_td
-                break_end += random_offset_td
-
-                if break_start < start:
-                    break_start = start
-                    break_end = start + timedelta(minutes=break_duration_minutes)
-                elif break_end > end:
-                    break_end = end
-                    break_start = end - timedelta(minutes=break_duration_minutes)
-                
-                try:
-                    cursor.execute("""
-                        INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-                        VALUES (%s, %s, %s, %s, 'break')
-                    """, (block["user_id"], block["date"], break_start.time(), break_end.time()))
+                                current_shift_start_time = None
                     
-                    result_all.append({
-                        "date": str(block["date"]),
-                        "user_id": block["user_id"],
-                        "start_time": break_start.strftime("%H:%M"),
-                        "end_time": break_end.strftime("%H:%M"),
-                        "type": "break"
-                    })
-                except Exception as ex:
-                    print("  DB Insert Error (break):", ex)
-        conn.commit()
-    except Exception as ex:
-        print("  休憩生成でエラー:", ex)
+                    # 休憩時間は無効化されたため、処理を省略
+                    pass 
+                
+                all_generated_shifts.extend(shifts_to_save_day)
+            
+            elif status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:
+                status_name = solver.StatusName(status)
+                conn.close()
+                return render_template("auto_calendar.html", 
+                                       settings=settings, 
+                                       shifts=[],
+                                       message=f"最適な解が見つかりませんでした。(Status: {status_name})。これは、**人数、希望、最大勤務時間**の制約が同時に満たせないことを意味します。",
+                                       error_details=f"Target Date: {target_date_str}, Status: {status_name}")
 
-    cursor.close()
-    conn.close()
 
-    print("\n✅ 全処理完了。登録件数:", len(result_all))
-    return render_template(
-        "auto_calendar.html",
-        shifts=result_all,
-        settings=settings,
-        message="✅ 希望外勤務に強力なペナルティを与え、希望を最優先する自動シフトを作成しました。"
-    )
+        # === 4. ループ終了後の最終処理 ===
+        if all_generated_shifts:
+            sql = "INSERT INTO shift_table (user_id, date, start_time, end_time, type) VALUES (%s, %s, %s, %s, %s)"
+            insert_data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type']) for s in all_generated_shifts]
+            cursor.executemany(sql, insert_data)
+            conn.commit()
+            
+            cursor.execute("SELECT user_id, date, start_time, end_time, type FROM shift_table ORDER BY date, start_time")
+            final_shifts = cursor.fetchall()
+            conn.close()
+            
+            formatted_shifts = [{
+                "user_id": s['user_id'], 
+                "date": s['date'].strftime("%Y-%m-%d"), 
+                "start_time": format_time(s['start_time']), 
+                "end_time": format_time(s['end_time']),     
+                "type": s['type']
+            } for s in final_shifts]
 
-# === 設定画面 ===
+            return render_template("auto_calendar.html", 
+                                   settings=settings, 
+                                   shifts=formatted_shifts,
+                                   message=f"{len(formatted_shifts)} 件のシフトを{len(target_dates)}日分自動生成しました。")
+
+        else:
+            conn.close()
+            return render_template("auto_calendar.html", message="シフトが割り当てられませんでした。全員が勤務不可能な設定です。", shifts=[], settings=settings)
+
+    except Exception as e:
+        conn.close()
+        error_trace = traceback.format_exc()
+        print("--- SHIFT GENERATION ERROR ---")
+        print(error_trace)
+        print("------------------------------")
+        
+        return render_template("auto_calendar.html", 
+                                   settings=settings, 
+                                   shifts=[],
+                                   message=f"予期せぬエラーが発生しました: {str(e)}",
+                                   error_details=error_trace)
+# === 設定画面 ===----------------------------------------------------------------------------------------------
 @makeshift_bp.route("/settings", methods=["GET", "POST"])
 def settings():
     conn = get_db_connection()
