@@ -99,11 +99,10 @@ if (hamburger && menu) {
         menu.classList.toggle('active');
     });
 }
-// === 🔹 ログアウト確認アラート (初期化時に一度だけ登録) ===
 const logoutLink = document.getElementById("logout-link");
 
 if (logoutLink) {
-    // ログアウトURLをdata属性から取得
+    // ログアウトURLをdata属性から取得 (HTML側に data-logout-url="{{ url_for('login.logout') }}" が必要)
     const logoutUrl = logoutLink.getAttribute('data-logout-url');
     
     logoutLink.addEventListener("click", function (e) {
@@ -111,7 +110,9 @@ if (logoutLink) {
         const confirmed = confirm("ログアウトしますか？");
         if (confirmed) {
             // 取得したURLを使用
-            window.location.href = logoutUrl;
+            if (logoutUrl) {
+                window.location.href = logoutUrl;
+            }
         }
     });
 }

@@ -133,15 +133,25 @@ hamburger.addEventListener("click", () => {
     menu.classList.toggle("open");
 });
 
-// ログアウト確認
 const logoutLink = document.getElementById("logout-link");
-logoutLink.addEventListener("click", function (e) {
-    e.preventDefault();
-    if (confirm("ログアウトしますか？")) {
-        window.location.href = "{{ url_for('login.logout') }}";
-    }
-});
 
+if (logoutLink) { // 要素が存在することを確認
+    logoutLink.addEventListener("click", function (e) {
+        e.preventDefault();
+
+        if (confirm("ログアウトしますか？")) {
+            // data-logout-url属性の値を取得
+            const logoutUrl = logoutLink.getAttribute("data-logout-url");
+
+            if (logoutUrl) {
+                window.location.href = logoutUrl;
+            } else {
+                // デバッグ用: URLが取得できなかった場合の警告
+                console.error("ログアウトURLが設定されていません。");
+            }
+        }
+    });
+}
 // モーダル閉じる処理
 const modal = document.getElementById("shift-modal");
 const closeBtn = document.getElementById("modal-close");

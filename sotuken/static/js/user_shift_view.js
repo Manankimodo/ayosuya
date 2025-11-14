@@ -236,13 +236,12 @@ function attachEventListeners() {
 }
 
 
-// === ログアウト確認アラート ===
+// === ログアウト確認アラート (既存のコードを維持) ===
 const logoutLink = document.getElementById("logout-link");
 if (logoutLink) {
     logoutLink.addEventListener("click", function (e) {
         e.preventDefault(); 
         
-        // --- 修正箇所 ---
         // data属性からログアウトURLを取得
         const logoutUrl = this.getAttribute('data-logout-url');
         
@@ -250,7 +249,6 @@ if (logoutLink) {
             console.error("ログアウトURLが見つかりません。");
             return;
         }
-        // ------------------
         
         const confirmed = confirm("ログアウトしますか？");
         if (confirmed) {
