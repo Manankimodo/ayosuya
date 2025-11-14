@@ -124,3 +124,29 @@ document.addEventListener("DOMContentLoaded", function() {
     // ✅ 初期表示
     renderCalendar();
 });
+
+// ハンバーガーメニュー
+const hamburger = document.getElementById("hamburger");
+const menu = document.getElementById("menu");
+hamburger.addEventListener("click", () => {
+    hamburger.classList.toggle("active");
+    menu.classList.toggle("open");
+});
+
+// ログアウト確認
+const logoutLink = document.getElementById("logout-link");
+logoutLink.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (confirm("ログアウトしますか？")) {
+        window.location.href = "{{ url_for('login.logout') }}";
+    }
+});
+
+// モーダル閉じる処理
+const modal = document.getElementById("shift-modal");
+const closeBtn = document.getElementById("modal-close");
+
+closeBtn.addEventListener("click", () => modal.style.display = "none");
+window.addEventListener("click", (e) => {
+    if (e.target === modal) modal.style.display = "none";
+});

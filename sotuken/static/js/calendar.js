@@ -83,3 +83,35 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 
 });
+
+
+// データベースから提出済み日付を取得する処理はそのまま維持
+const sentDates = JSON.parse(document.getElementById("sentDatesData").textContent);
+
+// === 🍔 ハンバーガーメニュー動作 (初期化時に一度だけ登録) ===
+const hamburger = document.getElementById('hamburger');
+const menu = document.getElementById('menu');
+
+if (hamburger && menu) {
+    hamburger.addEventListener('click', () => {
+        // メニューとアイコンの状態を切り替える
+        hamburger.classList.toggle('active');
+        menu.classList.toggle('active');
+    });
+}
+// === 🔹 ログアウト確認アラート (初期化時に一度だけ登録) ===
+const logoutLink = document.getElementById("logout-link");
+
+if (logoutLink) {
+    // ログアウトURLをdata属性から取得
+    const logoutUrl = logoutLink.getAttribute('data-logout-url');
+    
+    logoutLink.addEventListener("click", function (e) {
+        e.preventDefault(); 
+        const confirmed = confirm("ログアウトしますか？");
+        if (confirmed) {
+            // 取得したURLを使用
+            window.location.href = logoutUrl;
+        }
+    });
+}

@@ -34,21 +34,6 @@
             <li><a href="#" id="logout-link">ログアウト</a></li>        
         </ul>
     </nav>
-    <script>
-        // === ログアウト確認アラート ===
-        const logoutLink = document.getElementById("logout-link");
-        
-        if (logoutLink) {
-            logoutLink.addEventListener("click", function (e) {
-                e.preventDefault(); 
-                const confirmed = confirm("ログアウトしますか？");
-                if (confirmed) {
-                    // ✅ Jinja2タグをHTML内に記述することで、Flaskが確実にURLに変換する
-                    window.location.href = "{{ url_for('login.logout') }}";
-                }
-            });
-        }
-    </script>
     <script src="{{ url_for('static', filename='js/user_shift_view.js') }}"></script>
 </body>
 </html>
