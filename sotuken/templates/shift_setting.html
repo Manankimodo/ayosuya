@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <title>シフト自動生成設定</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+  <script src="{{ url_for('static', filename='js/shift_settings.js') }}"></script>
 </head>
 <body>
   <!-- ▼ ハンバーガーメニュー -->
@@ -62,15 +63,4 @@
     {% endif %}
   </div>
 </body>
-  <script>
-    const menuBtn = document.getElementById('menuBtn');
-    const sideMenu = document.getElementById('sideMenu');
-    const body = document.body;
-
-    menuBtn.addEventListener('click', () => {
-      menuBtn.classList.toggle('active');
-      sideMenu.classList.toggle('active');
-      body.classList.toggle('menu-open');
-    });
-  </script>
 </html>

@@ -235,4 +235,27 @@ function attachEventListeners() {
     }
 }
 
+
+// === ログアウト確認アラート (既存のコードを維持) ===
+const logoutLink = document.getElementById("logout-link");
+if (logoutLink) {
+    logoutLink.addEventListener("click", function (e) {
+        e.preventDefault(); 
+        
+        // data属性からログアウトURLを取得
+        const logoutUrl = this.getAttribute('data-logout-url');
+        
+        if (!logoutUrl) {
+            console.error("ログアウトURLが見つかりません。");
+            return;
+        }
+        
+        const confirmed = confirm("ログアウトしますか？");
+        if (confirmed) {
+            // 取得したURLを使用
+            window.location.href = logoutUrl;
+        }
+    });
+}
+
 fetchShifts();

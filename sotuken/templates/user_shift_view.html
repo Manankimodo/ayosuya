@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ user_name }}さんのシフト一覧</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='user_shift_view.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/user_shift_view.css') }}">
 </head>
 <body>
     <div class="header">
@@ -31,24 +31,9 @@
         <ul>
             <li><a href="{{ url_for('calendar.calendar') }}">希望シフト入力へ戻る</a></li>
             <li><a href="{{ url_for('chatbot.chat') }}">FAQ</a></li>
-            <li><a href="#" id="logout-link">ログアウト</a></li>        
+            <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>        
         </ul>
     </nav>
-    <script>
-        // === ログアウト確認アラート ===
-        const logoutLink = document.getElementById("logout-link");
-        
-        if (logoutLink) {
-            logoutLink.addEventListener("click", function (e) {
-                e.preventDefault(); 
-                const confirmed = confirm("ログアウトしますか？");
-                if (confirmed) {
-                    // ✅ Jinja2タグをHTML内に記述することで、Flaskが確実にURLに変換する
-                    window.location.href = "{{ url_for('login.logout') }}";
-                }
-            });
-        }
-    </script>
-    <script src="{{ url_for('static', filename='user_shift_view.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/user_shift_view.js') }}"></script>
 </body>
 </html>
