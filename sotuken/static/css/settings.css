@@ -167,10 +167,44 @@ p{color:var(--muted);font-size:13px;margin-top:10px;text-align:center;}
       color: #e50914;
     }
 
-    /* メインコンテンツを少し右にずらす
-    .container {
-      transition: margin-left 0.3s;
-    }
-    .menu-open .container {
-      margin-left: 220px;
-    } */
+/* デフォルトでメニューを画面外に隠す */
+.side-menu {
+    /* 例: 画面左端からメニュー幅分だけ移動させて隠す */
+    transform: translateX(-100%); 
+    transition: transform 0.3s ease-out;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    /* その他のスタイル（幅、高さ、背景色など） */
+    width: 250px; 
+    height: 100%;
+    background-color: #333;
+}
+
+/* activeクラスが付いたらメニューを表示する */
+.side-menu.active {
+    transform: translateX(0); /* 画面内に戻す */
+}
+
+/* ボタンのスタイル切り替え（任意） */
+.menu-btn.active span:nth-child(1) {
+    /* 1本目の棒を回転させてX字にする */
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+.menu-btn.active span:nth-child(2) {
+    /* 2本目の棒を非表示にする */
+    opacity: 0;
+}
+
+.menu-btn.active span:nth-child(3) {
+    /* 3本目の棒を回転させてX字にする */
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* bodyにmenu-openクラスが付いたときのスタイル（メインコンテンツの移動やオーバーレイ） */
+body.menu-open {
+    /* 例: 背景のスクロールを止める */
+    overflow: hidden; 
+}
