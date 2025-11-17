@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MovieShift カレンダー</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  
 </head>
 <body>
 
@@ -28,7 +27,7 @@
   <nav class="menu" id="menu">
     <ul>
         <li><a href="{{ url_for('calendar.my_confirmed_shift') }}">確定シフトを確認</a></li>
-        <li><a href="#" id="logout-link">ログアウト</a></li>
+        <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
         <li><a href="{{ url_for('chatbot.chat') }}">FAQ</a></li>
     </ul>
   </nav>
@@ -63,38 +62,6 @@
   <script id="sentDatesData" type="application/json">
     {{ sent_dates | tojson | safe }}
   </script>
-
-<script>
-    // データベースから提出済み日付を取得する処理はそのまま維持
-    const sentDates = JSON.parse(document.getElementById("sentDatesData").textContent);
-
-    // === 🍔 ハンバーガーメニュー動作 (初期化時に一度だけ登録) ===
-    const hamburger = document.getElementById('hamburger');
-    const menu = document.getElementById('menu');
-
-    if (hamburger && menu) {
-        hamburger.addEventListener('click', () => {
-            // メニューとアイコンの状態を切り替える
-            hamburger.classList.toggle('active');
-            menu.classList.toggle('active');
-        });
-    }
-
-    // === 🔹 ログアウト確認アラート (初期化時に一度だけ登録) ===
-    const logoutLink = document.getElementById("logout-link");
-    
-    if (logoutLink) {
-        logoutLink.addEventListener("click", function (e) {
-            e.preventDefault(); // デフォルトのリンク遷移を停止
-            const confirmed = confirm("ログアウトしますか？");
-            if (confirmed) {
-                // FlaskのログアウトURLへ遷移
-                window.location.href = "{{ url_for('login.logout') }}";
-            }
-        });
-    }
-</script>
-
 
   <!-- ✅ calendar.js はこの下で読み込む -->
   <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
