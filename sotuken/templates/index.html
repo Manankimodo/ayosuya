@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Jinja: CSSファイルへのリンク -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbot.css') }}">
+    
+    <!-- JavaScriptのファイル名を 'chatbot.js' に統一し、defer属性を追加 -->
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+    
     <title>AI チャットボット</title>
 </head>
 <body>
@@ -16,7 +20,8 @@
     <!-- メニュー -->
     <nav class="menu" id="menu">
         <ul>
-            <li><a href="{{ url_for('calendar.calendar') }}">カレンダー</a></li>
+            <li><a href="{{ url_for('calendar.my_confirmed_shift') }}">確定シフトを確認</a></li>
+            <li><a href="{{ url_for('chatbot.chat') }}">FAQ</a></li>
         </ul>
     </nav>
 

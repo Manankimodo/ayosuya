@@ -1,278 +1,252 @@
+/*
+ * Netflix風 統合カレンダー＆メニュー CSS (最終統合版)
+ */
 
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&display=swap');
+
+:root {
+    --bg-dark: #141414;      /* メイン背景色（非常に濃いダークグレー） */
+    --card-dark: #000000;    /* カード/コンテナ背景色（黒） */
+    --text-light: #ffffff;   /* 主な文字色（白） */
+    --muted-text: #AAAAAA;   /* 補助テキスト色 */
+    --accent: #E50914;      /* Netflix赤 */
+    --border-color: #333333; /* 境界線の色 */
+    --cell-bg: #1f1f1f;      /* カレンダーセル背景色 */
+}
+
+/* === 全体設定 === */
 body {
-    font-family: sans-serif;
+    font-family: 'Noto Sans JP', 'Helvetica Neue', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    overflow-x: hidden;
     text-align: center;
-    padding: 20px;
-    background-color: #fafafa;
 }
 
-h1{
-    margin-bottom: 10px;
+/* === タイトル === */
+h1 {
+    margin-top: 80px; 
+    margin-bottom: 25px; /* マージンを調整 */
+    font-size: 2.5em;
+    letter-spacing: 2px;
+    color: var(--text-light);
+    font-weight: 700;
 }
 
-.calendar {
-    width: 100%;
-    max-width: 400px;
-    margin: auto;
-    border-collapse: collapse;
-}
-
-th {
-    background-color: #4CAF50;
-    color: white;
-    padding: 8px;
-}
-
-td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    width: 14.2%;
-    height: 60px;
-    vertical-align: middle;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-td:hover {
-    background-color: #c8e6c9;
-}
-
-td.inactive {
-    color: #bbb;
-    background-color: #f5f5f5;
-    cursor: default;
-}
-
-@media (max-width: 600px) {
-    td {
-    padding: 6px;
-    height: 45px;
-    }
-}
-
+/* === 月切り替えボタン === */
 .month-switch {
     display: flex;
     justify-content: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 15px; /* ギャップを調整 */
+    margin: 20px 0 30px; 
+    width: 100%;
 }
 
-button {
-    background-color: #4CAF50;
-    color: white;
+.month-switch button {
+    background-color: var(--accent);
     border: none;
-    padding: 6px 12px;
-    border-radius: 5px;
+    color: var(--text-light);
+    padding: 12px 25px;
+    border-radius: 6px;
     cursor: pointer;
+    font-weight: 600;
+    font-size: 1em;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(229, 9, 20, 0.4);
 }
 
-    /* ▼ メニュー開いたときのアニメーション */
-    .hamburger.active span:nth-child(1) {
-      transform: translateY(9px) rotate(45deg);
-    }
-    .hamburger.active span:nth-child(2) {
-      opacity: 0;
-    }
-    .hamburger.active span:nth-child(3) {
-      transform: translateY(-9px) rotate(-45deg);
-    }
+.month-switch button:hover {
+    background-color: #B8070F; /* 濃い赤 */
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(229, 9, 20, 0.6);
+}
+
+/* === カレンダー本体 === */
+.calendar {
+    width: 95%;
+    max-width: 800px;
+    margin: auto;
+    border-collapse: collapse;
+    background-color: var(--card-dark);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
+}
+
+.calendar th, .calendar td {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    padding: 15px 10px;
+    color: var(--text-light);
+}
+
+.calendar th {
+    background-color: #222; /* 濃いグレー */
+    color: var(--muted-text);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.calendar td {
+    background-color: var(--cell-bg);
+    height: 70px; /* 高さ調整 */
+    vertical-align: middle;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    font-size: 1.1em;
+}
+
+.calendar td:hover {
+    background-color: rgba(229, 9, 20, 0.5); /* ホバーで赤い光沢 */
+}
+
+/* 先月/来月の日付 */
+.calendar td.inactive {
+    color: #666;
+    background-color: #111;
+    cursor: default;
+}
+
+/* === 🍔 ハンバーガーメニュー === */
+.hamburger {
+    position: fixed;
+    top: 25px;
+    left: 25px;
+    width: 35px;
+    height: 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    z-index: 1500;
+}
+
+.hamburger span {
+    display: block;
+    height: 4px;
+    width: 100%;
+    background-color: var(--accent); /* 赤に変更 */
+    box-shadow: 0 0 8px rgba(229, 9, 20, 0.8); /* 光らせ効果 */
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* メニュー開閉アニメーション */
+.hamburger.active span:nth-child(1) {
+    transform: translateY(10px) rotate(45deg);
+}
+.hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+.hamburger.active span:nth-child(3) {
+    transform: translateY(-10px) rotate(-45deg);
+}
+
+/* --- メニュー本体 --- */
+nav.menu {
+    position: fixed;
+    top: 0;
+    left: -250px;
+    width: 250px;
+    height: 100%;
+    background-color: rgba(10, 10, 10, 0.98);
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* アニメーションを統一 */
+    z-index: 1000;
+    padding-top: 100px;
+    text-align: left;
+}
+
+nav.menu.active {
+    left: 0;
+}
+
+nav.menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+nav.menu ul li {
+    padding: 15px 30px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+nav.menu ul li a {
+    color: var(--text-light);
+    text-decoration: none;
+    font-size: 1.2rem;
+    display: block;
+    transition: color 0.3s;
+    font-weight: 500;
+}
+
+nav.menu ul li a:hover {
+    color: var(--accent);
+}
+
+/* === フラッシュメッセージ === */
+.flash-messages {
+  margin: 10px auto;
+  width: 90%;
+  max-width: 780px;
+  text-align: center;
+  position: absolute; /* カレンダーに重ならないように配置 */
+  top: 150px; 
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+}
+
+.flash {
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 6px;
+  font-weight: 500;
+  text-align: left;
+}
+
+/* Success (成功) - Greenish Accent */
+.flash.success {
+  background-color: rgba(39, 174, 96, 0.2); /* 緑の透過背景 */
+  color: #2ecc71; /* 緑の文字色 */
+  border-left: 5px solid #27ae60;
+}
+
+/* Info (情報/エラー) - Red/White Accent */
+.flash.info {
+  background-color: rgba(229, 9, 20, 0.2); /* 赤の透過背景 */
+  color: #ff8080; /* 明るい赤の文字色 */
+  border-left: 5px solid var(--accent);
+}
 
 
-    /*---------------------------------------------------------------------------------*/
-    
-    /* --- Netflix風 基本スタイル --- */
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      background-color: #000000a6;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
+/* === スマホ対応 === */
+@media (max-width: 600px) {
     h1 {
-      /* 既存のmargin-topを維持 */
-      margin-top: 80px; 
-      
-      /* ★ 修正: 下側のマージンを追加 ★ */
-      margin-bottom: 10px;
-      
-      font-size: 2em;
-      letter-spacing: 1px;
-      color: #fff;
+        margin-top: 60px;
+        font-size: 2em;
     }
-
-    /* --- 月切り替えボタン --- */
-    /* .month-switch は h1 の下にあるため、このマージンは残します */
-    .month-switch {
-      margin: 20px 0; 
+    
+    .calendar th, .calendar td {
+        padding: 10px 5px;
+        font-size: 14px;
+        height: 50px;
     }
 
     .month-switch button {
-      background-color: #e50914;
-      border: none;
-      color: #fff;
-      padding: 10px 18px;
-      margin: 0 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: all 0.3s ease;
+        padding: 10px 16px;
+        font-size: 0.9em;
     }
 
-    .month-switch button:hover {
-      background-color: #f6121d;
-      transform: scale(1.05);
+    .flash-messages {
+        width: 95%;
+        top: 100px;
     }
-
-    /* --- カレンダー --- */
-    table.calendar {
-      width: 90%;
-      max-width: 800px;
-      border-collapse: collapse;
-      background-color: rgba(20, 20, 20, 0.95);
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 0 20px rgba(221, 221, 221, 0.2);
-    }
-
-    table.calendar th, table.calendar td {
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      text-align: center;
-      padding: 15px;
-      color: #fff;
-    }
-
-    table.calendar th {
-      background-color: #e50914;
-      font-weight: bold;
-    }
-
-    table.calendar td {
-      background-color: rgba(40, 40, 40, 0.9);
-      transition: background 0.3s;
-    }
-
-    table.calendar td:hover {
-      background-color: rgba(229, 9, 20, 0.4);
-      cursor: pointer;
-    }
-
-    /* --- 🍔 ハンバーガーボタン --- */
-    .hamburger {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      width: 30px;
-      height: 25px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      cursor: pointer;
-      z-index: 1500;
-    }
-
-    .hamburger span {
-      display: block;
-      height: 3px;
-      width: 100%;
-      background-color: #e50914; /* ← 赤に変更 */
-      box-shadow: 0 0 8px rgba(229, 9, 20, 0.8); /* 🔥 光らせ効果 */
-      border-radius: 2px;
-      transition: all 0.3s ease;
-    }
-
-    /* --- メニュー --- */
-    nav.menu {
-      position: fixed;
-      top: 0;
-      left: -250px;
-      width: 250px;
-      height: 100%;
-      background-color: rgba(10, 10, 10, 0.95);
-      box-shadow: 2px 0 15px rgba(0,0,0,0.7);
-      transition: left 0.3s ease;
-      z-index: 1000;
-      padding-top: 80px;
-    }
-
-    nav.menu.active {
-      left: 0;
-    }
-
-    nav.menu ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    nav.menu ul li {
-      margin: 20px 0;
-      text-align: center;
-    }
-
-    nav.menu ul li a {
-      color: #fff;
-      text-decoration: none;
-      font-size: 18px;
-      transition: color 0.3s;
-    }
-
-    nav.menu ul li a:hover {
-      color: #e50914;
-    }
-
-    /* --- メニュー開閉アニメーション --- */
-    .hamburger.active span:nth-child(1) {
-      transform: translateY(11px) rotate(45deg);
-    }
-    .hamburger.active span:nth-child(2) {
-      opacity: 0;
-    }
-    .hamburger.active span:nth-child(3) {
-      transform: translateY(-11px) rotate(-45deg);
-    }
-
-    /* --- スマホ対応 --- */
-    @media (max-width: 600px) {
-      h1 {
-        font-size: 1.6em;
-      }
-
-      table.calendar td, table.calendar th {
-        padding: 10px;
-        font-size: 14px;
-      }
-
-      .month-switch button {
-        padding: 8px 14px;
-        margin: 5px;
-      }
-    }
-
-    /*--------------------------------------------------------------------------------------*/
-.flash-messages {
-  margin: 10px auto;
-  width: 80%;
-  text-align: center;
-}
-
-.flash.success {
-  background-color: #d4edda;
-  color: #686b69;
-  border: 1px solid #c3e6cb;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.flash.info {
-  background-color: #cce5ff;
-  color: #004085;
-  border: 1px solid #b8daff;
-  padding: 10px;
-  border-radius: 5px;
 }
