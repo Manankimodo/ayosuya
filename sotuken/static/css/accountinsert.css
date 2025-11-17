@@ -236,6 +236,18 @@ button[type="submit"]:hover {
 }
 
 
+/*
+ * Netflix風 ハンバーガーメニュー (セレクタ: .hamburger / .menu 対応版)
+ * - 全体のテーマに合わせ、色の変数とアニメーションを統一
+ */
+
+:root {
+    /* 必須: これらが定義されている前提です */
+    --accent: #E50914; /* Netflix赤 */
+    --border-color: #333333; /* 統一されたダークボーダー */
+    --text-light: #ffffff;
+}
+
 /* --- ハンバーガーメニュー --- */
 .hamburger {
     width: 35px;
@@ -250,12 +262,13 @@ button[type="submit"]:hover {
 .bar {
     height: 4px;
     width: 100%;
-    background-color: white; 
+    background-color: var(--text-light); /* 白 */ 
     margin: 6px 0;
     border-radius: 2px;
     transition: all 0.3s ease;
 }
 
+/* X字へのアニメーション */
 .hamburger.active .bar:nth-child(1) {
     transform: translateY(10px) rotate(45deg);
 }
@@ -273,8 +286,10 @@ button[type="submit"]:hover {
     left: -250px; 
     width: 250px;
     height: 100%;
+    /* 統一された暗い半透明背景 */
     background-color: rgba(0, 0, 0, 0.95); 
     box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
+    /* 統一されたアニメーションのイージング */
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 999;
     padding-top: 100px;
@@ -293,6 +308,7 @@ button[type="submit"]:hover {
 
 .menu li {
     padding: 15px 30px;
+    /* 統一された境界線の色 */
     border-bottom: 1px solid var(--border-color); 
 }
 
@@ -302,7 +318,7 @@ button[type="submit"]:hover {
 
 .menu a {
     text-decoration: none;
-    color: #fff;
+    color: var(--text-light);
     font-size: 1.2rem;
     display: block;
     transition: color 0.3s ease;
@@ -310,6 +326,7 @@ button[type="submit"]:hover {
 }
 
 .menu a:hover {
+    /* 統一されたホバー色 (Netflix赤) */
     color: var(--accent); 
     font-weight: 600;
 }
