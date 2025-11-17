@@ -196,3 +196,88 @@ a[href="/calendar/admin"]:hover {
     color: var(--accent);
     text-decoration: underline;
 }
+
+/* --- ハンバーガーメニュー --- */
+.hamburger {
+    width: 35px;
+    height: 30px;
+    position: fixed;
+    top: 25px;
+    left: 25px;
+    cursor: pointer;
+    z-index: 1000; /* メニューより上に配置 */
+}
+
+.bar {
+    height: 4px;
+    width: 100%;
+    /* 白いバーでNetflix風ダークテーマに合わせる */
+    background-color: white; 
+    margin: 6px 0;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* ハンバーガーメニューのアニメーション (X字への変換) */
+.hamburger.active .bar:nth-child(1) {
+    transform: translateY(10px) rotate(45deg);
+}
+.hamburger.active .bar:nth-child(2) {
+    opacity: 0;
+}
+.hamburger.active .bar:nth-child(3) {
+    transform: translateY(-10px) rotate(-45deg);
+}
+
+/* --- メニュー本体 (サイドバー) --- */
+.menu {
+    position: fixed;
+    top: 0;
+    /* 初期状態は画面外に隠す */
+    left: -250px; 
+    width: 250px;
+    height: 100%;
+    /* 非常に暗い、半透明な背景 */
+    background-color: rgba(0, 0, 0, 0.95); 
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
+    /* スムーズなスライドインアニメーション */
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 999;
+    padding-top: 100px;
+    text-align: left;
+}
+
+.menu.open {
+    left: 0; /* openクラスが付いたら表示 */
+}
+
+.menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.menu li {
+    padding: 15px 30px;
+    /* ダークテーマの境界線 */
+    border-bottom: 1px solid #333; 
+}
+
+.menu li:last-child {
+    border-bottom: none;
+}
+
+.menu a {
+    text-decoration: none;
+    color: #fff;
+    font-size: 1.2rem;
+    display: block;
+    transition: color 0.3s ease;
+    font-weight: 500;
+}
+
+.menu a:hover {
+    /* ホバーでネトフリレッド */
+    color: #E50914; 
+    font-weight: 600;
+}
