@@ -6,9 +6,24 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/auto_calendar.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
- 
+  <script src="{{ url_for('static', filename='js/auto_calendar.js') }}"></script>
 </head>
 <body>
+      <!-- ▼ ハンバーガーメニュー -->
+  <div class="menu-btn" id="menuBtn">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <nav class="side-menu" id="sideMenu">
+    <ul>
+      <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
+      <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
+      <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
+      <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
+    </ul>
+  </nav>
   <header>自動作成シフトカレンダー</header>
  
   {% if settings %}
@@ -42,9 +57,9 @@
     <!-- ✅ 再編集ボタン -->
   <a href="{{ url_for('makeshift.auto_calendar') }}" class="btn secondary">♻️ 再編集（再生成）</a>
   </div>
-  <div class="back">
+  <!-- <div class="back">
     <button class="btn secondary" onclick="location.href='/makeshift/admin'">🔙 戻る</button>
-  </div>
+  </div> -->
  
   <script>
     // FlaskのPython変数から取得（settings変数がテンプレートに渡されていることが前提）
