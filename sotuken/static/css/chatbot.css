@@ -1,25 +1,43 @@
-/* ================================
-   LINE風チャットUI（改良版）
-================================ */
+/*
+ * Netflix風 ダークチャット UI 統合 CSS
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&display=swap');
+
+:root {
+    --bg-dark: #141414;      /* メイン背景色（非常に濃いダークグレー） */
+    --card-dark: #000000;    /* タイトル/入力エリア背景色 */
+    --text-light: #ffffff;   /* 主な文字色 */
+    --accent: #E50914;      /* Netflix赤 */
+    --border-color: #333333; /* 境界線の色 */
+    --user-bubble: #333333;  /* ユーザー吹き出し（ダークグレー） */
+    --bot-bubble: #1c1c1c;   /* ボット吹き出し（より濃いダークグレー） */
+    --input-focus: #ff4d4d;  /* 入力フォーカス時の赤 */
+}
+
 body {
     font-family: "Noto Sans JP", sans-serif;
-    background: linear-gradient(to bottom, #d7ccc8, #e5ddd5);
+    /* 背景を均一なダークカラーに設定 */
+    background-color: var(--bg-dark);
+    color: var(--text-light);
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden; /* メニューのはみ出し防止 */
 }
 
 /* タイトルバー */
 h1 {
-    background-color: #075e54;
-    color: white;
+    background-color: var(--card-dark);
+    color: var(--accent); /* 赤をアクセントに */
     text-align: center;
-    padding: 14px 0;
-    font-size: 1.2em;
+    padding: 18px 0;
+    font-size: 1.4em;
     margin: 0;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.7);
+    font-weight: 700;
 }
 
 /* 💬 チャットエリア */
@@ -29,85 +47,100 @@ h1 {
     padding: 20px 15px;
     display: flex;
     flex-direction: column;
-    background-image: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
-    background-size: cover;
+    /* 統一されたダーク背景 */
+    background-color: #0c0c0c; 
     scroll-behavior: smooth;
+    /* スクロールバーの色をダークテーマに合わせる */
+    scrollbar-color: #444 #111;
+    scrollbar-width: thin;
 }
 
 /* 吹き出し全体 */
 .message {
-    max-width: 75%;
-    padding: 10px 14px;
-    margin: 6px 0;
-    border-radius: 18px;
+    max-width: 80%;
+    padding: 12px 16px;
+    margin: 8px 0;
+    border-radius: 20px;
     word-wrap: break-word;
     line-height: 1.6;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    /* 吹き出しの影を強調 */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); 
     animation: fadeIn 0.3s ease;
 }
 
 /* ユーザーメッセージ（右側） */
 .message.user {
     align-self: flex-end;
-    background-color: #dcf8c6;
-    border-bottom-right-radius: 4px;
-    text-align: left;
+    background-color: var(--user-bubble); 
+    border-bottom-right-radius: 8px;
+    color: var(--text-light);
+    /* ユーザーメッセージに赤のボーダーで強調 */
+    border-right: 4px solid var(--accent);
 }
 
 /* ボットメッセージ（左側） */
 .message.bot {
     align-self: flex-start;
-    background-color: #ffffff;
-    border-bottom-left-radius: 4px;
-    text-align: left;
+    background-color: var(--bot-bubble);
+    border-bottom-left-radius: 8px;
+    color: var(--text-light);
+    border-left: 4px solid var(--border-color);
 }
 
 /* 入力フォーム */
 form {
     display: flex;
     padding: 10px;
-    background: #f0f0f0;
-    border-top: 1px solid #ccc;
+    background: var(--card-dark);
+    border-top: 1px solid #1c1c1c;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.5);
 }
 
 input[type="text"] {
     flex: 1;
-    padding: 10px 15px;
-    border: 1px solid #ccc;
+    padding: 12px 18px;
+    background-color: #1c1c1c;
+    border: 1px solid #444;
     border-radius: 25px;
     font-size: 1em;
     margin-right: 10px;
     outline: none;
-    transition: 0.3s;
+    color: var(--text-light);
+    transition: all 0.3s;
 }
 
 input[type="text"]:focus {
-    border-color: #34b7f1;
-    box-shadow: 0 0 3px #34b7f1;
+    border-color: var(--accent);
+    box-shadow: 0 0 5px var(--accent);
 }
 
 button {
-    background-color: #128c7e;
-    color: white;
+    background-color: var(--accent);
+    color: var(--text-light);
     border: none;
-    padding: 10px 20px;
+    padding: 10px 22px;
     border-radius: 25px;
     cursor: pointer;
     font-size: 1em;
-    transition: background-color 0.3s;
+    font-weight: 600;
+    transition: background-color 0.3s, transform 0.3s;
 }
 
 button:hover {
-    background-color: #0d6e63;
+    background-color: #B20710; /* 濃い赤 */
+    transform: translateY(-1px);
 }
 
-/* 🍔 ハンバーガーメニュー */
+/* ==================================== */
+/* --- 🍔 ハンバーガーメニュー (統一) --- */
+/* ==================================== */
+
 .hamburger {
     position: fixed;
-    top: 15px;
-    left: 15px;
-    width: 28px;
-    height: 22px;
+    top: 25px; /* タイトルバー内に配置 */
+    left: 25px;
+    width: 35px;
+    height: 30px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -117,52 +150,70 @@ button:hover {
 
 .hamburger span {
     display: block;
-    height: 3px;
+    height: 4px; /* 厚さを統一 */
     width: 100%;
-    background-color: white;
+    background-color: var(--text-light); /* 白 */
     border-radius: 2px;
     transition: all 0.3s ease;
 }
 
 /* ✨ アニメーション */
 .hamburger.active span:nth-child(1) {
-    transform: rotate(45deg) translateY(8px);
+    transform: rotate(45deg) translateY(10px);
 }
 .hamburger.active span:nth-child(2) {
     opacity: 0;
 }
 .hamburger.active span:nth-child(3) {
-    transform: rotate(-45deg) translateY(-8px);
+    transform: rotate(-45deg) translateY(-10px);
 }
 
-/* メニュー */
+/* メニュー本体 */
 .menu {
     position: fixed;
     top: 0;
-    left: -220px;
-    width: 200px;
+    left: -250px; /* 幅を統一 */
+    width: 250px;
     height: 100vh;
-    background-color: rgba(0, 0, 0, 0.9);
-    transition: left 0.3s ease;
+    background-color: rgba(0, 0, 0, 0.98);
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.8);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 1000;
-    padding-top: 70px;
+    padding-top: 100px; /* タイトルバー下からメニュー開始 */
 }
 .menu.active {
     left: 0;
 }
 .menu a {
-    color: #fff;
+    color: var(--text-light);
     display: block;
-    padding: 12px 20px;
+    padding: 15px 30px;
     text-decoration: none;
     font-size: 1.1em;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.3s, color 0.3s;
 }
 .menu a:hover {
-    background-color: #333;
+    background-color: #1c1c1c;
+    color: var(--accent);
 }
 
 /* 💫 フェードインアニメーション */
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+/* スマホ対応 */
+@media (max-width: 600px) {
+    .message {
+        max-width: 90%;
+    }
+    input[type="text"] {
+        padding: 10px 15px;
+        font-size: 0.95em;
+    }
+    button {
+        padding: 10px 18px;
+    }
 }
