@@ -9,6 +9,7 @@ app.secret_key = 'your_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     'mysql+pymysql://root:@localhost/ayosuya?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
 )
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- DB初期化 ---
@@ -39,4 +40,4 @@ def index():
 #     app.run(debug=True)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

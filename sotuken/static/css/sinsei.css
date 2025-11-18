@@ -1,3 +1,9 @@
+/*
+ * Netflix風入力フォームCSS (最終統合版)
+ * - ダークな背景色とNetflixレッドのアクセント
+ * - スマートフォンでの操作性を考慮し、入力フィールドのサイズを調整済み
+ */
+
 /* 背景全体：Netflix風 */
 body {
   font-family: 'Noto Sans JP', sans-serif;
@@ -71,14 +77,15 @@ label {
   color: #bbb;
 }
 
+/* ★調整済み: 入力フィールドとセレクトボックスのパディングとフォントサイズ */
 input, select {
   width: 100%;
-  padding: 10px;
+  padding: 12px; /* タッチ操作性を高めるためパディングを増やす */
   border: none;
   border-radius: 6px;
   background-color: #333;
   color: #fff;
-  font-size: 1em;
+  font-size: 1em; /* フォントサイズを1emに固定 */
   transition: background-color 0.3s;
 }
 
@@ -115,4 +122,66 @@ input:focus, select:focus {
 
 .back-link:hover {
   color: #fff;
+}
+
+/* ================================================= */
+/* ▼ スマホ対応（Max-width: 480px以下） */
+/* ================================================= */
+@media (max-width: 480px) {
+    
+    /* 全体設定：コンテンツを上に寄せ、縦方向のスクロールに対応 */
+    body {
+        align-items: flex-start; 
+        padding-top: 30px;
+        padding-bottom: 30px;
+        min-height: 100vh; 
+        overflow-y: auto; 
+    }
+
+    /* コンテンツエリア */
+    .container {
+        width: 95%; 
+        padding: 20px; 
+        max-width: none; 
+    }
+
+    /* タイトル */
+    .title {
+        font-size: 1.3em;
+        margin-bottom: 20px;
+    }
+
+    /* Netflix風Nロゴ */
+    .logo {
+        font-size: 1.5em;
+    }
+
+    /* 入力フォーム全体 */
+    .form-card {
+        gap: 12px; 
+    }
+
+    /* ラベルと入力フィールドの微調整 */
+    label {
+        font-size: 0.85em;
+    }
+
+    /* ★調整済み: スマホでも押しやすいパディングを維持 */
+    input, select {
+        padding: 10px; 
+        font-size: 1em; 
+    }
+
+    /* ボタン */
+    .btn {
+        padding: 12px;
+        font-size: 1em;
+        margin-top: 5px;
+    }
+
+    /* 戻るリンク */
+    .back-link {
+        font-size: 0.9em;
+        margin-top: 15px;
+    }
 }

@@ -1,5 +1,7 @@
 /*
- * Netflix風 ダークチャット UI 統合 CSS (最終版)
+ * Netflix風 ダークチャット UI 統合 CSS (最終完全版)
+ * - ハンバーガーメニューの重なりとアニメーションを修正済み
+ * - モバイルフレンドリーなレイアウトを維持
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&display=swap');
@@ -38,6 +40,9 @@ h1 {
     box-shadow: 0 4px 8px rgba(0,0,0,0.7);
     font-weight: 700;
     z-index: 10;
+    
+    /* ★修正: メニューが収まるよう左側に十分な余白を設定 */
+    padding-left: 80px; 
 }
 
 /* === 💬 チャットエリア === */
@@ -157,7 +162,7 @@ button:hover {
 
 
 /* ==================================== */
-/* --- 🍔 ハンバーガーメニュー (統一) --- */
+/* --- 🍔 ハンバーガーメニュー (修正統合版) --- */
 /* ==================================== */
 
 .hamburger {
@@ -166,11 +171,9 @@ button:hover {
     left: 25px; 
     width: 35px; 
     height: 30px; 
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
     cursor: pointer;
     z-index: 1500;
+    /* Flexbox定義を削除 */
 }
 
 .hamburger span {
@@ -180,17 +183,26 @@ button:hover {
     background-color: var(--text-light); 
     border-radius: 2px;
     transition: all 0.3s ease;
+    /* ★修正: 線の間にマージンを適用 */
+    margin-bottom: 6px; 
+}
+
+/* ★追加: 最後の線にはマージンを適用しない */
+.hamburger span:last-child {
+    margin-bottom: 0;
 }
 
 /* ✨ アニメーション (X字への変化) */
 .hamburger.active span:nth-child(1) {
-    transform: rotate(45deg) translateY(10px); 
+    /* ★修正: translateYの値を調整し、線が中央でクロスするようにする */
+    transform: rotate(45deg) translate(5px, 9px); 
 }
 .hamburger.active span:nth-child(2) {
     opacity: 0;
 }
 .hamburger.active span:nth-child(3) {
-    transform: rotate(-45deg) translateY(-10px); 
+    /* ★修正: translateYの値を調整し、線が中央でクロスするようにする */
+    transform: rotate(-45deg) translate(5px, -9px); 
 }
 
 /* メニュー本体 */
@@ -204,7 +216,7 @@ button:hover {
     box-shadow: 2px 0 15px rgba(0, 0, 0, 0.8);
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 1000;
-    padding-top: 100px; /* 見切れ防止のために十分なパディング */
+    padding-top: 100px; 
     text-align: left;
 }
 .menu.active {
@@ -213,7 +225,7 @@ button:hover {
 
 /* メニューリスト */
 .menu ul {
-    list-style: none; /* リストマークを削除 */
+    list-style: none; 
     padding: 0;
     margin: 0;
 }
@@ -251,8 +263,11 @@ button:hover {
     }
     h1 {
         font-size: 1.2em;
+        /* ★修正: スマホではパディングを少し減らす */
+        padding-left: 70px; 
     }
+    
     .hamburger {
-        top: 20px;
+        top: 15px;
     }
 }
