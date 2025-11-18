@@ -8,13 +8,27 @@
 </head>
 <body>
   <header>希望シフト一覧</header>
+    <!-- ▼ ハンバーガーメニュー -->
+  <div class="menu-btn" id="menuBtn">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <nav class="side-menu" id="sideMenu">
+    <ul>
+      <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
+      <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
+      <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
+      <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
+    </ul>
+  </nav>
     <!-- ✅ ボタンコントロール部分 -->
   <div id="controls">
     <button id="make-shift-btn" onclick="location.href='/makeshift/auto_calendar'">
       🗓️ シフト自動作成
     </button>
-    
-    <button id="back-btn" onclick="location.href='/calendar/admin'">👥 前のページへ戻る</button>
+    <!-- <button id="back-btn" onclick="location.href='/calendar/admin'">👥 前のページへ戻る</button> -->
   </div>
 
   <div class="container">

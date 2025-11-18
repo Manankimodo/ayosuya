@@ -4,10 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/manage_faq.css') }}">
+    <script src="{{ url_for('static', filename='js/manage_faq.js') }}"></script>
     <title>FAQ管理</title>
 </head>
 <body>
     <h1>FAQ管理画面</h1>
+    <!-- ▼ ハンバーガーメニュー -->
+    <div class="hamburger" id="hamburger">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+    </div>
+        <!-- ▼ メニュー本体 -->
+    <nav class="menu" id="menu">
+        <ul>
+            <!-- <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li> -->
+            <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
+            <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
+            <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
+            <li><a href="{{ url_for('makeshift.generate_shift') }}">シフト作成</a></li>
+        </ul>
+    </nav>
 
     <h2>新規登録</h2>
     <form action="{{ url_for('shift.add_faq') }}" method="POST">
@@ -39,6 +56,6 @@
     </table>
 
     <br>
-    <a href="/calendar/admin">← カレンダーに戻る</a>
+    <!-- <a href="/calendar/admin">← カレンダーに戻る</a> -->
 </body>
 </html>

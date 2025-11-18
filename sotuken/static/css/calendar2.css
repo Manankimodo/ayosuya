@@ -1,100 +1,138 @@
+/*
+ * Netflix風カレンダーCSS
+ * - ダークな背景色 (#141414, #000)
+ * - アクセントカラーにネトフリレッド (#E50914)
+ * - モダンなフォント（今回は標準のサンセリフを使用）
+ */
+
 /* 全体設定 */
 body {
-    font-family: 'Noto Sans JP', sans-serif;
-    background: rgba(81, 78, 78, 0.85);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    /* 非常にダークな背景色 */
+    background: #141414; 
     color: #ffffff;
     margin: 0;
     padding: 0;
     text-align: center;
+    min-height: 100vh;
+    overflow-x: hidden; /* 横スクロールを防止 */
 }
 
-/* タイトル */
+/* タイトル (h1) - ロゴ風に強調 */
 h1 {
-    font-size: 2.2rem;
-    margin: 20px 0;
-    color: #ffffff; /* Netflixレッド */
-    letter-spacing: 2px;
+    font-size: 2.5rem;
+    margin: 30px 0 25px;
+    color: #E50914; /* ネトフリレッド */
+    letter-spacing: 3px;
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(229, 9, 20, 0.4); /* 微妙な光沢 */
 }
 
 /* 月切り替えボタン */
 .month-switch {
-    margin-bottom: 20px;
+    margin-bottom: 30px;
 }
 
 .month-switch button {
-    background-color: #e50914;
+    background-color: #E50914; /* ネトフリレッド */
     border: none;
     color: white;
-    font-size: 1rem;
-    padding: 10px 20px;
-    border-radius: 6px;
-    margin: 0 10px;
+    font-size: 1.1rem;
+    padding: 12px 25px;
+    border-radius: 4px; /* 角をシャープに */
+    margin: 0 15px;
     cursor: pointer;
-    transition: background 0.3s ease;
+    transition: background 0.3s ease, transform 0.2s ease;
+    font-weight: 600;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 .month-switch button:hover {
-    background-color: #b0060f;
+    background-color: #B8070F;
+    transform: translateY(-2px); /* 少し浮き上がるエフェクト */
 }
 
-/* カレンダー */
+/* カレンダー本体 */
 .calendar {
-    width: 90%;
-    margin: 0 auto;
-    border-collapse: collapse;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
-    border-radius: 10px;
+    width: 95%;
+    max-width: 900px; /* PCでの最大幅 */
+    margin: 0 auto 50px;
+    border-collapse: separate; /* セルの間に隙間を持たせる */
+    border-spacing: 2px; /* セルの隙間 */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7); /* 強い影 */
+    border-radius: 8px;
     overflow: hidden;
-    background: rgba(81, 78, 78, 0.85);
+    background: #000; /* カレンダーの背景は黒 */
 }
 
 .calendar th, .calendar td {
-    padding: 15px;
-    border: 1px solid #333;
+    padding: 18px 10px;
+    border: none; /* ボーダーを削除し、背景色で区切る */
     text-align: center;
-    font-size: 1rem;
+    font-size: 1.05rem;
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
+/* カレンダーヘッダー（曜日） */
 .calendar th {
     background-color: #222;
-    color: #e50914;
+    color: #ffffff; /* 曜日は白 */
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
+/* カレンダーセル（日付） */
 .calendar td {
-    transition: background 0.3s ease;
+    background-color: #2B2B2B; /* 日付の背景色 */
+    color: #E0E0E0;
     cursor: pointer;
+    border-radius: 4px;
 }
 
+/* 日付セルホバー */
 .calendar td:hover {
-    background-color: rgba(229, 9, 20, 0.3);
+    background-color: #444;
+    box-shadow: inset 0 0 0 2px #E50914; /* 赤いインナーボーダー */
 }
 
-/* 今日の日付を強調 */
+/* 今日の日付を強調 - ネトフリレッドの背景 */
 .calendar td.today {
-    background-color: #e50914;
+    background-color: #E50914;
     color: white;
     font-weight: bold;
-    border-radius: 6px;
+    border-radius: 4px;
+    box-shadow: 0 0 15px rgba(229, 9, 20, 0.8); /* 強い発光 */
 }
 
-/* 日曜日を赤、土曜日を青 */
+/* 日曜日を赤、土曜日を水色 */
 .calendar th:first-child,
 .calendar td:first-child {
-    color: #ff6b6b;
+    color: #FF7777; /* 明るめの赤 */
 }
 
 .calendar th:last-child,
 .calendar td:last-child {
-    color: #4da6ff;
+    color: #77AFFF; /* 明るめの青 */
 }
 
+/* 月と年の表示を固定 */
+#monthYear {
+    position: sticky;
+    top: 0;
+    padding: 10px 0;
+    background: #141414; /* スクロールしても見えるように */
+    z-index: 10;
+}
+
+/* ================================================= */
 /* ▼ ハンバーガーメニュー */
 .hamburger {
-    width: 30px;
-    height: 25px;
+    width: 35px;
+    height: 30px;
     position: fixed;
-    top: 20px;
-    left: 20px;
+    top: 25px;
+    left: 25px;
     cursor: pointer;
     z-index: 1000;
 }
@@ -103,33 +141,35 @@ h1 {
     height: 4px;
     width: 100%;
     background-color: white;
-    margin: 5px 0;
+    margin: 6px 0;
     border-radius: 2px;
     transition: all 0.3s ease;
 }
 
 .hamburger.active .bar:nth-child(1) {
-    transform: translateY(9px) rotate(45deg);
+    transform: translateY(10px) rotate(45deg);
 }
 .hamburger.active .bar:nth-child(2) {
     opacity: 0;
 }
 .hamburger.active .bar:nth-child(3) {
-    transform: translateY(-9px) rotate(-45deg);
+    transform: translateY(-10px) rotate(-45deg);
 }
 
-/* ▼ メニュー本体 */
+/* ▼ メニュー本体 (サイドバー) */
 .menu {
     position: fixed;
     top: 0;
     left: -250px;
-    width: 220px;
+    width: 250px;
     height: 100%;
-    background-color: rgba(20, 20, 20, 0.95);
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.8);
-    transition: left 0.3s ease;
+    /* 非常に暗い、半透明な背景で没入感を出す */
+    background-color: rgba(0, 0, 0, 0.95); 
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* スムーズなアニメーション */
     z-index: 999;
-    padding-top: 80px;
+    padding-top: 100px;
+    text-align: left;
 }
 
 .menu.open {
@@ -143,103 +183,92 @@ h1 {
 }
 
 .menu li {
-    margin: 20px 0;
+    padding: 15px 30px;
+    border-bottom: 1px solid #333;
+}
+
+.menu li:last-child {
+    border-bottom: none;
 }
 
 .menu a {
     text-decoration: none;
     color: #fff;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+    display: block;
     transition: color 0.3s ease;
+    font-weight: 500;
 }
 
 .menu a:hover {
-    color: #e50914;
+    color: #E50914; /* ホバーでネトフリレッド */
+    font-weight: 600;
 }
 
-/* スクロール時も固定 */
-#monthYear {
-    position: sticky;
-    top: 0;
-    padding: 10px 0;
-    z-index: 10;
-}
-
-/* === モーダル全体 === */
-.modal {
-  display: none; /* 初期は非表示 */
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.6);
-  justify-content: center;
-  align-items: center;
-}
+/* ================================================= */
+/* ✅ モーダル - ポップアップコンテンツ風 */
 
 /* === モーダル全体の背景 === */
 #shift-modal {
-    display: none; /* 最初は非表示 */
+    display: none; 
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.8); /* 半透明の黒背景 */
+    background-color: rgba(0, 0, 0, 0.9); /* 完全に暗い背景 */
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 2000; /* 最前面に */
 }
 
-/* === モーダルの内容ボックス === */
-#shift-modal .modal-content {
-    background-color: #111111; /* 黒に近いダークグレー */
-    color: #ffffff;            /* 白文字 */
-    border-radius: 12px;
-    padding: 25px;
-    width: 80%;
-    max-width: 600px;
-    box-shadow: 0 0 15px rgb(255, 255, 255);
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    line-height: 1.6;
-    overflow-y: auto;
-    max-height: 80vh;
+/* === モーダルの内容ボックス (HTMLでインラインスタイル指定されている部分) === */
+/* HTML内のインラインスタイルを上書きまたは補完 */
+#shift-modal > div {
+    /* インラインスタイルで指定されている background: rgb(25, 25, 25); を補完 */
+    background: #000; 
+    border: 2px solid #E50914; /* 赤い枠線 */
+    padding: 30px 25px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 0 25px rgba(229, 9, 20, 0.5); /* 強めの発光 */
+    position: relative;
+    animation: fadeIn 0.3s ease-out; /* フェードイン */
 }
 
 /* === 閉じるボタン === */
 #modal-close {
-    background: none;
-    border: none;
+    /* インラインスタイルで指定されている &times; を補完 */
     color: #fff;
-    font-size: 22px;
-    font-weight: bold;
+    font-size: 30px;
     position: absolute;
-    top: 15px;
-    right: 25px;
+    right: 15px;
+    top: 5px;
     cursor: pointer;
-    transition: color 0.3s;
+    transition: color 0.2s;
 }
 
 #modal-close:hover {
-    color: #ff4d4d; /* ホバー時に赤っぽく */
+    color: #E50914; 
 }
 
-/* === モーダル内のテキスト（絵文字含む） === */
+/* === モーダル内のテキスト === */
 #modal-text {
-    white-space: pre-line; /* 改行を反映 */
-    font-size: 16px;
+    color: #fff;
+    font-size: 17px;
+    line-height: 1.7;
+    white-space: pre-wrap;
 }
 
-/* === スクロールバーのスタイル（おしゃれに） === */
-#shift-modal .modal-content::-webkit-scrollbar {
-    width: 8px;
-}
-#shift-modal .modal-content::-webkit-scrollbar-thumb {
-    background-color: #444;
-    border-radius: 4px;
-}
-#shift-modal .modal-content::-webkit-scrollbar-thumb:hover {
-    background-color: #666;
+/* モーダル表示時のアニメーション */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }

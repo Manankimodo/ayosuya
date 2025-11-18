@@ -1,8 +1,23 @@
+/*
+ * Netflix風 FAQ/Q&A管理画面 CSS
+ * - 没入感のあるダークテーマとネトフリレッドのアクセントを使用
+ */
+
+:root {
+    --bg-dark: #141414;      /* メイン背景色（非常に濃いダークグレー） */
+    --card-dark: #000000;    /* カード/フォーム背景色（黒） */
+    --text-light: #ffffff;   /* 主な文字色（白） */
+    --muted-text: #AAAAAA;   /* 補助テキスト色（明るいグレー） */
+    --accent: #E50914;      /* Netflix赤 */
+    --border-color: #333333; /* 境界線の色 */
+    --hover-dark: #1f1f1f;   /* テーブル行ホバー色 */
+}
+
 /* 全体のラッパー */
 body {
-    font-family: "Noto Sans JP", sans-serif;
-    background-color: #3c3c3c; /* 背景をダークグレーに */
-    color: #fff; /* 文字を白に */
+    font-family: "Noto Sans JP", 'Helvetica Neue', sans-serif;
+    background-color: var(--bg-dark); 
+    color: var(--text-light);
     margin: 0;
     padding: 0;
     display: flex;
@@ -15,90 +30,119 @@ body {
 
 /* コンテナ */
 .container {
-    width: 90%;
-    max-width: 900px;
+    width: 95%;
+    max-width: 1000px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    padding: 30px 0;
 }
 
 /* タイトル */
 h1 {
-    font-size: 1.8em;
+    font-size: 2.2em;
     margin-bottom: 40px;
-    border-bottom: 2px solid #e53935; /* 赤ライン */
-    padding-bottom: 5px;
+    /* 強調された赤ライン */
+    border-bottom: 3px solid var(--accent); 
+    padding-bottom: 10px;
     width: 100%;
+    max-width: 800px;
     text-align: center;
-    color: #fff;
+    color: var(--text-light);
+    font-weight: 700;
+    letter-spacing: 1px;
 }
 
-/* フォーム全体 */
+/* フォーム全体（新規登録/編集エリア） */
 form {
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: left;
-    padding: 20px 25px;
-    border: 2px solid #555;
-    border-radius: 6px;
-    background-color: #444; /* 少し明るいグレー */
+    padding: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--card-dark); 
     width: 100%;
-    max-width: 500px;
+    max-width: 600px;
     margin-bottom: 40px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
 }
 
-/* テーブル */
+/* テーブル（一覧表示） */
 table {
     margin: 0 auto;
-    border-collapse: collapse;
+    border-collapse: separate; /* セル間隔を有効にする */
+    border-spacing: 0 1px;
     width: 100%;
-    max-width: 800px;
-    background-color: #444;
-    color: #fff;
+    max-width: 900px;
+    background-color: var(--card-dark);
+    color: var(--text-light);
     border-radius: 8px;
     overflow: hidden;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
 }
 
 th, td {
-    padding: 10px;
-    border: 1px solid #666;
+    padding: 12px 15px;
+    border: none; /* セル内のボーダーを削除 */
     text-align: left;
+    vertical-align: middle;
 }
 
 /* テーブルヘッダー */
 th {
-    background-color: #222;
-    color: #ffffff;
+    background-color: #222222;
+    color: var(--muted-text);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* テーブルボディの行 */
+tbody tr {
+    background-color: #111111;
+    transition: background-color 0.2s ease;
+}
+
+tbody tr:hover {
+    background-color: var(--hover-dark); /* ホバーで少し明るく */
 }
 
 /* 区切り線 */
 hr {
     margin: 40px auto;
-    width: 60%;
+    width: 80%;
     border: none;
-    border-top: 2px solid #e53935;
+    border-top: 2px solid var(--accent);
+    opacity: 0.6;
 }
 
 /* 入力欄 */
 input[type="text"],
 textarea {
-    width: 90%;
-    max-width: 450px;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 2px solid #666;
-    border-radius: 5px;
+    width: 100%;
+    /* max-widthをフォームの幅に合わせるため削除 */
+    padding: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
     font-size: 1em;
-    background-color: #333;
-    color: #fff;
+    background-color: #1f1f1f; /* ダークな入力背景 */
+    color: var(--text-light);
     box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus,
+textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.3);
 }
 
 /* 回答欄 */
 textarea {
-    height: 120px;
+    height: 150px;
     resize: vertical;
 }
 
@@ -106,31 +150,134 @@ textarea {
 button,
 a[href*="delete_faq"] {
     display: inline-block;
-    padding: 10px 20px;
+    padding: 12px 25px;
     border: none;
-    border-radius: 6px;
-    background-color: #e53935; /* 赤 */
+    border-radius: 4px;
+    background-color: var(--accent); 
     color: #fff;
     font-size: 1em;
+    font-weight: 600;
     cursor: pointer;
     text-decoration: none;
     transition: all 0.2s ease;
-    margin: 5px;
+    margin: 8px;
+    letter-spacing: 0.5px;
 }
 
 /* ホバー時 */
 button:hover,
 a[href*="delete_faq"]:hover {
-    background-color: #b71c1c; /* 濃い赤 */
+    background-color: #B8070F; /* 濃い赤 */
+    transform: translateY(-1px);
+    box-shadow: 0 5px 10px rgba(229, 9, 20, 0.4);
 }
+
+/* 削除ボタンのスタイルを少し変えて強調（任意） */
+a[href*="delete_faq"] {
+    background-color: #888;
+    font-weight: 400;
+}
+a[href*="delete_faq"]:hover {
+    background-color: #e50914; /* ホバーで赤に */
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.4);
+}
+
 
 /* 戻るリンク */
 a[href="/calendar/admin"] {
-    color: #e53935;
+    color: var(--muted-text);
     text-decoration: none;
-    font-weight: bold;
+    font-weight: 500;
+    margin-top: 30px;
+    transition: color 0.2s;
 }
 
 a[href="/calendar/admin"]:hover {
+    color: var(--accent);
     text-decoration: underline;
+}
+
+/* --- ハンバーガーメニュー --- */
+.hamburger {
+    width: 35px;
+    height: 30px;
+    position: fixed;
+    top: 25px;
+    left: 25px;
+    cursor: pointer;
+    z-index: 1000; /* メニューより上に配置 */
+}
+
+.bar {
+    height: 4px;
+    width: 100%;
+    /* 白いバーでNetflix風ダークテーマに合わせる */
+    background-color: white; 
+    margin: 6px 0;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* ハンバーガーメニューのアニメーション (X字への変換) */
+.hamburger.active .bar:nth-child(1) {
+    transform: translateY(10px) rotate(45deg);
+}
+.hamburger.active .bar:nth-child(2) {
+    opacity: 0;
+}
+.hamburger.active .bar:nth-child(3) {
+    transform: translateY(-10px) rotate(-45deg);
+}
+
+/* --- メニュー本体 (サイドバー) --- */
+.menu {
+    position: fixed;
+    top: 0;
+    /* 初期状態は画面外に隠す */
+    left: -250px; 
+    width: 250px;
+    height: 100%;
+    /* 非常に暗い、半透明な背景 */
+    background-color: rgba(0, 0, 0, 0.95); 
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
+    /* スムーズなスライドインアニメーション */
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 999;
+    padding-top: 100px;
+    text-align: left;
+}
+
+.menu.open {
+    left: 0; /* openクラスが付いたら表示 */
+}
+
+.menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.menu li {
+    padding: 15px 30px;
+    /* ダークテーマの境界線 */
+    border-bottom: 1px solid #333; 
+}
+
+.menu li:last-child {
+    border-bottom: none;
+}
+
+.menu a {
+    text-decoration: none;
+    color: #fff;
+    font-size: 1.2rem;
+    display: block;
+    transition: color 0.3s ease;
+    font-weight: 500;
+}
+
+.menu a:hover {
+    /* ホバーでネトフリレッド */
+    color: #E50914; 
+    font-weight: 600;
 }
