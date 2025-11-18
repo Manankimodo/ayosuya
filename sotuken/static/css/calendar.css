@@ -1,252 +1,476 @@
 /*
- * Netflix風 統合カレンダー＆メニュー CSS (最終統合版)
+ * Netflix風カレンダーCSS (最終統合版)
+ * - PCでのテーブル崩れ修正済み
+ * - チェックマークを日付の下に配置する修正を再統合済み
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&display=swap');
-
-:root {
-    --bg-dark: #141414;      /* メイン背景色（非常に濃いダークグレー） */
-    --card-dark: #000000;    /* カード/コンテナ背景色（黒） */
-    --text-light: #ffffff;   /* 主な文字色（白） */
-    --muted-text: #AAAAAA;   /* 補助テキスト色 */
-    --accent: #E50914;      /* Netflix赤 */
-    --border-color: #333333; /* 境界線の色 */
-    --cell-bg: #1f1f1f;      /* カレンダーセル背景色 */
-}
-
-/* === 全体設定 === */
+/* 全体設定 */
 body {
-    font-family: 'Noto Sans JP', 'Helvetica Neue', sans-serif;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: #141414; 
+    color: #ffffff;
     margin: 0;
     padding: 0;
-    background-color: var(--bg-dark);
-    color: var(--text-light);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    text-align: center;
     min-height: 100vh;
     overflow-x: hidden;
-    text-align: center;
 }
 
-/* === タイトル === */
+/* タイトル (h1) - ロゴ風に強調 */
 h1 {
-    margin-top: 80px; 
-    margin-bottom: 25px; /* マージンを調整 */
-    font-size: 2.5em;
-    letter-spacing: 2px;
-    color: var(--text-light);
+    font-size: 2.5rem;
+    margin: 30px 0 25px;
+    color: #E50914; /* ネトフリレッド */
+    letter-spacing: 3px;
     font-weight: 700;
+    text-shadow: 0 0 10px rgba(229, 9, 20, 0.4);
+}
+
+/* 月と年の表示を固定 */
+#monthYear {
+    position: sticky;
+    top: 0;
+    padding: 10px 0;
+    background: #141414;
+    z-index: 10;
 }
 
 /* === 月切り替えボタン === */
 .month-switch {
+    margin-bottom: 30px;
     display: flex;
     justify-content: center;
-    gap: 15px; /* ギャップを調整 */
-    margin: 20px 0 30px; 
-    width: 100%;
 }
 
 .month-switch button {
-    background-color: var(--accent);
+    background-color: #E50914; 
     border: none;
-    color: var(--text-light);
+    color: white;
+    font-size: 1.1rem;
     padding: 12px 25px;
-    border-radius: 6px;
+    border-radius: 4px; 
+    margin: 0 15px;
     cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
     font-weight: 600;
-    font-size: 1em;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 10px rgba(229, 9, 20, 0.4);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 .month-switch button:hover {
-    background-color: #B8070F; /* 濃い赤 */
+    background-color: #B8070F;
     transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(229, 9, 20, 0.6);
 }
 
 /* === カレンダー本体 === */
 .calendar {
     width: 95%;
-    max-width: 800px;
-    margin: auto;
-    border-collapse: collapse;
-    background-color: var(--card-dark);
-    border-radius: 10px;
+    max-width: 900px; 
+    margin: 0 auto 50px;
+    border-collapse: separate; 
+    border-spacing: 2px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7); 
+    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
+    background: #000;
 }
 
 .calendar th, .calendar td {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 18px 10px;
+    border: none; 
     text-align: center;
-    padding: 15px 10px;
-    color: var(--text-light);
+    font-size: 1.05rem;
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
+/* カレンダーヘッダー（曜日） */
 .calendar th {
-    background-color: #222; /* 濃いグレー */
-    color: var(--muted-text);
+    background-color: #222;
+    color: #ffffff; 
     font-weight: 600;
-    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
+/* 日曜日を赤、土曜日を水色 */
+.calendar th:first-child {
+    color: #FF7777;
+}
+
+.calendar th:last-child {
+    color: #77AFFF;
+}
+
+/* === カレンダーセル（日付）のベースと構造化 === */
 .calendar td {
-    background-color: var(--cell-bg);
-    height: 70px; /* 高さ調整 */
-    vertical-align: middle;
+    background-color: #2B2B2B; 
+    color: #E0E0E0;
     cursor: pointer;
-    transition: background-color 0.3s;
-    font-size: 1.1em;
+    border-radius: 4px;
+    height: 100px; 
+    padding: 5px; 
+    vertical-align: top;
+    position: relative; /* ★修正: 相対位置を維持 */
+    text-align: left; 
+    font-size: 1rem;
+    overflow: hidden;
 }
 
+/* 日付セルホバー */
 .calendar td:hover {
-    background-color: rgba(229, 9, 20, 0.5); /* ホバーで赤い光沢 */
+    background-color: #444;
+    box-shadow: inset 0 0 0 2px #E50914; 
+}
+
+/* 今日の日付を強調 - ネトフリレッドの背景 */
+.calendar td.today {
+    background-color: #E50914;
+    color: white;
+    font-weight: bold;
+    border-radius: 4px;
+    box-shadow: 0 0 15px rgba(229, 9, 20, 0.8); 
+}
+
+/* 日曜日の日付、土曜日の日付の色 */
+.calendar td:first-child {
+    color: #FF7777;
+}
+
+.calendar td:last-child {
+    color: #77AFFF;
 }
 
 /* 先月/来月の日付 */
 .calendar td.inactive {
-    color: #666;
     background-color: #111;
+    color: #666;
     cursor: default;
+    box-shadow: none;
 }
 
-/* === 🍔 ハンバーガーメニュー === */
+/* 1. 日付番号 (day-number) のスタイリング */
+.day-number {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff; 
+    padding: 5px 8px; 
+    line-height: 1;
+    padding-bottom: 0; 
+}
+
+/* inactiveな日付の番号は目立たなくする */
+.calendar td.inactive .day-number {
+    color: #666;
+    font-weight: 400;
+}
+
+/* 2. シフト内容コンテナ (チェックマークと時間入力) */
+/* ★修正: position: relativeで日付番号の直下から開始し、レイアウト崩れを防ぐ */
+.shift-content {
+    display: block; 
+    width: 100%;
+    pointer-events: none; 
+    box-sizing: border-box;
+    
+    /* 日付番号の高さ分、上から押し下げる */
+    /* .day-numberの高さ(1.2rem)とpadding(5px*2 + 8px*2)を考慮 */
+    position: relative; 
+    top: 0; /* ★修正: top: 0; は不要 */
+}
+
+/* 3. 希望提出済み（チェックマーク）のスタイリング */
+.event-indicator {
+    color: #E50914; 
+    font-size: 2rem;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 5px;
+    text-shadow: 0 0 8px rgba(229, 9, 20, 0.7); 
+    display: block; 
+    margin-top: 5px; /* ★修正: 日付番号との間隔を空ける */
+    padding-left: 8px; /* 日付番号と揃えるための左余白 */
+}
+
+/* 4. 時間入力コンテナとフィールドのスタイリング */
+.time-input-container {
+    display: block; 
+    width: 100%;
+    padding: 0 5px 5px 0; 
+    box-sizing: border-box;
+    pointer-events: all; 
+    padding-left: 8px; /* ★追加: 日付番号と揃えるための左余白 */
+}
+
+.time-input-container input {
+    width: 90%;
+    max-width: 100px;
+    background-color: #111; 
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: 0.9rem;
+    text-align: left; 
+    margin-top: 5px;
+    transition: border-color 0.2s;
+}
+
+.time-input-container input:focus {
+    border-color: #E50914; 
+    outline: none;
+    box-shadow: 0 0 5px rgba(229, 9, 20, 0.6);
+}
+
+/* 5. 提出済みセル全体の強調 (has-shift) */
+.calendar td.has-shift {
+    background-color: #1A1A1A; 
+    border: 1px solid rgba(229, 9, 20, 0.5);
+    box-shadow: inset 0 0 8px rgba(229, 9, 20, 0.4); 
+}
+
+
+/* ================================================= */
+/* ▼ ハンバーガーメニュー */
+/* ================================================= */
 .hamburger {
+    width: 35px;
+    height: 30px;
     position: fixed;
     top: 25px;
     left: 25px;
-    width: 35px;
-    height: 30px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
     cursor: pointer;
-    z-index: 1500;
+    z-index: 1000;
 }
 
-.hamburger span {
-    display: block;
+/* ★修正済: 赤線表示 */
+.bar, .hamburger span {
+    display: block; 
     height: 4px;
     width: 100%;
-    background-color: var(--accent); /* 赤に変更 */
-    box-shadow: 0 0 8px rgba(229, 9, 20, 0.8); /* 光らせ効果 */
+    background-color: #E50914; 
+    margin: 6px 0;
     border-radius: 2px;
     transition: all 0.3s ease;
+    box-shadow: 0 0 8px rgba(229, 9, 20, 0.8); 
 }
 
-/* メニュー開閉アニメーション */
+/* アニメーションも .bar と .hamburger span の両方に対応 */
+.hamburger.active .bar:nth-child(1),
 .hamburger.active span:nth-child(1) {
     transform: translateY(10px) rotate(45deg);
 }
+.hamburger.active .bar:nth-child(2),
 .hamburger.active span:nth-child(2) {
     opacity: 0;
 }
+.hamburger.active .bar:nth-child(3),
 .hamburger.active span:nth-child(3) {
     transform: translateY(-10px) rotate(-45deg);
 }
 
-/* --- メニュー本体 --- */
-nav.menu {
+/* ▼ メニュー本体 (サイドバー) */
+.menu {
     position: fixed;
     top: 0;
     left: -250px;
     width: 250px;
     height: 100%;
-    background-color: rgba(10, 10, 10, 0.98);
+    background-color: rgba(0, 0, 0, 0.95); 
     box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
-    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* アニメーションを統一 */
-    z-index: 1000;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 999;
     padding-top: 100px;
     text-align: left;
 }
 
-nav.menu.active {
+.menu.open {
     left: 0;
 }
 
-nav.menu ul {
+.menu ul {
     list-style: none;
     padding: 0;
     margin: 0;
 }
 
-nav.menu ul li {
+.menu li {
     padding: 15px 30px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid #333;
 }
 
-nav.menu ul li a {
-    color: var(--text-light);
+.menu li:last-child {
+    border-bottom: none;
+}
+
+.menu a {
     text-decoration: none;
+    color: #fff;
     font-size: 1.2rem;
     display: block;
-    transition: color 0.3s;
+    transition: color 0.3s ease;
     font-weight: 500;
 }
 
-nav.menu ul li a:hover {
-    color: var(--accent);
-}
-
-/* === フラッシュメッセージ === */
-.flash-messages {
-  margin: 10px auto;
-  width: 90%;
-  max-width: 780px;
-  text-align: center;
-  position: absolute; /* カレンダーに重ならないように配置 */
-  top: 150px; 
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 500;
-}
-
-.flash {
-  padding: 15px;
-  margin: 10px 0;
-  border-radius: 6px;
-  font-weight: 500;
-  text-align: left;
-}
-
-/* Success (成功) - Greenish Accent */
-.flash.success {
-  background-color: rgba(39, 174, 96, 0.2); /* 緑の透過背景 */
-  color: #2ecc71; /* 緑の文字色 */
-  border-left: 5px solid #27ae60;
-}
-
-/* Info (情報/エラー) - Red/White Accent */
-.flash.info {
-  background-color: rgba(229, 9, 20, 0.2); /* 赤の透過背景 */
-  color: #ff8080; /* 明るい赤の文字色 */
-  border-left: 5px solid var(--accent);
+.menu a:hover {
+    color: #E50914; 
+    font-weight: 600;
 }
 
 
-/* === スマホ対応 === */
+/* ================================================= */
+/* ✅ モーダル - ポップアップコンテンツ風 */
+/* ================================================= */
+
+/* === モーダル全体の背景 === */
+#shift-modal {
+    display: none; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9); 
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; 
+}
+
+/* === モーダルの内容ボックス === */
+#shift-modal > div {
+    background: #000; 
+    border: 2px solid #E50914; 
+    padding: 30px 25px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 0 25px rgba(229, 9, 20, 0.5); 
+    position: relative;
+    animation: fadeIn 0.3s ease-out; 
+}
+
+/* === 閉じるボタン === */
+#modal-close {
+    color: #fff;
+    font-size: 30px;
+    position: absolute;
+    right: 15px;
+    top: 5px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#modal-close:hover {
+    color: #E50914; 
+}
+
+/* === モーダル内のテキスト === */
+#modal-text {
+    color: #fff;
+    font-size: 17px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+}
+
+/* モーダル表示時のアニメーション */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ================================================= */
+/* ▼ スマホ対応（Max-width: 600px） - レイアウト修正済み */
+/* ================================================= */
 @media (max-width: 600px) {
+    
+    /* === 1. タイトルと全般的な余白の調整 === */
     h1 {
-        margin-top: 60px;
-        font-size: 2em;
+        font-size: 2rem; 
+        margin-top: 20px;
+        margin-bottom: 20px;
+        letter-spacing: 2px;
+    }
+
+    /* === 2. 月切り替えボタンの調整 === */
+    .month-switch {
+        margin-bottom: 20px;
+    }
+    .month-switch button {
+        font-size: 1rem;
+        padding: 8px 15px; 
+        margin: 0 5px;
+    }
+
+    /* === 3. カレンダー本体の調整 === */
+    .calendar {
+        border-spacing: 1px; 
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.7);
     }
     
-    .calendar th, .calendar td {
-        padding: 10px 5px;
-        font-size: 14px;
-        height: 50px;
+    /* 曜日ヘッダー */
+    .calendar th {
+        padding: 10px 0;
+        font-size: 0.8rem;
     }
 
-    .month-switch button {
-        padding: 10px 16px;
-        font-size: 0.9em;
+    /* === 4. カレンダーセル内部の調整 === */
+    .calendar td {
+        height: 70px; /* セル高を低く */
+        padding: 2px;
     }
 
+    /* 日付番号を縮小 */
+    .day-number {
+        font-size: 1rem;
+        padding: 3px 5px; 
+    }
+
+    /* シフト内容コンテナ（スマホでは中央寄せに再調整） */
+    .shift-content {
+        display: flex; 
+        flex-direction: column;
+        align-items: center; /* 中央寄せ */
+        padding-left: 0; 
+    }
+    
+    /* チェックマークを縮小 */
+    .event-indicator {
+        font-size: 1.5rem;
+        margin-bottom: 3px;
+        text-shadow: 0 0 5px rgba(229, 9, 20, 0.7);
+        display: block;
+        padding-left: 0; 
+    }
+
+    /* 時間入力フィールドを縮小 */
+    .time-input-container {
+        align-items: center; /* 中央寄せ */
+        padding: 0;
+    }
+    .time-input-container input {
+        width: 80%; 
+        max-width: 80px;
+        padding: 3px 5px;
+        font-size: 0.8rem;
+        margin-top: 3px;
+        text-align: center; /* 中央寄せに戻す */
+    }
+
+    /* === 5. ハンバーガーメニューの位置調整 === */
+    .hamburger {
+        top: 15px;
+        left: 15px;
+    }
+
+    /* === 6. フラッシュメッセージの調整 === */
     .flash-messages {
-        width: 95%;
-        top: 100px;
+        width: 90%;
+        margin: 10px auto;
+        position: relative; 
     }
 }
