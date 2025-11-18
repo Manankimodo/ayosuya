@@ -24,18 +24,49 @@ document.addEventListener("DOMContentLoaded", function() {
 
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const cell = document.createElement("td");
-      cell.textContent = day;
-
+      
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
+      // 1. 日付番号コンテナ (.day-number) を作成
+      const dayNumber = document.createElement("span");
+      dayNumber.classList.add("day-number");
+      dayNumber.textContent = day;
+      cell.appendChild(dayNumber);
 
-        // ✅ チェックマーク表示（送信済みの日付なら）
+      // 2. シフト内容コンテナ (.shift-content) を作成
+      const shiftContent = document.createElement("div");
+      shiftContent.classList.add("shift-content");
+
+
+      // ✅ チェックマーク表示（送信済みの日付なら）
       if (sentDates.includes(dateStr)) {
         const check = document.createElement("span");
-        check.textContent = "✅";
-        check.style.marginLeft = "5px";
-        cell.appendChild(check);
+        check.classList.add("event-indicator"); // CSSのスタイルを適用
+        check.textContent = "✔"; // "✅"から"✔"に変更。CSSでは"✔"を想定
+        
+        shiftContent.appendChild(check);
+        cell.classList.add('has-shift'); // 提出済みセルの背景を強調
       }
+
+
+      // 3. 時間入力フィールド (.time-input-container) を作成 (常に追加)
+      //    ※ 提出済みかどうかに関わらず、クリックでモーダル等が開くことを想定し、
+      //       ここではCSS構造のみ作成します。
+      const timeInputContainer = document.createElement("div");
+      timeInputContainer.classList.add("time-input-container");
+      
+      // 仮の入力フィールド (実際の入力はsinsei.htmlで行う前提)
+      // ここで input 要素を生成して追加すれば、カレンダー画面で入力可能になります。
+      // 例: const input = document.createElement("input");
+      //     input.type = "text";
+      //     timeInputContainer.appendChild(input); 
+
+      // シフト内容コンテナにチェックと入力コンテナを追加
+      shiftContent.appendChild(timeInputContainer);
+
+      // 最終的にセルに shift-content を追加
+      cell.appendChild(shiftContent);
+
 
       // ✅ 日付クリックで sinsei.html に遷移
       cell.addEventListener("click", () => {
@@ -52,6 +83,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
     calendarBody.appendChild(row);
   }
+  
+  // (以降のイベントリスナー、ハンバーガーメニュー、ログアウト処理はそのまま)
+  // ...
 
   prevMonthBtn.addEventListener("click", () => {
     currentDate.setMonth(currentDate.getMonth() - 1);
