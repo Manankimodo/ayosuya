@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for
 import mysql.connector
+from line_notifier import send_help_request_to_staff
 from datetime import datetime, timedelta, time as time_cls, date as date_cls
 from ortools.sat.python import cp_model
 import random, traceback
@@ -697,26 +698,63 @@ def create_help_request():
         busy_users = [row['user_id'] for row in cursor.fetchall()]
 
         # 全ユーザーから忙しい人を除外
-        query = "SELECT ID, name FROM account"
+        query = "SELECT ID, name, line_id FROM account" # 👈 ここに line_id が含まれているか確認！
+
         if busy_users:
             # IDが busy_users に含まれない人を抽出
             format_strings = ','.join(['%s'] * len(busy_users))
-            query += f" WHERE ID NOT IN ({format_strings})"
+            query += f" WHERE ID NOT IN ({format_strings}) AND line_id IS NOT NULL"
             cursor.execute(query, tuple(busy_users))
         else:
-            cursor.execute(query)
+            # 🚨 修正が必要な行
+            cursor.execute(query + " WHERE line_id IS NOT NULL")
             
         eligible_staff = cursor.fetchall()
+
+        # 🚨 デバッグ用: 抽出されたスタッフのリストをターミナルに出力
+        print("--- デバッグ情報: 抽出された対象スタッフ ---")
+        print(eligible_staff)
+        print("---------------------------------------")
         
         conn.commit()
 
-        # 3. Bot送信用にデータを返す
-        # 実際のBot配信はこのレスポンスを受け取ったJavaScript側などでキックします
+        # --- ▼▼▼ ここからLINE通知ロジックを追加/変更 ▼▼▼ ---
+        
+        # 3. ターゲットのスタッフにLINE通知を送信
+        target_count = 0
+        
+        # 応募用URLを生成 (このURLはスタッフが応募ボタンを押した際に遷移するURL)
+        # 外部URLを生成するために、_external=True と適切な SERVER_NAME 設定が必要です
+        # 例として、ここでは固定のURLを使用します。
+        # 実際のFlask環境に合わせて、url_for('makeshift.help_landing_page', request_id=request_id, _external=True) を推奨
+        help_url = f"https://your.domain.com/makeshift/help/respond/{request_id}"
+        
+        request_data = {
+            "date": target_date,
+            "start_time": start_time_str,
+            "end_time": end_time_str,
+            "request_id": request_id
+        }
+
+        for staff in eligible_staff:
+            # LINE ID が設定されているか確認
+            if staff.get('line_id'):
+                send_help_request_to_staff(
+                    staff_line_id=staff['line_id'],
+                    request_data=request_data,
+                    help_url=help_url
+                )
+                target_count += 1
+        
+        # --- ▲▲▲ LINE通知ロジック追加終了 ▲▲▲ ---
+        
+        conn.commit()
+
+        # 4. Bot送信用にデータを返す (レスポンスを変更)
         return jsonify({
-            "message": "募集を作成しました",
+            "message": "募集を作成し、通知を送信しました。",
             "request_id": request_id,
-            "target_count": len(eligible_staff),
-            "targets": eligible_staff,  # このリストに向けてLINE等を送る
+            "target_count": target_count, # 実際に通知が送られた人数を返す
             "details": {
                 "date": target_date,
                 "time": f"{start_time_str}〜{end_time_str}"
