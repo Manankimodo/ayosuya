@@ -660,3 +660,126 @@ def show_user_shift_view(user_id):
     user_id=user_id, 
     user_name=user_data['name'])
 
+# ==========================================
+# 🚑 ヘルプ募集機能 (ワンタップ配信システム)
+# ==========================================
+
+@makeshift_bp.route("/api/help/create", methods=["POST"])
+def create_help_request():
+    """
+    店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
+    POSTデータ: { "date": "2025-11-20", "start_time": "17:00", "end_time": "22:00" }
+    """
+    data = request.json
+    target_date = data.get("date")
+    start_time_str = data.get("start_time")
+    end_time_str = data.get("end_time")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        # 1. 募集データをDBに登録
+        cursor.execute("""
+            INSERT INTO help_requests (date, start_time, end_time, status)
+            VALUES (%s, %s, %s, 'open')
+        """, (target_date, start_time_str, end_time_str))
+        request_id = cursor.lastrowid
+        
+        # 2. 「その時間にすでにシフトが入っている人」を除外してターゲットを抽出
+        # (shift_table に重複する時間帯があるユーザーIDを取得)
+        cursor.execute("""
+            SELECT DISTINCT user_id 
+            FROM shift_table
+            WHERE date = %s
+              AND NOT (end_time <= %s OR start_time >= %s) 
+        """, (target_date, start_time_str, end_time_str))
+        busy_users = [row['user_id'] for row in cursor.fetchall()]
+
+        # 全ユーザーから忙しい人を除外
+        query = "SELECT ID, name FROM account"
+        if busy_users:
+            # IDが busy_users に含まれない人を抽出
+            format_strings = ','.join(['%s'] * len(busy_users))
+            query += f" WHERE ID NOT IN ({format_strings})"
+            cursor.execute(query, tuple(busy_users))
+        else:
+            cursor.execute(query)
+            
+        eligible_staff = cursor.fetchall()
+        
+        conn.commit()
+
+        # 3. Bot送信用にデータを返す
+        # 実際のBot配信はこのレスポンスを受け取ったJavaScript側などでキックします
+        return jsonify({
+            "message": "募集を作成しました",
+            "request_id": request_id,
+            "target_count": len(eligible_staff),
+            "targets": eligible_staff,  # このリストに向けてLINE等を送る
+            "details": {
+                "date": target_date,
+                "time": f"{start_time_str}〜{end_time_str}"
+            }
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@makeshift_bp.route("/api/help/accept", methods=["POST"])
+def accept_help_request():
+    """
+    スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
+    POSTデータ: { "request_id": 1, "user_id": 5 }
+    """
+    data = request.json
+    req_id = data.get("request_id")
+    user_id = data.get("user_id")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        # 1. トランザクション開始
+        conn.start_transaction()
+
+        # 2. 【重要】早い者勝ち判定
+        # status='open' の場合のみ更新を行う。更新件数が1なら勝ち、0なら既に埋まった。
+        cursor.execute("""
+            UPDATE help_requests 
+            SET status = 'closed', accepted_by = %s
+            WHERE id = %s AND status = 'open'
+        """, (user_id, req_id))
+        
+        if cursor.rowcount == 0:
+            # 既に他の誰かが埋めてしまった場合
+            conn.rollback()
+            return jsonify({"status": "failed", "message": "タッチの差で募集が埋まってしまいました🙇‍♂️"}), 409
+
+        # 3. 募集情報を取得して shift_table に確定シフトとして書き込む
+        cursor.execute("SELECT date, start_time, end_time FROM help_requests WHERE id = %s", (req_id,))
+        req_data = cursor.fetchone()
+
+        cursor.execute("""
+            INSERT INTO shift_table (user_id, date, start_time, end_time, type)
+            VALUES (%s, %s, %s, %s, 'help')
+        """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success", 
+            "message": "シフトが確定しました！ありがとうございます！"
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
