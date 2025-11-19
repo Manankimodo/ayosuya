@@ -692,7 +692,7 @@ def create_help_request():
             SELECT DISTINCT user_id 
             FROM shift_table
             WHERE date = %s
-              AND NOT (end_time <= %s OR start_time >= %s) 
+            AND NOT (end_time <= %s OR start_time >= %s) 
         """, (target_date, start_time_str, end_time_str))
         busy_users = [row['user_id'] for row in cursor.fetchall()]
 
