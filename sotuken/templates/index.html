@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <!-- Jinja: CSSファイルへのリンク -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbot.css') }}">
     
@@ -13,9 +13,19 @@
 </head>
 <body>
     <!-- ハンバーガー -->
-    <div class="hamburger" id="hamburger">
+    <!-- <div class="hamburger" id="hamburger">
         <span></span><span></span><span></span>
-    </div>
+    </div> -->
+    <body>
+
+    <!-- ★★ 新しく header でまとめる ★★ -->
+    <header class="top-bar">
+        <div class="hamburger" id="hamburger">
+            <span></span><span></span><span></span>
+        </div>
+        <h1>アルバイト教育支援チャットボット</h1>
+    </header>
+
 
     <!-- メニュー -->
     <nav class="menu" id="menu">
