@@ -2,6 +2,7 @@
 
 import os # osモジュールをインポート
 from linebot import LineBotApi
+from linebot.models import TextSendMessage # 👈 この行が必要です
 # ... (他のインポート) ...
 
 # 🚨 修正: トークンを環境変数から読み込む 🚨
