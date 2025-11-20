@@ -882,7 +882,9 @@ def create_help_request():
                 send_help_request_to_staff(
                     staff_line_id=staff['line_id'],
                     request_data=request_data,
-                    help_url=help_url
+                    help_url=help_url,
+                    # 🚨 修正: 必要な引数 'staff_name' を追加 🚨
+                    staff_name=staff['name'] 
                 )
                 target_count += 1
         
@@ -961,3 +963,28 @@ def accept_help_request():
     finally:
         cursor.close()
         conn.close()
+
+        # makeshift.py (例)
+
+from flask import request, jsonify # ← request と jsonify がインポートされているか確認
+
+# 🚨 User ID 取得のためのデバッグエンドポイント 🚨
+# /webhook エンドポイントのコード（makeshift.py または app.py 内）
+
+@makeshift_bp.route("/webhook", methods=["POST"])
+def webhook():
+    # 🚨 ここが重要です 🚨
+    # request.json を print() しているか確認してください
+    # print(request.json) 
+    
+    # さらに、見つけやすくするために、JSON 構造全体を文字列化して出力します
+    import json
+    # request.json を受け取ります
+    data = request.get_json()
+    
+    print("--- LINE Webhook データ全体 (JSONダンプ) ---")
+    # indent=2 で整形し、見やすく出力
+    print(json.dumps(data, indent=2))
+    print("-----------------------------------------")
+
+    return jsonify({}), 200
