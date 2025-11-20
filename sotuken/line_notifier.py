@@ -1,10 +1,15 @@
-# line_notifier.py (本番用コード)
+# line_notifier.py
 
+import os # osモジュールをインポート
 from linebot import LineBotApi
-from linebot.models import TextSendMessage
+# ... (他のインポート) ...
 
-# 🚨 ここに実際の「チャンネルアクセストークン」を貼り付けてください 🚨
-LINE_CHANNEL_ACCESS_TOKEN = 'rlgBIHKnI0Z1StSLVWg6h7tCQK0Xdwz+yH4MlUIy8wZaqyoNv/izM/cgd1slCDiC/rHai63OLs9bj4ACE0pV46M2oIYPwAaWADAJpIxbbcodAQIa/AyB7nbygckLrwkkxSyhmq6WBJmeam/r1nWSyQdB04t89/1O/w1cDnyilFU=' 
+# 🚨 修正: トークンを環境変数から読み込む 🚨
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_ACCESS_TOKEN') 
+# .envファイルで設定したキーと同じ名前にする
+
+if not LINE_CHANNEL_ACCESS_TOKEN:
+    raise ValueError("環境変数 'LINE_ACCESS_TOKEN' が設定されていません。")
 
 # APIクライアントを初期化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
