@@ -1,0 +1,13 @@
+# Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+
+# Secret files and configuration
+.env
+
+# 仮想環境ディレクトリ (よく使われる名前を列挙)
+# 実際に使っているディレクトリ名がここにない場合は、追加してください。
+venv/
+env/
+.venv/

@@ -82,6 +82,10 @@ h1 {
     flex-direction: column;
     background-color: #0c0c0c; 
     scroll-behavior: smooth;
+    
+    /* ★修正: ヘッダーとフッターに隠れないよう、パディングを調整 */
+    padding-top: 90px; /* ヘッダー分の余白 */
+    padding-bottom: 90px; /* フォーム分の余白 */
 }
 
 /* 吹き出し全体 */
@@ -115,27 +119,49 @@ h1 {
     border-left: 4px solid var(--border-color);
 }
 
-/* === ✏️ 入力フォーム === */
+
+/* === ✏️ 入力フォーム (画面下固定に変更) === */
 form {
-    display: flex;
-    padding: 10px;
+    position: fixed; 
+    bottom: 0;
+    left: 0;
+    
+    width: 100%; 
+    
+    /* ★最終調整: 左右のパディングをさらにタイトに調整 (10px/10px) */
+    padding: 10px 10px; /* 上下10px、左右10px */
     background: var(--card-dark);
     border-top: 1px solid #1c1c1c;
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.5);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5); 
+    
+    max-width: none; 
+    transform: none; 
+
+    display: flex;
     align-items: center;
+    gap: 8px; 
+    z-index: 50;
+    
+    /* iPhoneのセーフエリア対応 */
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
 input[type="text"] {
     flex: 1;
-    padding: 12px 18px;
+    min-width: 0; 
+    
+    /* ★最終修正: 入力欄の最大幅を 55% に制限し、ボタン側に大きなスペースを確保 */
+    max-width: 55%; 
+    
+    padding: 12px 15px;
     background-color: #1c1c1c;
     border: 1px solid #444;
     border-radius: 25px;
     font-size: 1em;
-    margin-right: 10px;
     outline: none;
     color: var(--text-light);
     transition: all 0.3s;
+    margin-right: 0; 
 }
 
 input[type="text"]:focus {
@@ -143,18 +169,19 @@ input[type="text"]:focus {
     box-shadow: 0 0 5px var(--accent);
 }
 
+/* ボタンの調整 (固定フォームに合うように微調整) */
 button {
     background-color: var(--accent);
     color: var(--text-light);
     border: none;
-    padding: 10px 15px; 
-    border-radius: 25px;
+    /* ★最終調整: 左右のパディングを維持 (6px) */
+    padding: 10px 6px; 
+    border-radius: 20px;
     cursor: pointer;
-    font-size: 1em;
+    font-size: 0.85em; 
     font-weight: 600;
     transition: background-color 0.3s, transform 0.3s;
-    margin-left: 5px;
-    white-space: nowrap; /* ボタンのテキストが折り返されないように */
+    white-space: nowrap; 
 }
 
 button:hover {
@@ -201,7 +228,6 @@ button:hover {
     height: 30px; 
     cursor: pointer;
     z-index: 1500;
-    /* Flexbox定義を削除 */
 }
 
 /* ハンバーガーの位置調整（ヘッダー内前提） */
@@ -221,7 +247,6 @@ button:hover {
     background-color: var(--text-light); 
     border-radius: 2px;
     transition: all 0.3s ease;
-    /* ★修正: 線の間にマージンを適用 */
     margin-bottom: 6px; 
 }
 
@@ -232,14 +257,12 @@ button:hover {
 
 /* ✨ アニメーション (X字への変化) */
 .hamburger.active span:nth-child(1) {
-    /* ★修正: translateYの値を調整し、線が中央でクロスするようにする */
     transform: rotate(45deg) translate(5px, 9px); 
 }
 .hamburger.active span:nth-child(2) {
     opacity: 0;
 }
 .hamburger.active span:nth-child(3) {
-    /* ★修正: translateYの値を調整し、線が中央でクロスするようにする */
     transform: rotate(-45deg) translate(5px, -9px); 
 }
 
@@ -296,7 +319,8 @@ button:hover {
         padding: 10px 15px;
     }
     form button {
-        padding: 8px 15px;
+        /* ★最終調整: スマホでのボタンのパディングを維持 */
+        padding: 8px 6px; 
         font-size: 0.9em;
     }
     h1 {
@@ -308,65 +332,8 @@ button:hover {
     .hamburger {
         top: 15px;
     }
-
-    /* iPhoneのホームバー（白い部分）に入力欄が埋まらないようにする */
-@supports(padding: max(0px)) {
-    form {
-        padding-bottom: max(env(safe-area-inset-bottom), 50px);
-    }
 }
 
-}
-/* ======== ✨ フローティング入力欄（ボタンがはみ出さない版） ======== */
-form {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 30px); /* ★ 画面幅から余白を確保 → はみ出し防止 */
-    max-width: 600px;
-
-    padding: 12px;
-    background: rgba(0,0,0,0.85);
-    border-radius: 25px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    border: 1px solid #333;
-
-    display: flex;
-    align-items: center;
-    gap: 8px; /* 安全なボタンの間隔 */
-    z-index: 50;
-}
-
-/* 入力欄 */
-input[type="text"] {
-    flex: 1;
-    min-width: 0;  /* ★これが超重要！ → フォーム内で縮まらずに押し出すのを防ぐ */
-    padding: 12px 15px;
-}
-
-/* ボタン（送信 & 履歴を消す） */
-button {
-    padding: 10px 12px; /* ★幅を小さめに調整 */
-    border-radius: 20px;
-    font-size: 0.85em;  /* ★文字サイズを落として収まりを良くする */
-    white-space: nowrap;
-}
-
-/* 履歴を消すボタン専用 */
-#clear-btn {
-    background-color: var(--border-color);
-}
-#clear-btn:hover {
-    background-color: #444;
-}
-
-/* チャットエリアの下余白（フォームに隠れないように） */
-.chat-container {
-    padding-bottom: 150px;
-    padding-top: 90px; /* ★ ヘッダー分の余白 */
-
-}
 /* iPhoneのフォーム入力ズーム対策 */
 input,
 textarea,
