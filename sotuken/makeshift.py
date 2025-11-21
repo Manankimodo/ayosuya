@@ -252,8 +252,17 @@ def auto_calendar():
     # ★修正1: 必要な部品をここで確実にインポート
     from datetime import time, datetime, timedelta 
     
+    # 〜 省略 〜
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
+
+    # 【追加】ポジションIDと名前の対応表を作る
+    # これがあれば、IDが4でも5でも自動で名前が入ります
+    position_names = {}
+    cursor.execute("SELECT id, name FROM positions")
+    for row in cursor.fetchall():
+        position_names[row['id']] = row['name']
+    # 〜 省略 〜
     
     try:
         # 0. 初期データ取得
@@ -440,9 +449,8 @@ def auto_calendar():
                                 my_skills = user_skill_ids.get(str(user_id), [])
                                 for pid in my_skills:
                                     if pid in needed and needed[pid] > 0:
-                                        if pid == 1: this_role = "ホール"
-                                        elif pid == 2: this_role = "キッチン"
-                                        elif pid == 3: this_role = "洗い場"
+                                        # 辞書から名前を探す。なければ "work" にする
+                                        this_role = position_names.get(pid, "work")
                                         break
                             
                             if current_block_start is None:
