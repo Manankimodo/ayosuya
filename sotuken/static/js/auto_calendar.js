@@ -182,13 +182,16 @@ document.addEventListener("DOMContentLoaded", function() {
 
         chartDataPoints.sort((a, b) => yAxisLabels.indexOf(a.userLabel) - yAxisLabels.indexOf(b.userLabel));
 
+        // ▼▼▼ チャート生成部分の書き換え ▼▼▼
         new Chart(ctx, {
             type: "bar",
             data: {
                 datasets: [{
                     data: chartDataPoints,
                     backgroundColor: chartDataPoints.map(d => d.backgroundColor),
-                    borderColor: "rgba(0,0,0,0.1)", borderWidth: 1
+                    borderColor: "rgba(0,0,0,0.1)", borderWidth: 1,
+                    // バーの太さを調整（文字が見えやすいように少し太くする）
+                    barPercentage: 0.8 
                 }]
             },
             options: {
@@ -204,19 +207,55 @@ document.addEventListener("DOMContentLoaded", function() {
                 },
                 plugins: {
                     legend: { display: false },
+                    
+                    // 1. マウスオーバー時の吹き出し設定
                     tooltip: {
                         callbacks: {
                             label: c => {
                                 const d = c.raw;
                                 const st = d.x[0].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
                                 const en = d.x[1].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                                return `${d.userLabel}: ${st}〜${en}`;
+                                // ★ここで役割名を表示！
+                                const roleName = (d.type === 'work') ? '' : `【${d.type}】`;
+                                return `${roleName} ${st}〜${en}`;
                             }
                         }
                     }
                 }
-            }
+            },
+            // 2. グラフの中に文字を描画するプラグイン（インライン定義）
+            plugins: [{
+                id: 'roleLabels',
+                afterDatasetsDraw(chart) {
+                    const { ctx } = chart;
+                    chart.data.datasets.forEach((dataset, i) => {
+                        const meta = chart.getDatasetMeta(i);
+                        if (!meta.hidden) {
+                            meta.data.forEach((element, index) => {
+                                const dataPoint = dataset.data[index];
+                                const roleText = dataPoint.type; // "キッチン" など
+
+                                // "work" 以外のときだけ文字を書く
+                                if (roleText && roleText !== 'work') {
+                                    ctx.fillStyle = 'black'; // 文字色
+                                    ctx.font = 'bold 12px Arial';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    
+                                    // バーの中心座標を取得
+                                    const x = element.x; 
+                                    const y = element.y;
+                                    
+                                    // 文字を描画
+                                    ctx.fillText(roleText, x, y);
+                                }
+                            });
+                        }
+                    });
+                }
+            }]
         });
+        // ▲▲▲ ここまで ▲▲▲
     });
 
     // --- 合計時間グラフ ---

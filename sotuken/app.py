@@ -1,3 +1,10 @@
+# ==================================
+# 🚨 追記: .env ファイルの読み込み 🚨
+# ==================================
+from dotenv import load_dotenv
+load_dotenv()
+# ==================================
+
 # app.py
 from flask import Flask, redirect, url_for
 from extensions import db  # ✅ ← dbをこちらからimport

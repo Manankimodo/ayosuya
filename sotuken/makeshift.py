@@ -268,7 +268,55 @@ def auto_calendar():
         user_map = {user_id: i for i, user_id in enumerate(user_ids)}
         if num_users == 0:
             return render_template("auto_calendar.html", message="登録ユーザーがいません。", shifts=[], settings=settings)
+        
+        # ========================================================
+        # ▼▼▼ 修正①：スキルと需要データの読み込み (ここから) ▼▼▼
+        # ========================================================
 
+        # 1. 全従業員のスキルIDを取得 (position_id で管理するように変更)
+        # user_skill_ids = { '2': [2], '6': [1], '7': [1, 2] }  <-- IDで管理
+        user_skill_ids = {}
+        
+        cursor.execute("SELECT user_id, position_id FROM user_positions")
+        skill_rows = cursor.fetchall()
+
+        for row in skill_rows:
+            uid = str(row['user_id'])
+            pid = row['position_id'] # 数値のまま扱う (1:ホール, 2:キッチン)
+            
+            if uid not in user_skill_ids:
+                user_skill_ids[uid] = []
+            user_skill_ids[uid].append(pid)
+            
+        print("--- User Skill IDs ---")
+        print(user_skill_ids)
+
+        # 2. 時間帯ごとの需要データを取得
+        # demand_map = { "12:00": { 1: 2, 2: 2 } }  <-- "12:00"に ポジション1が2人、2が2人必要
+        demand_map = {}
+        
+        cursor.execute("SELECT time_slot, position_id, required_count FROM shift_demand")
+        demand_rows = cursor.fetchall()
+        
+        for row in demand_rows:
+            # time_slotが "12:00:00" のように秒付きで来る場合があるので先頭5文字("12:00")にする
+            t_str = str(row['time_slot'])[:5]
+            pid = row['position_id']
+            count = row['required_count']
+            
+            if t_str not in demand_map:
+                demand_map[t_str] = {}
+            
+            # 同じ時間に同じポジションの設定が複数あった場合は上書き、または加算
+            demand_map[t_str][pid] = count
+            
+        print("--- Shift Demand Map ---")
+        print(demand_map) # ログで確認
+        print("------------------------")
+
+        # ========================================================
+        # ▲▲▲ 修正①：ここまで ▲▲▲
+        # ========================================================
         # 1. 処理対象となる全ての日付を取得 (希望が登録されている日付のみ)
         cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
         target_dates = [row['date'] for row in cursor.fetchall()]
@@ -299,12 +347,13 @@ def auto_calendar():
             SHIFT_START = ensure_time_obj(settings['start_time'])
             SHIFT_END = ensure_time_obj(settings['end_time'])
             INTERVAL_MINUTES = settings['interval_minutes']
-            MAX_PEOPLE = settings['max_people_per_shift']
-
-            # ⚠️ 最小勤務時間制約を完全に解除 (0時間)
-            MIN_WORK_INTERVALS = 0 
             
-            MAX_WORK_INTERVALS = settings['max_hours_per_day'] * 60 // INTERVAL_MINUTES
+            # ▼▼▼ ここを数字で直書きに変更（制限解除） ▼▼▼
+            MAX_PEOPLE = 30           # 3人→30人に増やす
+            MIN_WORK_INTERVALS = 0    # 最小勤務なし
+            MAX_WORK_INTERVALS = 100  # 最大勤務時間の制限なし
+          
+            # ▲▲▲ ここまで ▲▲▲
             
             # ⚠️ 休憩制約は無効化するため、関連定数も無視
             BREAK_MINUTES = settings['break_minutes']
@@ -340,47 +389,95 @@ def auto_calendar():
             # 3.4. 制約の追加
             
             # 4-1. 時間帯最大人数制約 (MAX_PEOPLEは上限として機能)
+            #for t_idx in range(num_intervals):
+            #   model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= MAX_PEOPLE)
+            # ========================================================
+            # ▼▼▼ 修正②：需要に基づく配置制約 (ここから) ▼▼▼
+            # ========================================================
+            
+            # 4-1. ポジション別・時間帯別の必要人数制約
+            # 旧コード: model.Add(sum(...) <= MAX_PEOPLE)  <-- これは削除かコメントアウト
+            
+            # 全体の最大人数制約（一応残しておく、不要ならMAX_PEOPLEを大きく設定）
             for t_idx in range(num_intervals):
-                model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= MAX_PEOPLE)
+                 model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= MAX_PEOPLE)
+
+            # ★ ここが心臓部：需要（デマンド）に合わせたスキル配置 ★
+            for t_idx, t_time in enumerate(time_intervals):
+                # 現在の時刻を "12:00" のような文字列にする
+                t_str = t_time.strftime("%H:%M")
+                
+                # もしこの時間に需要設定(demand_map)があれば制約を追加
+                if t_str in demand_map:
+                    current_demand = demand_map[t_str] # 例: {1: 2, 2: 1} (ホール2人, キッチン1人)
+                    
+                    for needed_pos_id, needed_count in current_demand.items():
+                        # このポジション(needed_pos_id)ができる人を探す
+                        capable_users = []
+                        
+                        for u_idx in range(num_users):
+                            user_id = user_ids[u_idx]
+                            # ユーザーのスキルリストに、必要なポジションIDが含まれているか？
+                            if needed_pos_id in user_skill_ids.get(user_id, []):
+                                capable_users.append(shifts[u_idx, t_idx])
+                        
+                        if capable_users:
+                            # 「スキルを持ってる人の合計」が「必要人数」以上になるようにする
+                            # needed_count が 2なら、最低2人は割り当てる
+                            model.Add(sum(capable_users) >= needed_count)
+                            
+            # ========================================================
+            # ▲▲▲ 修正②：ここまで ▲▲▲
+            # ========================================================
                 
             # 4-2. 最小・最大勤務時間制約 (最小勤務は0時間に設定)
             for u_idx in range(num_users):
                 model.Add(total_work_intervals[u_idx] >= MIN_WORK_INTERVALS) # 0時間
                 model.Add(total_work_intervals[u_idx] <= MAX_WORK_INTERVALS) # 最大時間
 
-            # 4-3. ユーザーの希望シフト制約 (厳格な禁止制約を復活 + バグ修正)
+            # ========================================================
+            # ▼▼▼ 修正版：4-3. ユーザーの希望シフト制約 (総入れ替え) ▼▼▼
+            # ========================================================
+
+            # 4-3. ユーザーの希望シフト制約
             user_preferences_map = {} 
             preference_fulfillment = []
             
-            # ⚠️ 最終バグ修正: 希望シフトが全くないユーザーを特定し、全時間帯を禁止する
+            # 希望シフトが全くないユーザーを特定
             users_with_preference = {row['ID'] for row in preference_rows}
             
+            # A. まず、希望を出していないユーザーを全休にする
             for u_idx, u_id in enumerate(user_ids):
                 if u_id not in users_with_preference:
-                    # このユーザーは希望シフトを登録していないため、全ての時間帯を勤務禁止
+                    # 希望なしの人は勤務禁止
                     for t_idx in range(num_intervals):
                         model.Add(shifts[u_idx, t_idx] == 0)
 
-
+            # B. 次に、希望を出しているユーザーの処理（start_tを作るのはここ！）
             for row in preference_rows:
                 u_id = row['ID']
                 if u_id not in user_map: continue
                 u_idx = user_map[u_id]
+                
+                # ★ ここで start_t を定義！
                 start_t = ensure_time_obj(row['start_time'])
                 end_t = ensure_time_obj(row['end_time'])
                 
                 if u_idx not in user_preferences_map: user_preferences_map[u_idx] = set()
 
+                # ★ ループは必ず start_t 定義の「後」で、「中」に入れる！
                 for t_idx, t_time in enumerate(time_intervals):
                     # 勤務希望時間帯
                     if start_t <= t_time < end_t:
                         user_preferences_map[u_idx].add(t_idx)
                         preference_fulfillment.append(shifts[u_idx, t_idx])
-                    # 勤務禁止時間帯
+                    
+                    # 勤務禁止時間帯（今回は強制出勤させるために無効化！）
                     else:
-                        # ⚠️ 厳格な制約: 希望外は勤務不可
-                        model.Add(shifts[u_idx, t_idx] == 0)
-                        
+                        # model.Add(shifts[u_idx, t_idx] == 0) 
+                        pass 
+
+            # ========================================================       
             # 4-4. 休憩時間制約 (完全に無効化)
             pass
 
@@ -422,14 +519,57 @@ def auto_calendar():
                             if current_shift_start_time is None:
                                 current_shift_start_time = t_time
                             
-                            # シフトの終わりを判定
+                            # シフトの終わりを判定（次の時間が休み、または今日最後の場合）
                             if t_idx == num_intervals - 1 or solver.Value(shifts[u_idx, t_idx + 1]) == 0:
                                 end_t_dt = datetime.combine(target_date_obj, t_time) + timedelta(minutes=INTERVAL_MINUTES)
+                                
+                                # ==========================================
+                                # ▼▼▼ ここから：役割判定ロジック（完成版） ▼▼▼
+                                # ==========================================
+                                
+                                assigned_type = "work" # 初期値
+                                found_role = None
+                                
+                                # ユーザーのスキルを取得（文字列IDで検索）
+                                my_skill_ids = user_skill_ids.get(str(user_id), [])
+
+                                # シフトの時間帯(開始〜終了)をスキャンして、需要とマッチするか調べる
+                                temp_time = current_shift_start_time
+                                while temp_time < end_t_dt.time():
+                                    t_str = to_time_str(temp_time)[:5] # "12:00"
+                                    
+                                    # その時間に需要設定があるか？
+                                    if t_str in demand_map:
+                                        needed_positions = demand_map[t_str]
+                                        
+                                        # 自分が持っているスキルとマッチするか確認
+                                        for pid in my_skill_ids:
+                                            if pid in needed_positions and needed_positions[pid] > 0:
+                                                # 🎯 マッチした！役割名を決定
+                                                if pid == 1: found_role = "ホール"
+                                                elif pid == 2: found_role = "キッチン"
+                                                elif pid == 3: found_role = "洗い場"
+                                                else: found_role = f"Role-{pid}"
+                                                break # 役割決定
+                                    
+                                    if found_role:
+                                        assigned_type = found_role
+                                        break # ループ終了
+                                        
+                                    # 次の15分へ進める（判定用）
+                                    dummy_dt = datetime.combine(date_cls.today(), temp_time) + timedelta(minutes=INTERVAL_MINUTES)
+                                    temp_time = dummy_dt.time()
+
+                                # ==========================================
+                                # ▲▲▲ ここまで：役割判定ロジック ▲▲▲
+                                # ==========================================
+
                                 shifts_to_save_day.append({
-                                    "user_id": user_id, "date": target_date_str,
+                                    "user_id": user_id, 
+                                    "date": target_date_str,
                                     "start_time": to_time_str(current_shift_start_time),
                                     "end_time": to_time_str(end_t_dt.time()),
-                                    "type": "work"
+                                    "type": assigned_type # ← 判定された役割が入る
                                 })
                                 current_shift_start_time = None
                     
@@ -742,7 +882,9 @@ def create_help_request():
                 send_help_request_to_staff(
                     staff_line_id=staff['line_id'],
                     request_data=request_data,
-                    help_url=help_url
+                    help_url=help_url,
+                    # 🚨 修正: 必要な引数 'staff_name' を追加 🚨
+                    staff_name=staff['name'] 
                 )
                 target_count += 1
         
@@ -821,3 +963,28 @@ def accept_help_request():
     finally:
         cursor.close()
         conn.close()
+
+        # makeshift.py (例)
+
+from flask import request, jsonify # ← request と jsonify がインポートされているか確認
+
+# 🚨 User ID 取得のためのデバッグエンドポイント 🚨
+# /webhook エンドポイントのコード（makeshift.py または app.py 内）
+
+@makeshift_bp.route("/webhook", methods=["POST"])
+def webhook():
+    # 🚨 ここが重要です 🚨
+    # request.json を print() しているか確認してください
+    # print(request.json) 
+    
+    # さらに、見つけやすくするために、JSON 構造全体を文字列化して出力します
+    import json
+    # request.json を受け取ります
+    data = request.get_json()
+    
+    print("--- LINE Webhook データ全体 (JSONダンプ) ---")
+    # indent=2 で整形し、見やすく出力
+    print(json.dumps(data, indent=2))
+    print("-----------------------------------------")
+
+    return jsonify({}), 200
