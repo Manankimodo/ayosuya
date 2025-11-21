@@ -9,6 +9,7 @@ login_bp = Blueprint('login', __name__, url_prefix='/login')
 # 🔹 ログイン処理
 # -----------------------
 @login_bp.route('/', methods=['GET', 'POST'])
+@login_bp.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         user_id = request.form['user_id']
@@ -19,11 +20,18 @@ def login():
 
         if result:
             session['user_id'] = user_id
-            return redirect(url_for('login.check'))  # ✅ Blueprint名.login関数名
+            session['role'] = result.role  # ← ここで role をセッションに保存
+
+            # 店長なら管理用カレンダーへ
+            if result.role == 'manager':
+                return redirect(url_for('login.admin'))  # 店長画面
+            else:
+                return redirect(url_for('login.check'))  # 一般スタッフ画面
         else:
             flash('IDまたはパスワードが違います', 'danger')
 
     return render_template('login.html')
+
 
 
 # --- ログアウト処理 ---
@@ -35,7 +43,11 @@ def check():
 
 @login_bp.route('/admin')
 def admin():
+    if session.get('role') != 'manager':
+        flash("権限がありません。", "warning")
+        return redirect(url_for('login.check'))  # 権限なしは一般画面へ
     return render_template("calendar2.html")
+
 
 @login_bp.route('/shift')
 def shift():
