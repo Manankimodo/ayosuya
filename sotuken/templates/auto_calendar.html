@@ -5,18 +5,205 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>自動作成シフトカレンダー</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/auto_calendar.css') }}">
+  
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
-<script>
-  // Flaskのデータをグローバル変数として定義し、外部JSから参照できるようにする
-  window.flaskData = {
-    shifts: JSON.parse('{{ shifts|tojson|safe }}') || [],
-    settings: JSON.parse('{{ settings|tojson|safe }}') || {}
-  };
-</script>
+  <script>
+    window.flaskData = {
+      shifts: JSON.parse('{{ shifts|tojson|safe }}') || [],
+      settings: JSON.parse('{{ settings|tojson|safe }}') || {}
+    };
+  </script>
 
-  <script src="{{ url_for('static', filename='js/auto_calendar.js') }}"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // 1. ハンバーガーメニュー制御
+      const menuBtn = document.getElementById('menuBtn');
+      const sideMenu = document.getElementById('sideMenu');
+      if (menuBtn && sideMenu) {
+          menuBtn.addEventListener('click', function() {
+              menuBtn.classList.toggle('active');
+              sideMenu.classList.toggle('active');
+          });
+          sideMenu.querySelectorAll('a').forEach(link => {
+              link.addEventListener('click', function() {
+                  menuBtn.classList.remove('active');
+                  sideMenu.classList.remove('active');
+              });
+          });
+      }
+
+      // 2. グラフ描画ロジック
+      const rawData = window.flaskData.shifts;
+      const settings = window.flaskData.settings;
+      const chartsDiv = document.getElementById("charts");
+      
+      if (!rawData || rawData.length === 0 || !chartsDiv) {
+          if(chartsDiv) chartsDiv.innerHTML = '<p style="text-align:center; padding:20px;">シフトデータがありません。</p>';
+          return;
+      }
+
+      // ① データをソート（ユーザーID順 -> 日付順 -> 時間順）
+      rawData.sort((a, b) => {
+          if (a.user_id !== b.user_id) return a.user_id - b.user_id;
+          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          return a.start_time.localeCompare(b.start_time);
+      });
+
+      // ② 結合ロジック（ここがバーコードを直す魔法！）
+      const mergedShifts = [];
+      if (rawData.length > 0) {
+          let current = { ...rawData[0] }; 
+          for (let i = 1; i < rawData.length; i++) {
+              const next = rawData[i];
+              
+              // 「同じ人・同じ日・同じ役割・時間が連続」なら合体させる
+              if (current.user_id === next.user_id &&
+                  current.date === next.date &&
+                  current.type === next.type &&
+                  current.end_time === next.start_time) {
+                  
+                  current.end_time = next.end_time; // 終了時間を後ろに伸ばす
+              } else {
+                  mergedShifts.push(current); // 途切れたら保存
+                  current = { ...next };      // 次のブロックへ
+              }
+          }
+          mergedShifts.push(current); // 最後のブロックを保存
+      }
+
+      // ③ グラフ設定
+      const minTime = settings.start_time ? new Date(`1970-01-01T${settings.start_time}:00`) : new Date("1970-01-01T08:00:00");
+      const maxTime = settings.end_time ? new Date(`1970-01-01T${settings.end_time}:00`) : new Date("1970-01-01T23:00:00");
+      
+      const groupedByDate = {};
+      mergedShifts.forEach(s => {
+          if (!groupedByDate[s.date]) groupedByDate[s.date] = [];
+          groupedByDate[s.date].push(s);
+      });
+
+      const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
+      const userColorMap = {};
+      let colorIndex = 0;
+
+      // ④ 日付ごとにグラフを描画
+      Object.entries(groupedByDate).forEach(([date, shifts], idx) => {
+          const container = document.createElement("div");
+          container.className = "chart-container";
+          
+          // ▼ デザイン調整（白背景、黒文字）
+          container.style.marginBottom = "30px";
+          container.style.padding = "20px";
+          container.style.background = "#ffffff"; // 背景は白
+          container.style.borderRadius = "8px";
+          container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+          
+          // ▼ 日付タイトルの文字色を黒(#333)に強制指定！
+          container.innerHTML = `<h3 style="color: #333333; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px;">📅 ${date} のシフト</h3><div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>`;
+          chartsDiv.appendChild(container);
+
+          const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
+          
+          // Y軸ラベル（ユーザー名）
+          const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
+
+          const chartDataPoints = shifts.map(s => {
+              const uName = s.user_name || `ID:${s.user_id}`;
+              
+              if (!userColorMap[s.user_id]) {
+                  userColorMap[s.user_id] = baseColors[colorIndex % baseColors.length];
+                  colorIndex++;
+              }
+              
+              // 役割ごとの色
+              let barColor = userColorMap[s.user_id];
+              if (s.type && s.type.includes("キッチン")) barColor = "#e57373"; // 赤
+              if (s.type && s.type.includes("ホール")) barColor = "#64b5f6";   // 青
+
+              return {
+                  x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
+                  y: uName,
+                  type: s.type,
+                  backgroundColor: barColor
+              };
+          });
+
+          new Chart(ctx, {
+              type: "bar",
+              data: {
+                  datasets: [{
+                      data: chartDataPoints,
+                      backgroundColor: chartDataPoints.map(d => d.backgroundColor),
+                      barPercentage: 0.7, 
+                      borderRadius: 4,
+                      borderSkipped: false
+                  }]
+              },
+              options: {
+                  indexAxis: "y",
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                      x: {
+                          type: "time",
+                          time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+                          min: minTime, max: maxTime,
+                          grid: { color: "#f0f0f0" },
+                          ticks: { color: "#333" } // X軸の文字色
+                      },
+                      y: { 
+                          type: 'category', 
+                          labels: yLabels,
+                          grid: { display: false },
+                          ticks: { color: "#333", font: { weight: 'bold' } } // Y軸（名前）の文字色
+                      }
+                  },
+                  plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                          callbacks: {
+                              label: c => {
+                                  const d = c.raw;
+                                  const st = d.x[0].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                                  const en = d.x[1].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                                  return `${d.type}: ${st}〜${en}`;
+                              }
+                          }
+                      }
+                  }
+              },
+              // バーの中に文字（役割名）を表示する設定
+              plugins: [{
+                  id: 'roleLabels',
+                  afterDatasetsDraw(chart) {
+                      const { ctx } = chart;
+                      chart.data.datasets.forEach((dataset, i) => {
+                          const meta = chart.getDatasetMeta(i);
+                          if (!meta.hidden) {
+                              meta.data.forEach((element, index) => {
+                                  const d = dataset.data[index];
+                                  // "work" 以外のときに文字を表示
+                                  if (d.type && d.type !== 'work') {
+                                      ctx.fillStyle = '#ffffff'; // バーの中の文字は白
+                                      ctx.font = 'bold 12px "Helvetica Neue", Arial';
+                                      ctx.textAlign = 'center';
+                                      ctx.textBaseline = 'middle';
+                                      // 文字に影をつけて読みやすく
+                                      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                                      ctx.shadowBlur = 3;
+                                      ctx.fillText(d.type, element.x, element.y);
+                                      ctx.shadowBlur = 0;
+                                  }
+                              });
+                          }
+                      });
+                  }
+              }]
+          });
+      });
+    });
+  </script>
 </head>
 <body>
 
@@ -43,12 +230,7 @@
     <ul>
       <li>開始時間: {{ settings.start_time }}</li>
       <li>終了時間: {{ settings.end_time }}</li>
-      <li>休憩時間: {{ settings.break_minutes }}分</li>
-      <li>シフト間隔: {{ settings.interval_minutes }}分</li>
-      <li>最大勤務時間: {{ settings.max_hours_per_day }}時間</li>
-      <li>最小勤務時間: {{ settings.min_hours_per_day }}時間</li>
       <li>時間帯最大人数: {{ settings.max_people_per_shift }}</li>
-      <li>モード: {{ settings.auto_mode }}</li>
     </ul>
   </div>
   {% endif %}
@@ -57,37 +239,31 @@
     <p class="message">{{ message }}</p>
   {% endif %}
  
-  {% if shifts %}
-    <div id="charts"></div> 
-  {% else %}
-    <p>シフトがありません。</p>
-  {% endif %}
+  <div id="charts"></div> 
  
-  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 50px;">
     <a href="{{ url_for('makeshift.auto_calendar') }}" class="btn secondary">♻️ 再編集（再生成）</a>
-    
     <button onclick="openHelpModal()" class="btn danger">🚨 ヘルプ募集</button>
   </div>
 
   <div id="helpModal" class="modal-overlay">
     <div class="modal-content">
         <h3 style="margin-top:0; color:#d32f2f;">🚨 ヘルプ急募配信</h3>
-        <p style="margin-bottom: 15px; color: #666;">条件に合うスタッフ（現在シフト外）に<br>一斉送信します。</p>
-        
-        <label for="helpDate">📅 日付:</label>
-        <input type="date" id="helpDate" class="form-control">
-        
-        <label for="helpStart">⏰ 開始時間:</label>
-        <input type="time" id="helpStart" class="form-control">
-        
-        <label for="helpEnd">🏁 終了時間:</label>
-        <input type="time" id="helpEnd" class="form-control">
-  
+        <p style="margin-bottom: 15px; color: #666;">条件に合うスタッフに通知します。</p>
+        <label>📅 日付:</label> <input type="date" id="helpDate" class="form-control">
+        <label>⏰ 開始:</label> <input type="time" id="helpStart" class="form-control">
+        <label>🏁 終了:</label> <input type="time" id="helpEnd" class="form-control">
         <div class="modal-actions">
-            <button onclick="closeHelpModal()" class="btn secondary" style="background:#ccc; border:none;">キャンセル</button>
-            <button onclick="submitHelpRequest()" class="btn danger">配信する</button>
+            <button onclick="closeHelpModal()" class="btn secondary">キャンセル</button>
+            <button onclick="submitHelpRequest()" class="btn danger">配信</button>
         </div>
     </div>
   </div>
+  
+  <script>
+      function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
+      function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
+      function submitHelpRequest() { alert('送信しました'); closeHelpModal(); }
+  </script>
 </body>
 </html>

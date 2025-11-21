@@ -244,84 +244,102 @@ PREFERENCE_REWARD_WEIGHT = 1000
 # from ortools.sat.python import cp_model
 # import traceback
 
+# ==========================================
+# 1. シフト自動生成ロジック (メイン機能)
+# ==========================================
+# ==========================================
+# 1. シフト自動生成ロジック (定員厳守・スリム化版)
+# ==========================================
+# ==========================================
+# 1. シフト自動生成ロジック (時間エラー完全修正版)
+# ==========================================
+# ==========================================
+# 1. シフト自動生成ロジック (修正版)
+# ==========================================
 @makeshift_bp.route("/auto_calendar")
 def auto_calendar():
+    # ★修正1: 必要な部品をここで確実にインポート
+    from datetime import time, datetime, timedelta 
+    
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # 0. 初期データ取得と設定の準備
+        # 0. 初期データ取得
         cursor.execute("SELECT * FROM shift_settings LIMIT 1")
-        settings = cursor.fetchone()
-        if not settings:
+        row = cursor.fetchone()
+        
+        if row:
+            settings = {
+                "start_time": str(row["start_time"])[:5],
+                "end_time": str(row["end_time"])[:5],
+                "break_minutes": row.get("break_minutes", 60),
+                "interval_minutes": row.get("interval_minutes", 15),
+                "max_hours_per_day": row.get("max_hours_per_day", 8),
+                "min_hours_per_day": row.get("min_hours_per_day", 0),
+                "max_people_per_shift": row.get("max_people_per_shift", 30),
+                "auto_mode": row.get("auto_mode", "balance")
+            }
+        else:
             return render_template("auto_calendar.html", message="シフト設定が未登録です。", shifts=[], settings={})
 
-        settings['start_time'] = format_time(settings.get('start_time'))
-        settings['end_time'] = format_time(settings.get('end_time'))
-        if settings.get('updated_at') and isinstance(settings['updated_at'], (datetime, date_cls)):
-            settings['updated_at'] = settings['updated_at'].strftime("%Y-%m-%d %H:%M:%S")
+        # =====================================================
+        # 🔧 安全な時間変換関数
+        # =====================================================
+        def safe_to_time(val):
+            if val is None: return time(0, 0)
+            if isinstance(val, time): return val
+            if isinstance(val, timedelta): return (datetime.min + val).time()
+            
+            s = str(val).strip()
+            try:
+                return datetime.strptime(s, "%H:%M:%S").time()
+            except ValueError:
+                try:
+                    return datetime.strptime(s, "%H:%M").time()
+                except ValueError:
+                    parts = s.split(':')
+                    if len(parts) >= 2:
+                        return time(int(parts[0]), int(parts[1]))
+            return time(0, 0)
+
+        SHIFT_START = safe_to_time(settings['start_time'])
+        SHIFT_END = safe_to_time(settings['end_time'])
+        INTERVAL_MINUTES = int(settings['interval_minutes'])
+
+        settings['start_time'] = SHIFT_START.strftime("%H:%M")
+        settings['end_time'] = SHIFT_END.strftime("%H:%M")
 
         cursor.execute("SELECT ID, name FROM account")
         users_data = cursor.fetchall()
         user_ids = [str(u['ID']) for u in users_data]
         num_users = len(user_ids)
         user_map = {user_id: i for i, user_id in enumerate(user_ids)}
+        
         if num_users == 0:
             return render_template("auto_calendar.html", message="登録ユーザーがいません。", shifts=[], settings=settings)
         
-        # ========================================================
-        # ▼▼▼ 修正①：スキルと需要データの読み込み (ここから) ▼▼▼
-        # ========================================================
-
-        # 1. 全従業員のスキルIDを取得 (position_id で管理するように変更)
-        # user_skill_ids = { '2': [2], '6': [1], '7': [1, 2] }  <-- IDで管理
+        # 1. スキル読み込み
         user_skill_ids = {}
-        
         cursor.execute("SELECT user_id, position_id FROM user_positions")
-        skill_rows = cursor.fetchall()
-
-        for row in skill_rows:
+        for row in cursor.fetchall():
             uid = str(row['user_id'])
-            pid = row['position_id'] # 数値のまま扱う (1:ホール, 2:キッチン)
+            if uid not in user_skill_ids: user_skill_ids[uid] = []
+            user_skill_ids[uid].append(row['position_id'])
             
-            if uid not in user_skill_ids:
-                user_skill_ids[uid] = []
-            user_skill_ids[uid].append(pid)
-            
-        print("--- User Skill IDs ---")
-        print(user_skill_ids)
-
-        # 2. 時間帯ごとの需要データを取得
-        # demand_map = { "12:00": { 1: 2, 2: 2 } }  <-- "12:00"に ポジション1が2人、2が2人必要
+        # 2. 需要読み込み
         demand_map = {}
-        
         cursor.execute("SELECT time_slot, position_id, required_count FROM shift_demand")
-        demand_rows = cursor.fetchall()
-        
-        for row in demand_rows:
-            # time_slotが "12:00:00" のように秒付きで来る場合があるので先頭5文字("12:00")にする
-            t_str = str(row['time_slot'])[:5]
-            pid = row['position_id']
-            count = row['required_count']
-            
-            if t_str not in demand_map:
-                demand_map[t_str] = {}
-            
-            # 同じ時間に同じポジションの設定が複数あった場合は上書き、または加算
-            demand_map[t_str][pid] = count
-            
-        print("--- Shift Demand Map ---")
-        print(demand_map) # ログで確認
-        print("------------------------")
+        for row in cursor.fetchall():
+            t_obj = safe_to_time(row['time_slot'])
+            t_str = t_obj.strftime("%H:%M")
+            if t_str not in demand_map: demand_map[t_str] = {}
+            demand_map[t_str][row['position_id']] = row['required_count']
 
-        # ========================================================
-        # ▲▲▲ 修正①：ここまで ▲▲▲
-        # ========================================================
-        # 1. 処理対象となる全ての日付を取得 (希望が登録されている日付のみ)
+        # 3. シフト生成ループ
         cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
         target_dates = [row['date'] for row in cursor.fetchall()]
 
-        # ⚠️ 修正: シフト生成前にshift_table全体をクリアし、古いシフト表示を防ぐ
         cursor.execute("DELETE FROM shift_table")
         conn.commit()
         
@@ -331,11 +349,9 @@ def auto_calendar():
 
         all_generated_shifts = []
 
-        # === 3. 日付ごとのシフト生成ループ ===
         for target_date_obj in target_dates:
             target_date_str = target_date_obj.strftime("%Y-%m-%d")
 
-            # 3.1. その日付の希望シフトのみを取得
             cursor.execute("""
                 SELECT ID, date, start_time, end_time, work 
                 FROM calendar 
@@ -343,304 +359,195 @@ def auto_calendar():
             """, (target_date_str,))
             preference_rows = cursor.fetchall()
             
-            # 3.2. 時間枠の定義と定数化
-            SHIFT_START = ensure_time_obj(settings['start_time'])
-            SHIFT_END = ensure_time_obj(settings['end_time'])
-            INTERVAL_MINUTES = settings['interval_minutes']
-            
-            # ▼▼▼ ここを数字で直書きに変更（制限解除） ▼▼▼
-            MAX_PEOPLE = 30           # 3人→30人に増やす
-            MIN_WORK_INTERVALS = 0    # 最小勤務なし
-            MAX_WORK_INTERVALS = 100  # 最大勤務時間の制限なし
-          
-            # ▲▲▲ ここまで ▲▲▲
-            
-            # ⚠️ 休憩制約は無効化するため、関連定数も無視
-            BREAK_MINUTES = settings['break_minutes']
-            BREAK_REQUIRED_HOURS = 5 
-            BREAK_REQUIRED_INTERVALS = BREAK_REQUIRED_HOURS * 60 // INTERVAL_MINUTES
-            BREAK_INTERVALS = BREAK_MINUTES // INTERVAL_MINUTES
-            # ---------------------------------------------------------------------
-
             time_intervals = []
-            current_time_dt = datetime.combine(date_cls.today(), SHIFT_START)
-            end_time_dt = datetime.combine(date_cls.today(), SHIFT_END)
-            while current_time_dt < end_time_dt:
-                time_intervals.append(current_time_dt.time())
-                current_time_dt += timedelta(minutes=INTERVAL_MINUTES)
+            base_date = datetime(2000, 1, 1)
+            current_dt = base_date.replace(hour=SHIFT_START.hour, minute=SHIFT_START.minute)
+            target_end_dt = base_date.replace(hour=SHIFT_END.hour, minute=SHIFT_END.minute)
+            
+            while current_dt < target_end_dt:
+                time_intervals.append(current_dt.time())
+                current_dt += timedelta(minutes=INTERVAL_MINUTES)
             num_intervals = len(time_intervals)
 
             if num_intervals == 0: continue 
 
-            # 3.3. OR-Tools モデル構築と決定変数定義
             model = cp_model.CpModel()
             shifts = {}
-            break_starts = {} 
+            
             for u_idx in range(num_users):
                 for t_idx in range(num_intervals):
                     shifts[u_idx, t_idx] = model.NewBoolVar(f's_{u_idx}_{t_idx}_{target_date_str}')
-                    break_starts[u_idx, t_idx] = model.NewBoolVar(f'b_start_{u_idx}_{t_idx}_{target_date_str}')
-                    
-            total_work_intervals = {}
-            for u_idx in range(num_users):
-                total_work_intervals[u_idx] = model.NewIntVar(0, num_intervals, f'total_w_{u_idx}_{target_date_str}')
-                model.Add(total_work_intervals[u_idx] == sum(shifts[u_idx, t_idx] for t_idx in range(num_intervals)))
+            
+            # ★修正2: demand_fulfillment はループの外で初期化！
+            demand_fulfillment = [] 
 
-            # 3.4. 制約の追加
-            
-            # 4-1. 時間帯最大人数制約 (MAX_PEOPLEは上限として機能)
-            #for t_idx in range(num_intervals):
-            #   model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= MAX_PEOPLE)
-            # ========================================================
-            # ▼▼▼ 修正②：需要に基づく配置制約 (ここから) ▼▼▼
-            # ========================================================
-            
-            # 4-1. ポジション別・時間帯別の必要人数制約
-            # 旧コード: model.Add(sum(...) <= MAX_PEOPLE)  <-- これは削除かコメントアウト
-            
-            # 全体の最大人数制約（一応残しておく、不要ならMAX_PEOPLEを大きく設定）
-            for t_idx in range(num_intervals):
-                 model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= MAX_PEOPLE)
-
-            # ★ ここが心臓部：需要（デマンド）に合わせたスキル配置 ★
+            # 時間ごとの制約
             for t_idx, t_time in enumerate(time_intervals):
-                # 現在の時刻を "12:00" のような文字列にする
                 t_str = t_time.strftime("%H:%M")
+                total_required = 0
                 
-                # もしこの時間に需要設定(demand_map)があれば制約を追加
                 if t_str in demand_map:
-                    current_demand = demand_map[t_str] # 例: {1: 2, 2: 1} (ホール2人, キッチン1人)
-                    
+                    current_demand = demand_map[t_str]
                     for needed_pos_id, needed_count in current_demand.items():
-                        # このポジション(needed_pos_id)ができる人を探す
-                        capable_users = []
-                        
+                        total_required += needed_count
+                        capable_vars = []
                         for u_idx in range(num_users):
                             user_id = user_ids[u_idx]
-                            # ユーザーのスキルリストに、必要なポジションIDが含まれているか？
                             if needed_pos_id in user_skill_ids.get(user_id, []):
-                                capable_users.append(shifts[u_idx, t_idx])
-                        
-                        if capable_users:
-                            # 「スキルを持ってる人の合計」が「必要人数」以上になるようにする
-                            # needed_count が 2なら、最低2人は割り当てる
-                            model.Add(sum(capable_users) >= needed_count)
-                            
-            # ========================================================
-            # ▲▲▲ 修正②：ここまで ▲▲▲
-            # ========================================================
+                                capable_vars.append(shifts[u_idx, t_idx])
+                        if capable_vars:
+                            model.Add(sum(capable_vars) <= needed_count)
+                            demand_fulfillment.append(sum(capable_vars))
                 
-            # 4-2. 最小・最大勤務時間制約 (最小勤務は0時間に設定)
-            for u_idx in range(num_users):
-                model.Add(total_work_intervals[u_idx] >= MIN_WORK_INTERVALS) # 0時間
-                model.Add(total_work_intervals[u_idx] <= MAX_WORK_INTERVALS) # 最大時間
+                # 定員オーバー禁止
+                model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= total_required)
 
-            # ========================================================
-            # ▼▼▼ 修正版：4-3. ユーザーの希望シフト制約 (総入れ替え) ▼▼▼
-            # ========================================================
-
-            # 4-3. ユーザーの希望シフト制約
-            user_preferences_map = {} 
-            preference_fulfillment = []
-            
-            # 希望シフトが全くないユーザーを特定
+            # 希望シフト制約
             users_with_preference = {row['ID'] for row in preference_rows}
-            
-            # A. まず、希望を出していないユーザーを全休にする
             for u_idx, u_id in enumerate(user_ids):
                 if u_id not in users_with_preference:
-                    # 希望なしの人は勤務禁止
                     for t_idx in range(num_intervals):
                         model.Add(shifts[u_idx, t_idx] == 0)
 
-            # B. 次に、希望を出しているユーザーの処理（start_tを作るのはここ！）
+            preference_fulfillment = [] 
             for row in preference_rows:
                 u_id = row['ID']
                 if u_id not in user_map: continue
                 u_idx = user_map[u_id]
                 
-                # ★ ここで start_t を定義！
-                start_t = ensure_time_obj(row['start_time'])
-                end_t = ensure_time_obj(row['end_time'])
+                st_val = safe_to_time(row['start_time'])
+                en_val = safe_to_time(row['end_time'])
                 
-                if u_idx not in user_preferences_map: user_preferences_map[u_idx] = set()
-
-                # ★ ループは必ず start_t 定義の「後」で、「中」に入れる！
                 for t_idx, t_time in enumerate(time_intervals):
-                    # 勤務希望時間帯
-                    if start_t <= t_time < end_t:
-                        user_preferences_map[u_idx].add(t_idx)
+                    if st_val <= t_time < en_val:
                         preference_fulfillment.append(shifts[u_idx, t_idx])
-                    
-                    # 勤務禁止時間帯（今回は強制出勤させるために無効化！）
                     else:
-                        # model.Add(shifts[u_idx, t_idx] == 0) 
-                        pass 
+                        model.Add(shifts[u_idx, t_idx] == 0)
 
-            # ========================================================       
-            # 4-4. 休憩時間制約 (完全に無効化)
-            pass
+            # 目的関数
+            model.Maximize(sum(demand_fulfillment) * 10 + sum(preference_fulfillment) * 1)
 
-            # 3.5. 目的関数の定義 (バランスモードのみ使用、希望充足度と公平性)
-            min_work = model.NewIntVar(0, num_intervals, 'min_work')
-            max_work = model.NewIntVar(0, num_intervals, 'max_work')
-            
-            if total_work_intervals:
-                model.AddMaxEquality(max_work, total_work_intervals.values())
-                model.AddMinEquality(min_work, total_work_intervals.values())
-                fairness_cost = max_work - min_work 
-            else:
-                fairness_cost = 0
-
-            # ⚠️ モードはバランスモードのみ使用
-            model.Maximize(
-                sum(preference_fulfillment) * PREFERENCE_REWARD_WEIGHT - 
-                fairness_cost * FAIRNESS_PENALTY_WEIGHT
-            )
-
-            # 3.6. ソルバー実行と結果処理
             solver = cp_model.CpSolver()
-            solver.parameters.max_time_in_seconds = 5.0
             status = solver.Solve(model)
             
-            shifts_to_save_day = []
             if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-                
                 for u_idx in range(num_users):
                     user_id = user_ids[u_idx]
-                    current_shift_start_time = None
+                    current_block_start = None
+                    current_role = None
                     
-                    # 勤務時間 (work) の保存
                     for t_idx in range(num_intervals):
                         is_working = solver.Value(shifts[u_idx, t_idx]) == 1
-                        t_time = time_intervals[t_idx]
                         
                         if is_working:
-                            if current_shift_start_time is None:
-                                current_shift_start_time = t_time
+                            t_time = time_intervals[t_idx]
+                            t_str = t_time.strftime("%H:%M")
                             
-                            # シフトの終わりを判定（次の時間が休み、または今日最後の場合）
-                            if t_idx == num_intervals - 1 or solver.Value(shifts[u_idx, t_idx + 1]) == 0:
-                                end_t_dt = datetime.combine(target_date_obj, t_time) + timedelta(minutes=INTERVAL_MINUTES)
-                                
-                                # ==========================================
-                                # ▼▼▼ ここから：役割判定ロジック（完成版） ▼▼▼
-                                # ==========================================
-                                
-                                assigned_type = "work" # 初期値
-                                found_role = None
-                                
-                                # ユーザーのスキルを取得（文字列IDで検索）
-                                my_skill_ids = user_skill_ids.get(str(user_id), [])
-
-                                # シフトの時間帯(開始〜終了)をスキャンして、需要とマッチするか調べる
-                                temp_time = current_shift_start_time
-                                while temp_time < end_t_dt.time():
-                                    t_str = to_time_str(temp_time)[:5] # "12:00"
-                                    
-                                    # その時間に需要設定があるか？
-                                    if t_str in demand_map:
-                                        needed_positions = demand_map[t_str]
-                                        
-                                        # 自分が持っているスキルとマッチするか確認
-                                        for pid in my_skill_ids:
-                                            if pid in needed_positions and needed_positions[pid] > 0:
-                                                # 🎯 マッチした！役割名を決定
-                                                if pid == 1: found_role = "ホール"
-                                                elif pid == 2: found_role = "キッチン"
-                                                elif pid == 3: found_role = "洗い場"
-                                                else: found_role = f"Role-{pid}"
-                                                break # 役割決定
-                                    
-                                    if found_role:
-                                        assigned_type = found_role
-                                        break # ループ終了
-                                        
-                                    # 次の15分へ進める（判定用）
-                                    dummy_dt = datetime.combine(date_cls.today(), temp_time) + timedelta(minutes=INTERVAL_MINUTES)
-                                    temp_time = dummy_dt.time()
-
-                                # ==========================================
-                                # ▲▲▲ ここまで：役割判定ロジック ▲▲▲
-                                # ==========================================
-
-                                shifts_to_save_day.append({
+                            this_role = "work"
+                            if t_str in demand_map:
+                                needed = demand_map[t_str]
+                                my_skills = user_skill_ids.get(str(user_id), [])
+                                for pid in my_skills:
+                                    if pid in needed and needed[pid] > 0:
+                                        if pid == 1: this_role = "ホール"
+                                        elif pid == 2: this_role = "キッチン"
+                                        elif pid == 3: this_role = "洗い場"
+                                        break
+                            
+                            if current_block_start is None:
+                                current_block_start = t_time
+                                current_role = this_role
+                            elif this_role != current_role:
+                                end_dt_calc = datetime.combine(base_date, t_time)
+                                all_generated_shifts.append({
                                     "user_id": user_id, 
                                     "date": target_date_str,
-                                    "start_time": to_time_str(current_shift_start_time),
-                                    "end_time": to_time_str(end_t_dt.time()),
-                                    "type": assigned_type # ← 判定された役割が入る
+                                    "start_time": current_block_start.strftime("%H:%M"),
+                                    "end_time": end_dt_calc.time().strftime("%H:%M"),
+                                    "type": current_role
                                 })
-                                current_shift_start_time = None
-                    
-                    # 休憩時間は無効化されたため、処理を省略
-                    pass 
-                
-                all_generated_shifts.extend(shifts_to_save_day)
-            
-            elif status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:
-                status_name = solver.StatusName(status)
-                conn.close()
-                return render_template("auto_calendar.html", 
-                settings=settings, 
-                shifts=[],
-                message=f"最適な解が見つかりませんでした。(Status: {status_name})。これは、**人数、希望、最大勤務時間**の制約が同時に満たせないことを意味します。",
-                error_details=f"Target Date: {target_date_str}, Status: {status_name}")
+                                current_block_start = t_time
+                                current_role = this_role
+                        
+                        else:
+                            if current_block_start is not None:
+                                end_dt_calc = datetime.combine(base_date, time_intervals[t_idx])
+                                all_generated_shifts.append({
+                                    "user_id": user_id, 
+                                    "date": target_date_str,
+                                    "start_time": current_block_start.strftime("%H:%M"),
+                                    "end_time": end_dt_calc.time().strftime("%H:%M"),
+                                    "type": current_role
+                                })
+                                current_block_start = None
+                                current_role = None
 
+                    if current_block_start is not None:
+                        last_t = time_intervals[-1]
+                        last_end_dt = datetime.combine(base_date, last_t) + timedelta(minutes=INTERVAL_MINUTES)
+                        all_generated_shifts.append({
+                            "user_id": user_id, 
+                            "date": target_date_str,
+                            "start_time": current_block_start.strftime("%H:%M"),
+                            "end_time": last_end_dt.time().strftime("%H:%M"),
+                            "type": current_role
+                        })
 
-        # === 4. ループ終了後の最終処理 ===
         if all_generated_shifts:
             sql = "INSERT INTO shift_table (user_id, date, start_time, end_time, type) VALUES (%s, %s, %s, %s, %s)"
-            insert_data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type']) for s in all_generated_shifts]
-            cursor.executemany(sql, insert_data)
+            data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type']) for s in all_generated_shifts]
+            cursor.executemany(sql, data)
             conn.commit()
             
-            cursor.execute("SELECT user_id, date, start_time, end_time, type FROM shift_table ORDER BY date, start_time")
+            cursor.execute("""
+                SELECT s.*, a.name as user_name 
+                FROM shift_table s 
+                LEFT JOIN account a ON s.user_id = a.ID 
+                ORDER BY s.user_id, s.date, s.start_time
+            """)
             final_shifts = cursor.fetchall()
-            conn.close()
             
-            formatted_shifts = [{
-                "user_id": s['user_id'], 
-                "date": s['date'].strftime("%Y-%m-%d"), 
-                "start_time": format_time(s['start_time']), 
-                "end_time": format_time(s['end_time']),     
-                "type": s['type']
-            } for s in final_shifts]
-
-            return render_template("auto_calendar.html", 
-            settings=settings, 
-            shifts=formatted_shifts,
-            message=f"{len(formatted_shifts)} 件のシフトを{len(target_dates)}日分自動生成しました。")
-
-        else:
+            formatted = []
+            for s in final_shifts:
+                st = safe_to_time(s['start_time']).strftime("%H:%M")
+                en = safe_to_time(s['end_time']).strftime("%H:%M")
+                
+                formatted.append({
+                    "user_id": s['user_id'],
+                    "user_name": s['user_name'],
+                    "date": str(s['date']),
+                    "start_time": st,
+                    "end_time": en,
+                    "type": s['type']
+                })
+            
             conn.close()
-            return render_template("auto_calendar.html", message="シフトが割り当てられませんでした。全員が勤務不可能な設定です。", shifts=[], settings=settings)
+            return render_template("auto_calendar.html", settings=settings, shifts=formatted, message=f"{len(formatted)}件のシフトを生成しました。")
+            
+        conn.close()
+        return render_template("auto_calendar.html", settings=settings, shifts=[], message="シフトが作成されませんでした。")
 
     except Exception as e:
         conn.close()
-        error_trace = traceback.format_exc()
-        print("--- SHIFT GENERATION ERROR ---")
-        print(error_trace)
-        print("------------------------------")
-        
-        return render_template("auto_calendar.html", 
-        settings=settings, 
-        shifts=[],
-        message=f"予期せぬエラーが発生しました: {str(e)}",
-        error_details=error_trace)
-# === 設定画面 ===----------------------------------------------------------------------------------------------
+        import traceback
+        print(traceback.format_exc())
+        return render_template("auto_calendar.html", settings=settings if 'settings' in locals() else {}, shifts=[], message=f"エラーが発生しました: {str(e)}")
+#-------------------------------------------------------------------------------------------------------------
+# ==========================================
+# 2. 設定画面の表示と基本設定の更新
+# ==========================================
 @makeshift_bp.route("/settings", methods=["GET", "POST"])
 def settings():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # --- 現在の設定を取得 ---
-    cursor.execute("SELECT ID, start_time, end_time, break_minutes, interval_minutes, max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode FROM shift_settings LIMIT 1")
-    settings = cursor.fetchone()
+    # --- 1. 現在の基本設定を取得 ---
+    cursor.execute("SELECT * FROM shift_settings LIMIT 1")
+    settings_data = cursor.fetchone()
 
-    # --- データが存在しない場合の初期値 ---
-    if not settings:
-        settings = {
+    # データがない場合の初期値
+    if not settings_data:
+        settings_data = {
             "ID": None,
             "start_time": "09:00",
             "end_time": "18:00",
@@ -652,78 +559,167 @@ def settings():
             "auto_mode": "balance",
         }
 
-    # --- POST（更新処理） ---
-    if request.method == "POST":
-        start_time = request.form["start_time"]
-        end_time = request.form["end_time"]
-        break_minutes = request.form["break_minutes"]
-        interval_minutes = request.form["interval_minutes"]
-        max_hours_per_day = request.form["max_hours_per_day"]
-        min_hours_per_day = request.form["min_hours_per_day"]
-        max_people_per_shift = request.form["max_people_per_shift"]
-        auto_mode = request.form["auto_mode"]
-
-        # 既存データを確認
-        cursor.execute("SELECT ID FROM shift_settings LIMIT 1")
-        existing_id = cursor.fetchone()
-
-        if existing_id:
-            # データが存在する場合: UPDATE
-            cursor.execute("""
-                UPDATE shift_settings
-                SET start_time=%s, end_time=%s, break_minutes=%s, interval_minutes=%s,
-                    max_hours_per_day=%s, min_hours_per_day=%s, max_people_per_shift=%s,
-                    auto_mode=%s, updated_at=NOW()
-                WHERE ID = %s
-            """, (
-                start_time, end_time, break_minutes, interval_minutes,
-                max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, existing_id["ID"]
-            ))
+    # --- 2. 役割リストを取得 ---
+    cursor.execute("SELECT * FROM positions")
+    positions_list = cursor.fetchall()
+    
+    # --- 3. 現在の需要設定を取得 ---
+    cursor.execute("""
+        SELECT d.id, d.time_slot, d.required_count, p.name as position_name
+        FROM shift_demand d
+        LEFT JOIN positions p ON d.position_id = p.id
+        ORDER BY d.time_slot, d.position_id
+    """)
+    raw_demands = cursor.fetchall()
+    
+    # 時間変換ロジック
+    formatted_demands = []
+    for r in raw_demands:
+        ts = r['time_slot']
+        ts_str = ""
+        if isinstance(ts, timedelta):
+            total_seconds = int(ts.total_seconds())
+            h = total_seconds // 3600
+            m = (total_seconds % 3600) // 60
+            ts_str = f"{h:02d}:{m:02d}"
         else:
-            # データが存在しない場合: INSERT
-            cursor.execute("""
-                INSERT INTO shift_settings 
-                (start_time, end_time, break_minutes, interval_minutes, max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            """, (
-                start_time, end_time, break_minutes, interval_minutes,
-                max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode
-            ))
-            
-        conn.commit()
-        conn.close()
+            ts_str = str(ts)[:5]
+        
+        pos_name = r['position_name'] if r['position_name'] else f"Role-{r['position_id']}"
+        formatted_demands.append({
+            'time_slot': ts_str,
+            'position_name': pos_name,
+            'required_count': r['required_count']
+        })
+
+    # --- 4. POST（更新処理） ---
+    if request.method == "POST":
+        try:
+            start_time = request.form["start_time"]
+            end_time = request.form["end_time"]
+            break_minutes = request.form.get("break_minutes", 60)
+            interval_minutes = request.form.get("interval_minutes", 15)
+            max_hours_per_day = request.form.get("max_hours_per_day", 8)
+            min_hours_per_day = request.form.get("min_hours_per_day", 0)
+            max_people_per_shift = request.form.get("max_people_per_shift", 30)
+            auto_mode = request.form.get("auto_mode", "balance")
+
+            cursor.execute("SELECT ID FROM shift_settings LIMIT 1")
+            existing_id = cursor.fetchone()
+
+            if existing_id:
+                cursor.execute("""
+                    UPDATE shift_settings
+                    SET start_time=%s, end_time=%s, break_minutes=%s, interval_minutes=%s,
+                        max_hours_per_day=%s, min_hours_per_day=%s, max_people_per_shift=%s,
+                        auto_mode=%s, updated_at=NOW()
+                    WHERE ID = %s
+                """, (
+                    start_time, end_time, break_minutes, interval_minutes,
+                    max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, existing_id["ID"]
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO shift_settings 
+                    (start_time, end_time, break_minutes, interval_minutes, max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                """, (
+                    start_time, end_time, break_minutes, interval_minutes,
+                    max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode
+                ))
+            conn.commit()
+        except Exception as e:
+            print(f"Error: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+        
+        # POSTの後のリダイレクト（インデント注意：ifの中）
         return redirect(url_for("makeshift.settings"))
 
+    # --- 5. GET（表示処理） ---
     conn.close()
 
-    # --- 🕒 GET時の時刻表示フォーマット ---
+    # 時刻フォーマット調整
     for key in ["start_time", "end_time"]:
-        if settings[key]:
-            settings[key] = str(settings[key])[:5]
+        if settings_data[key]:
+            settings_data[key] = str(settings_data[key])[:5]
         else:
-            settings[key] = "09:00" if key == "start_time" else "18:00"
+            settings_data[key] = "09:00" if key == "start_time" else "18:00"
 
-    return render_template("shift_setting.html", settings=settings)
+    # ★ここが一番大事！このreturnが左端（defと同じ縦ラインの1つ内側）にある必要があります
+    return render_template("shift_setting.html", 
+                           settings=settings_data, 
+                           positions=positions_list, 
+                           demands=formatted_demands)
+# ==========================================
+# 3. 需要（ピークタイム）を追加する処理
+# ==========================================
+@makeshift_bp.route("/settings/demand/add", methods=["POST"])
+def add_demand():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        start_time_str = request.form['start_time']
+        end_time_str = request.form['end_time']
+        position_id = request.form['position_id']
+        count = int(request.form['required_count'])
+        
+        t_start = datetime.strptime(start_time_str, "%H:%M")
+        t_end = datetime.strptime(end_time_str, "%H:%M")
+        
+        if t_start >= t_end:
+            return redirect(url_for('makeshift.settings'))
 
-#----------------------------------------------------------------------------------------------------------------------------
+        current = t_start
+        while current < t_end:
+            time_slot = current.strftime("%H:%M")
+            cursor.execute("DELETE FROM shift_demand WHERE time_slot = %s AND position_id = %s", (time_slot, position_id))
+            cursor.execute("INSERT INTO shift_demand (time_slot, position_id, required_count) VALUES (%s, %s, %s)", (time_slot, position_id, count))
+            current += timedelta(minutes=15)
+            
+        conn.commit()
+    except Exception as e:
+        print(f"Error adding demand: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+        
+    return redirect(url_for('makeshift.settings'))
 
-# === 既存の /api/shifts/all ルートを修正 ===
+
+# ==========================================
+# 4. 需要をリセット（全削除）する処理
+# ==========================================
+@makeshift_bp.route("/settings/demand/reset", methods=["POST"])
+def reset_demand():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM shift_demand")
+        conn.commit()
+    except Exception as e:
+        print(f"Error resetting demand: {e}")
+    finally:
+        conn.close()
+    return redirect(url_for('makeshift.settings'))
+
+
+# ==========================================
+# 5. 確定シフト取得API
+# ==========================================
 @makeshift_bp.route("/api/shifts/all")
 def get_all_confirmed_shifts():
-    """全ての日付・全ユーザーの確定シフトをJSON形式で返すAPI (user_nameを必ず取得)"""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
-    # ユーザー名を取得するためのJOINが必須
     cursor.execute("""
-        SELECT 
-            s.user_id, a.name AS user_name, s.date, s.start_time, s.end_time, s.type
+        SELECT s.user_id, a.name AS user_name, s.date, s.start_time, s.end_time, s.type
         FROM shift_table s
         JOIN account a ON s.user_id = a.ID
         ORDER BY s.date, s.start_time
     """)
     confirmed_shifts = cursor.fetchall()
-
     cursor.close()
     conn.close()
 
@@ -737,15 +733,12 @@ def get_all_confirmed_shifts():
             "end_time": format_time(shift["end_time"]),
             "type": shift["type"]
         })
-        
     return jsonify({"shifts": formatted_shifts})
 
 @makeshift_bp.route("/api/shifts/user/<int:user_id>")
 def get_user_shifts(user_id):
-    """特定のユーザーIDの確定シフトをJSON形式で返すAPI"""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
     user_data = cursor.fetchone()
     if not user_data:
@@ -759,7 +752,6 @@ def get_user_shifts(user_id):
         ORDER BY date, start_time
     """, (user_id,))
     user_shifts = cursor.fetchall()
-
     cursor.close()
     conn.close()
 
@@ -771,7 +763,6 @@ def get_user_shifts(user_id):
             "end_time": format_time(shift["end_time"]),
             "type": shift["type"]
         })
-        
     return jsonify({
         "user_id": user_id,
         "user_name": user_data["name"],
