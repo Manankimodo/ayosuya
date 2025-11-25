@@ -7,30 +7,29 @@
   <script src="{{ url_for('static', filename='js/accountinsert.js') }}"></script>
 </head>
 <body>
-  <!-- ▼ ハンバーガーメニュー -->
-    <div class="hamburger" id="hamburger">
+  <div class="hamburger" id="hamburger" onclick="document.getElementById('menu').classList.toggle('active');">
         <div class="bar"></div>
         <div class="bar"></div>
         <div class="bar"></div>
     </div>
-        <!-- ▼ メニュー本体 -->
     <nav class="menu" id="menu">
         <ul>
-            <!-- <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li> -->
-            <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
-            <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
+            <li><a href="{{ url_for('makeshift.show_admin_shift') }}">希望一覧</a></li>
+            <li><a href="#">履歴</a></li>
             <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
-            <li><a href="{{ url_for('makeshift.generate_shift') }}">シフト作成</a></li>
+            <li><a href="{{ url_for('makeshift.auto_calendar') }}">シフト作成</a></li>
         </ul>
     </nav>
+
   <div class="container">
     <div class="card">
       <h1><span class="hicon"></span> 従業員登録フォーム</h1>
-      {% with messages = get_flashed_messages() %}
+      
+      {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <ul class="flash">
-            {% for msg in messages %}
-              <li>{{ msg }}</li>
+            {% for category, msg in messages %}
+              <li class="{{ category }}">{{ msg }}</li>
             {% endfor %}
           </ul>
         {% endif %}
@@ -41,10 +40,19 @@
         <input type="text" name="name" required>
 
         <label>パスワード</label>
-        <input type="password" name="password" required>
+        <input type="text" name="password" required>
 
         <label>店舗ID</label>
         <input type="number" name="store_id" required>
+
+        <label style="margin-top: 15px; display:block; font-weight:bold;">主な役割（複数選択可）</label>
+        <div class="radio-group" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; background: #f9f9f9; padding: 10px; border-radius: 5px;">
+            <label style="cursor: pointer;"><input type="checkbox" name="positions" value="1"> 🛎️ ホール</label>
+            <label style="cursor: pointer;"><input type="checkbox" name="positions" value="2"> 🍳 キッチン</label>
+            <label style="cursor: pointer;"><input type="checkbox" name="positions" value="3"> 🧼 洗い場</label>
+            <label style="cursor: pointer;"><input type="checkbox" name="positions" value="4"> 🔓 開店作業</label>
+            <label style="cursor: pointer;"><input type="checkbox" name="positions" value="5"> 🔒 閉店作業</label>
+        </div>
 
         <button type="submit">登録する</button>
       </form>
@@ -55,14 +63,15 @@
     <div class="chat-list">
       {% for a in accounts %}
       <div class="chat-bubble">
-        <p><strong>ID：</strong>{{ a.id }}</p>
+        <p><strong>ID：</strong>{{ a.ID }}</p>
         <p><strong>名前：</strong>{{ a.name }}</p>
         <p><strong>パスワード：</strong>{{ a.password }}</p>
         <p><strong>店舗ID：</strong>{{ a.store_id }}</p>
 
         <div class="actions">
-          <a class="btn-edit" href="{{ url_for('insert.update', id=a.id) }}">編集</a>
-          <form action="{{ url_for('insert.delete', id=a.id) }}" method="POST" style="display:inline;">
+          <a class="btn-edit" href="{{ url_for('insert.update', id=a.ID) }}">編集</a>
+          
+          <form action="{{ url_for('insert.delete', id=a.ID) }}" method="POST" style="display:inline;">
             <button type="submit" class="btn-delete" onclick="return confirm('削除しますか？')">削除</button>
           </form>
         </div>
@@ -72,11 +81,6 @@
       <p class="muted">まだ従業員は登録されていません。</p>
       {% endfor %}
     </div>
-
-    <!-- 🔹 戻るボタン
-    <div class="back-container">
-      <a href="{{ url_for('calendar.admin') }}" class="btn-back">← カレンダーに戻る</a>
-    </div> -->
   </div>
 </body>
 </html>

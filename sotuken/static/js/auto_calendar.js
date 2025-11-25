@@ -1,3 +1,129 @@
+    function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
+    function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
+    
+    // 🚨 修正: サーバーへのAPI呼び出しロジックを実装 🚨
+    async function submitHelpRequest() {
+        const helpDate = document.getElementById('helpDate').value;
+        const helpStart = document.getElementById('helpStart').value;
+        const helpEnd = document.getElementById('helpEnd').value;
+        
+        // 必須チェック
+        if (!helpDate || !helpStart || !helpEnd) {
+            alert('日付と時間をすべて入力してください。');
+            return;
+        }
+
+        const btn = document.querySelector('#helpModal .btn.danger');
+        const originalText = btn.innerText;
+
+        btn.disabled = true;
+        btn.innerText = '配信中...';
+
+        try {
+            const response = await fetch("{{ url_for('makeshift.create_help_request') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    date: helpDate,
+                    start_time: helpStart,
+                    end_time: helpEnd
+                })
+            });
+
+            closeHelpModal(); // 処理が終わったらモーダルを閉じる
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // 成功時
+                alert(`🎉 募集を配信しました！ (${result.target_count} 名に通知)`);
+            } else {
+                // 失敗時 (サーバーからのエラーメッセージを表示)
+                alert(`❌ 配信失敗: ${result.error || '不明なエラー'}`);
+            }
+
+        } catch (error) {
+            console.error('API Error:', error);
+            alert('通信中にエラーが発生しました。サーバーを確認してください。');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+// ==========================================
+// ヘルプ募集機能 (独立して定義)
+// ==========================================
+function openHelpModal() {
+    const modal = document.getElementById('helpModal');
+    if(modal) {
+        modal.style.display = 'flex';
+        
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('helpDate').value = today;
+
+        const now = new Date();
+        now.setHours(now.getHours() + 1);
+        const h = String(now.getHours()).padStart(2, '0');
+        document.getElementById('helpStart').value = `${h}:00`;
+    }
+}
+
+function closeHelpModal() {
+    const modal = document.getElementById('helpModal');
+    if(modal) modal.style.display = 'none';
+}
+
+async function submitHelpRequest() {
+    const date = document.getElementById('helpDate').value;
+    const start = document.getElementById('helpStart').value;
+    const end = document.getElementById('helpEnd').value;
+
+    if(!date || !start || !end) {
+        alert("日時をすべて入力してください");
+        return;
+    }
+
+    if(!confirm(`【確認】\n${date} ${start}〜${end}\n\n通知を送信しますか？`)) return;
+
+    const submitBtn = document.querySelector('#helpModal .btn.danger');
+    const originalText = submitBtn.innerText;
+
+    try {
+        submitBtn.disabled = true;
+        submitBtn.innerText = "送信中...";
+
+        const response = await fetch('/makeshift/api/help/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, start_time: start, end_time: end })
+        });
+
+        const result = await response.json();
+        if(response.ok) {
+            alert(`✅ 配信完了！対象: ${result.target_count}名`);
+            closeHelpModal();
+        } else {
+            alert("エラー: " + result.error);
+        }
+    } catch(e) {
+        console.error(e);
+        alert("通信エラーが発生しました");
+    } finally {
+        if(submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalText;
+        }
+    }
+}
+
+// モーダル外クリックで閉じる
+window.onclick = function(event) {
+    const modal = document.getElementById('helpModal');
+    if (event.target == modal) closeHelpModal();
+}
+
 // ==========================================
 // 4. ハンバーガーメニュー制御
 // ==========================================
