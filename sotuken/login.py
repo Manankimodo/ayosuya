@@ -55,6 +55,7 @@ def login():
         flash("ログインID または パスワードが間違っています", "danger")
 
     return render_template("login.html")
+
 @login_bp.route('/manager/home')
 def manager_home():
     if session.get("role") != "manager":

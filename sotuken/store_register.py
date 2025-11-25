@@ -70,8 +70,6 @@ def register_store():
 
     return render_template("store_register.html")
 
-
-
 @store_bp.route("/register/done")
 def register_done():
     store_id = request.args.get("store_id")
@@ -86,5 +84,3 @@ def register_done():
     ).fetchone()
 
     return render_template("register_done.html", store=store)
-
-
