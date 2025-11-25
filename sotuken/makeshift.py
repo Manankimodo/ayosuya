@@ -213,14 +213,7 @@ def generate_shift():
     return redirect(url_for('makeshift.show_admin_shift'))
 
 
-# === 自動生成ロジック ===
-# ... (makeshift_bp.route("/generate") の定義まで省略) ...
 
-# === 自動生成ロジック（希望スコア最大化ロジックを統合） ===
-# ... (makeshift_bp.route("/generate") の定義まで省略) ...
-
-# === 自動生成ロジック（希望時刻絶対優先ロジックを統合） ===
-# ... (makeshift_bp.route("/generate") の定義まで省略) ...
 
 # === 自動生成ロジック（複合目標関数に修正） ===----------------------------------------------------------------------
 from ortools.sat.python import cp_model
@@ -228,21 +221,14 @@ from datetime import datetime, time as time_cls, timedelta, date as date_cls
 import traceback
 from flask import jsonify, render_template
 
-# ⚠️ 注意: 以下のユーティリティ関数は、あなたの環境で定義されている必要があります
-# def get_db_connection(): ...
-# def ensure_time_obj(time_data): ...
-# def to_time_str(time_obj): ...
-# def format_time(time_obj): ...
+
 
 # 'balance'モードの場合に、勤務時間の公平性を評価するためのペナルティ重み
 FAIRNESS_PENALTY_WEIGHT = 100
 # 'preference'モードの場合に、希望充足度を最大化するための重み
 PREFERENCE_REWARD_WEIGHT = 1000  
 
-# 🚨 注意: このコードは、元のファイルで定義されている helper functions (get_db_connection, format_time, ensure_time_obj, to_time_str) が既に存在し、インポートされていることを前提としています。
-# from datetime import datetime, time as time_cls, timedelta, date as date_cls
-# from ortools.sat.python import cp_model
-# import traceback
+
 
 # ==========================================
 # 1. シフト自動生成ロジック (メイン機能)
@@ -648,9 +634,9 @@ def settings():
 
     # ★ここが一番大事！このreturnが左端（defと同じ縦ラインの1つ内側）にある必要があります
     return render_template("shift_setting.html", 
-                           settings=settings_data, 
-                           positions=positions_list, 
-                           demands=formatted_demands)
+        settings=settings_data, 
+        positions=positions_list, 
+        demands=formatted_demands)
 # ==========================================
 # 3. 需要（ピークタイム）を追加する処理
 # ==========================================
@@ -791,6 +777,12 @@ def show_user_shift_view(user_id):
     user_id=user_id, 
     user_name=user_data['name'])
 
+
+
+
+from flask import Blueprint, request, jsonify, render_template
+
+
 # ==========================================
 # 🚑 ヘルプ募集機能 (ワンタップ配信システム)
 # ==========================================
@@ -799,7 +791,6 @@ def show_user_shift_view(user_id):
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
-    POSTデータ: { "date": "2025-11-20", "start_time": "17:00", "end_time": "22:00" }
     """
     data = request.json
     target_date = data.get("date")
@@ -817,7 +808,7 @@ def create_help_request():
         """, (target_date, start_time_str, end_time_str))
         request_id = cursor.lastrowid
         
-        # 2. 「その時間にすでにシフトが入っている人」を除外してターゲットを抽出
+        # 2. 【ステップA】「その時間にすでにシフトが入っている人」を除外
         # (shift_table に重複する時間帯があるユーザーIDを取得)
         cursor.execute("""
             SELECT DISTINCT user_id 
@@ -825,39 +816,48 @@ def create_help_request():
             WHERE date = %s
             AND NOT (end_time <= %s OR start_time >= %s) 
         """, (target_date, start_time_str, end_time_str))
-        busy_users = [row['user_id'] for row in cursor.fetchall()]
-
-        # 全ユーザーから忙しい人を除外
-        query = "SELECT ID, name, line_id FROM account" # 👈 ここに line_id が含まれているか確認！
-
-        if busy_users:
-            # IDが busy_users に含まれない人を抽出
-            format_strings = ','.join(['%s'] * len(busy_users))
-            query += f" WHERE ID NOT IN ({format_strings}) AND line_id IS NOT NULL"
-            cursor.execute(query, tuple(busy_users))
-        else:
-            # 🚨 修正が必要な行
-            cursor.execute(query + " WHERE line_id IS NOT NULL")
-            
-        eligible_staff = cursor.fetchall()
-
-        # 🚨 デバッグ用: 抽出されたスタッフのリストをターミナルに出力
-        print("--- デバッグ情報: 抽出された対象スタッフ ---")
-        print(eligible_staff)
-        print("---------------------------------------")
         
+        # 既にシフトに入っていて忙しいユーザーのIDリスト (文字列に変換して['1002']のようにする)
+        busy_users = [str(row['user_id']) for row in cursor.fetchall()]
+
+        # 3. 【ステップB】全ユーザーを抽出
+        # ここで line_id が NULL のユーザーも取得し、デバッグログで状態を確認できるようにする
+        cursor.execute("SELECT ID, name, line_id FROM account")
+        all_staff = cursor.fetchall()
+        
+        # 4. 【ステップC】通知対象をフィルタリング
+        eligible_staff = []
+        for staff in all_staff:
+            staff_id_str = str(staff['ID'])
+                
+            # 忙しい人を除外 (IDはDBから数値で返ってくる場合があるため、str()で揃える)
+            if staff_id_str in busy_users:
+                continue
+                
+            # LINE ID が設定されている人だけを通知対象とする
+            if staff.get('line_id'):
+                eligible_staff.append(staff)
+
+        # -----------------------------------------------------------
+        # 🚨 デバッグログの出力（強化版） 🚨
+        print(f"--- 通知対象スタッフ数: {len(eligible_staff)}人 ---")
+        print(f"--- 1. 募集時間と重複しているスタッフ (busy_users): {busy_users}")
+        print("--- 2. 全スタッフとLINE IDの有無 ---")
+        for staff in all_staff:
+            staff_id_str = str(staff['ID'])
+            status = "対象外(忙しい)" if staff_id_str in busy_users else ("通知対象" if staff.get('line_id') else "対象外(LINE IDなし)")
+            print(f"ID: {staff['ID']}, Name: {staff['name']}, LINE ID: {staff.get('line_id')}, Status: {status}")
+        print("-------------------------------------------------")
+        # -----------------------------------------------------------
+
         conn.commit()
 
-        # --- ▼▼▼ ここからLINE通知ロジックを追加/変更 ▼▼▼ ---
-        
-        # 3. ターゲットのスタッフにLINE通知を送信
+        # 5. ターゲットのスタッフにLINE通知を送信
         target_count = 0
         
-        # 応募用URLを生成 (このURLはスタッフが応募ボタンを押した際に遷移するURL)
-        # 外部URLを生成するために、_external=True と適切な SERVER_NAME 設定が必要です
-        # 例として、ここでは固定のURLを使用します。
-        # 実際のFlask環境に合わせて、url_for('makeshift.help_landing_page', request_id=request_id, _external=True) を推奨
-        help_url = f"https://your.domain.com/makeshift/help/respond/{request_id}"
+        # 🚨重要: ここのURLを現在の ngrok URL に書き換えてください！
+        current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev" # あなたの ngrok URL に戻してください
+        help_url = f"{current_ngrok_url}/makeshift/help/respond/{request_id}"
         
         request_data = {
             "date": target_date,
@@ -867,35 +867,29 @@ def create_help_request():
         }
 
         for staff in eligible_staff:
-            # LINE ID が設定されているか確認
-            if staff.get('line_id'):
-                send_help_request_to_staff(
-                    staff_line_id=staff['line_id'],
-                    request_data=request_data,
-                    help_url=help_url,
-                    # 🚨 修正: 必要な引数 'staff_name' を追加 🚨
-                    staff_name=staff['name'] 
-                )
-                target_count += 1
-        
-        # --- ▲▲▲ LINE通知ロジック追加終了 ▲▲▲ ---
+            send_help_request_to_staff(
+                staff_line_id=staff['line_id'],
+                request_data=request_data,
+                help_url=help_url,
+                staff_name=staff['name'] 
+            )
+            target_count += 1
         
         conn.commit()
 
-        # 4. Bot送信用にデータを返す (レスポンスを変更)
+
         return jsonify({
             "message": "募集を作成し、通知を送信しました。",
             "request_id": request_id,
-            "target_count": target_count, # 実際に通知が送られた人数を返す
-            "details": {
-                "date": target_date,
-                "time": f"{start_time_str}〜{end_time_str}"
-            }
+            "target_count": target_count
         })
 
     except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 500
+            conn.rollback()
+            print("--- ❌ CRITICAL ERROR IN create_help_request ---")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"error": "サーバー内部エラー"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -949,32 +943,52 @@ def accept_help_request():
 
     except Exception as e:
         conn.rollback()
+        print("--- ❌ CRITICAL ERROR IN accept_help_request ---")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-        # makeshift.py (例)
-
-from flask import request, jsonify # ← request と jsonify がインポートされているか確認
-
-# 🚨 User ID 取得のためのデバッグエンドポイント 🚨
-# /webhook エンドポイントのコード（makeshift.py または app.py 内）
-
-@makeshift_bp.route("/webhook", methods=["POST"])
-def webhook():
-    # 🚨 ここが重要です 🚨
-    # request.json を print() しているか確認してください
-    # print(request.json) 
+# ==========================================
+# 🙋‍♂️ ヘルプ応募画面の表示
+# ==========================================
+@makeshift_bp.route("/help/respond/<int:request_id>", methods=["GET"]) # 👈 /makeshift を削除済み
+def help_respond_page(request_id):
+    """
+    スタッフ用: ヘルプ募集の詳細を表示し、応募ボタンを提供する画面
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     
-    # さらに、見つけやすくするために、JSON 構造全体を文字列化して出力します
-    import json
-    # request.json を受け取ります
-    data = request.get_json()
+    # 1. 募集情報を取得
+    try:
+        cursor.execute("""
+            SELECT * FROM help_requests WHERE id = %s
+        """, (request_id,))
+        request_data = cursor.fetchone()
     
-    print("--- LINE Webhook データ全体 (JSONダンプ) ---")
-    # indent=2 で整形し、見やすく出力
-    print(json.dumps(data, indent=2))
-    print("-----------------------------------------")
+        if not request_data:
+            return "募集が見つかりませんでした。", 404
+        
+        # 🚨 仮のユーザーIDを設定 (LINE連携実装後に置き換えること)
+        # 🚨 注意: 本番環境では、ここでLINE IDなどからユーザーIDを特定する必要があります
+        # 例: user_id = get_user_id_from_line_session()
+        current_staff_id = 1002 # 仮のID。実際にはセッションや認証から取得
 
-    return jsonify({}), 200
+        # 2. 画面をレンダリングして返す
+        # 変数名を 'req' としてテンプレートに渡す
+        return render_template(
+            "help_loading.html", 
+            req=request_data, 
+            staff_id_for_form=current_staff_id # フォームに渡すスタッフID
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "サーバー内部エラー"}), 500
+    finally:
+        cursor.close()
+        conn.close()
