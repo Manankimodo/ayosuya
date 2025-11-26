@@ -101,7 +101,7 @@
         loadingOverlay.style.display = 'flex'; // ローディング表示
 
         try {
-            const response = await fetch('/api/help/accept', { // 👈 URLを /api/help/accept に修正
+            const response = await fetch('/line/api/help/accept', { // 👈 URLを /api/help/accept に修正
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -117,24 +117,23 @@
             loadingOverlay.style.display = 'none'; // ローディング非表示
             messageArea.classList.remove('d-none');
             
-            if (response.ok && result.status === 'success') {
-                // 成功
-                messageArea.classList.remove('alert-danger', 'alert-warning');
-                messageArea.classList.add('alert-success');
-                messageArea.innerHTML = "🎉 **シフトが確定しました！**<br>" + result.message;
-                // 応募成功のため、ボタンを完全に非活性化
-                btn.innerText = "応募完了";
-                // 画面を更新するとクローズ状態の画面が表示される
-                setTimeout(() => { location.reload(); }, 1000);
+            // help_loading.html の JavaScript 内 (応募成功時)
 
-            } else {
-                // 失敗 (タッチの差で埋まった場合など)
-                messageArea.classList.remove('alert-success', 'alert-warning');
-                messageArea.classList.add('alert-danger');
-                messageArea.innerHTML = "😢 **応募失敗**<br>" + result.message;
-                // 失敗した場合も、募集がクローズしている可能性があるため更新
-                setTimeout(() => { location.reload(); }, 1000); 
-            }
+        if (response.ok && result.status === 'success') {
+            // 成功
+            messageArea.classList.remove('alert-danger', 'alert-warning');
+            messageArea.classList.add('alert-success');
+            messageArea.innerHTML = "🎉 **シフトが確定しました！**<br>" + result.message;
+            
+            btn.innerText = "応募完了";
+            // 🚨 重要なポイント: 画面がリロードされるか？ 🚨
+            setTimeout(() => { location.reload(); }, 1000); 
+
+        } else {
+            // 失敗 (締め切り済みなど)
+            // ...
+            setTimeout(() => { location.reload(); }, 1000); 
+        }
 
         } catch (error) {
             console.error('通信エラー:', error);
