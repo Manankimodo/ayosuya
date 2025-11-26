@@ -233,30 +233,32 @@ PREFERENCE_REWARD_WEIGHT = 1000
 # ==========================================
 # 1. シフト自動生成ロジック (メイン機能)
 # ==========================================
+# ==========================================
+# 1. シフト自動生成ロジック (ID型統一・役割名完全表示版)
+# ==========================================
+# ==========================================
+# 1. シフト自動生成ロジック (ID型統一・役割名完全表示版)
+# ==========================================
 @makeshift_bp.route("/auto_calendar")
 def auto_calendar():
-    # ★修正1: 必要な部品をここで確実にインポート
     from datetime import time, datetime, timedelta 
-    
-    # 〜 省略 〜
+    import traceback
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    # 【追加】ポジションIDと名前の対応表を作る
-    # これがあれば、IDが4でも5でも自動で名前が入ります
-    position_names = {}
-    cursor.execute("SELECT id, name FROM positions")
-    for row in cursor.fetchall():
-        position_names[row['id']] = row['name']
-    # 〜 省略 〜
     
     try:
-        # 0. 初期データ取得
+        # 0. 設定取得
         cursor.execute("SELECT * FROM shift_settings LIMIT 1")
         row = cursor.fetchone()
         
+        settings = {
+            "start_time": "09:00", "end_time": "22:00", "break_minutes": 60,
+            "interval_minutes": 15, "max_hours_per_day": 8, "min_hours_per_day": 0,
+            "max_people_per_shift": 30, "auto_mode": "balance"
+        }
         if row:
-            settings = {
+            settings.update({
                 "start_time": str(row["start_time"])[:5],
                 "end_time": str(row["end_time"])[:5],
                 "break_minutes": row.get("break_minutes", 60),
@@ -265,84 +267,73 @@ def auto_calendar():
                 "min_hours_per_day": row.get("min_hours_per_day", 0),
                 "max_people_per_shift": row.get("max_people_per_shift", 30),
                 "auto_mode": row.get("auto_mode", "balance")
-            }
-        else:
-            return render_template("auto_calendar.html", message="シフト設定が未登録です。", shifts=[], settings={})
+            })
 
-        # =====================================================
-        # 🔧 安全な時間変換関数
-        # =====================================================
         def safe_to_time(val):
             if val is None: return time(0, 0)
             if isinstance(val, time): return val
             if isinstance(val, timedelta): return (datetime.min + val).time()
-            
             s = str(val).strip()
-            try:
-                return datetime.strptime(s, "%H:%M:%S").time()
-            except ValueError:
-                try:
-                    return datetime.strptime(s, "%H:%M").time()
-                except ValueError:
-                    parts = s.split(':')
-                    if len(parts) >= 2:
-                        return time(int(parts[0]), int(parts[1]))
+            try: return datetime.strptime(s, "%H:%M:%S").time()
+            except: pass
+            try: return datetime.strptime(s, "%H:%M").time()
+            except: pass
             return time(0, 0)
 
         SHIFT_START = safe_to_time(settings['start_time'])
         SHIFT_END = safe_to_time(settings['end_time'])
         INTERVAL_MINUTES = int(settings['interval_minutes'])
-
         settings['start_time'] = SHIFT_START.strftime("%H:%M")
         settings['end_time'] = SHIFT_END.strftime("%H:%M")
 
+        # ユーザー取得 (IDを文字列化してキーにする)
         cursor.execute("SELECT ID, name FROM account")
         users_data = cursor.fetchall()
         user_ids = [str(u['ID']) for u in users_data]
         num_users = len(user_ids)
-        user_map = {user_id: i for i, user_id in enumerate(user_ids)}
+        user_map = {str(user_id): i for i, user_id in enumerate(user_ids)}
         
-        if num_users == 0:
-            return render_template("auto_calendar.html", message="登録ユーザーがいません。", shifts=[], settings=settings)
-        
-        # 1. スキル読み込み
+        # ★重要修正: 役割マスタの読み込み (IDを文字列キーにする)
+        position_names = {}
+        cursor.execute("SELECT id, name FROM positions")
+        db_positions = cursor.fetchall()
+        for p in db_positions:
+            position_names[str(p['id'])] = p['name']
+
+        # ★重要修正: スキル読み込み (IDを文字列キーにする)
         user_skill_ids = {}
         cursor.execute("SELECT user_id, position_id FROM user_positions")
         for row in cursor.fetchall():
             uid = str(row['user_id'])
+            pid = str(row['position_id']) # 文字列化！
             if uid not in user_skill_ids: user_skill_ids[uid] = []
-            user_skill_ids[uid].append(row['position_id'])
+            user_skill_ids[uid].append(pid)
             
-        # 2. 需要読み込み
+        # ★重要修正: 需要読み込み (IDを文字列キーにする)
         demand_map = {}
         cursor.execute("SELECT time_slot, position_id, required_count FROM shift_demand")
         for row in cursor.fetchall():
-            t_obj = safe_to_time(row['time_slot'])
-            t_str = t_obj.strftime("%H:%M")
+            t_str = safe_to_time(row['time_slot']).strftime("%H:%M")
+            pid = str(row['position_id']) # 文字列化！
             if t_str not in demand_map: demand_map[t_str] = {}
-            demand_map[t_str][row['position_id']] = row['required_count']
+            demand_map[t_str][pid] = row['required_count']
 
-        # 3. シフト生成ループ
+        # 生成準備
         cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
         target_dates = [row['date'] for row in cursor.fetchall()]
-
         cursor.execute("DELETE FROM shift_table")
         conn.commit()
         
-        if not target_dates:
-            conn.close()
-            return render_template("auto_calendar.html", message="希望シフトが登録されていません。", shifts=[], settings=settings)
-
         all_generated_shifts = []
+        shortage_list = []
+
+        if not target_dates:
+             conn.close()
+             return render_template("auto_calendar.html", message="希望シフトなし", shifts=[], settings=settings)
 
         for target_date_obj in target_dates:
             target_date_str = target_date_obj.strftime("%Y-%m-%d")
-
-            cursor.execute("""
-                SELECT ID, date, start_time, end_time, work 
-                FROM calendar 
-                WHERE date = %s AND work = 1
-            """, (target_date_str,))
+            cursor.execute("SELECT ID, start_time, end_time FROM calendar WHERE date = %s AND work = 1", (target_date_str,))
             preference_rows = cursor.fetchall()
             
             time_intervals = []
@@ -354,74 +345,58 @@ def auto_calendar():
                 time_intervals.append(current_dt.time())
                 current_dt += timedelta(minutes=INTERVAL_MINUTES)
             num_intervals = len(time_intervals)
-
             if num_intervals == 0: continue 
 
             model = cp_model.CpModel()
             shifts = {}
+            for u in range(num_users):
+                for t in range(num_intervals):
+                    shifts[u, t] = model.NewBoolVar(f's_{u}_{t}')
             
-            for u_idx in range(num_users):
-                for t_idx in range(num_intervals):
-                    shifts[u_idx, t_idx] = model.NewBoolVar(f's_{u_idx}_{t_idx}_{target_date_str}')
-            
-            # ★修正2: demand_fulfillment はループの外で初期化！
-            demand_fulfillment = [] 
-
-            # 時間ごとの制約
+            # 制約条件 (文字列IDで比較)
+            demand_fulfillment = []
             for t_idx, t_time in enumerate(time_intervals):
                 t_str = t_time.strftime("%H:%M")
-                total_required = 0
-                
+                total_req = 0
                 if t_str in demand_map:
-                    current_demand = demand_map[t_str]
-                    for needed_pos_id, needed_count in current_demand.items():
-                        total_required += needed_count
-                        capable_vars = []
-                        for u_idx in range(num_users):
-                            user_id = user_ids[u_idx]
-                            if needed_pos_id in user_skill_ids.get(user_id, []):
-                                capable_vars.append(shifts[u_idx, t_idx])
-                        if capable_vars:
-                            model.Add(sum(capable_vars) <= needed_count)
-                            demand_fulfillment.append(sum(capable_vars))
-                
-                # 定員オーバー禁止
-                model.Add(sum(shifts[u_idx, t_idx] for u_idx in range(num_users)) <= total_required)
+                    dem = demand_map[t_str]
+                    for pid, count in dem.items(): # pidは文字列
+                        total_req += count
+                        capable = [shifts[u, t_idx] for u in range(num_users) if pid in user_skill_ids.get(user_ids[u], [])]
+                        if capable:
+                            model.Add(sum(capable) <= count)
+                            demand_fulfillment.append(sum(capable))
+                model.Add(sum(shifts[u, t_idx] for u in range(num_users)) <= total_req)
 
-            # 希望シフト制約
-            users_with_preference = {row['ID'] for row in preference_rows}
-            for u_idx, u_id in enumerate(user_ids):
-                if u_id not in users_with_preference:
-                    for t_idx in range(num_intervals):
-                        model.Add(shifts[u_idx, t_idx] == 0)
-
-            preference_fulfillment = [] 
+            users_with_pref = {str(row['ID']) for row in preference_rows}
+            for u, uid in enumerate(user_ids):
+                if str(uid) not in users_with_pref:
+                    for t in range(num_intervals): model.Add(shifts[u, t] == 0)
+            
+            pref_score = []
             for row in preference_rows:
-                u_id = row['ID']
-                if u_id not in user_map: continue
-                u_idx = user_map[u_id]
-                
-                st_val = safe_to_time(row['start_time'])
-                en_val = safe_to_time(row['end_time'])
-                
-                for t_idx, t_time in enumerate(time_intervals):
-                    if st_val <= t_time < en_val:
-                        preference_fulfillment.append(shifts[u_idx, t_idx])
-                    else:
-                        model.Add(shifts[u_idx, t_idx] == 0)
+                uid_str = str(row['ID'])
+                if uid_str not in user_map: continue
+                u = user_map[uid_str]
+                s_val = safe_to_time(row['start_time'])
+                e_val = safe_to_time(row['end_time'])
+                for t, t_val in enumerate(time_intervals):
+                    if s_val <= t_val < e_val: pref_score.append(shifts[u, t])
+                    else: model.Add(shifts[u, t] == 0)
 
-            # 目的関数
-            model.Maximize(sum(demand_fulfillment) * 10 + sum(preference_fulfillment) * 1)
-
+            model.Maximize(sum(demand_fulfillment)*10 + sum(pref_score))
             solver = cp_model.CpSolver()
             status = solver.Solve(model)
             
-            if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+            if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
                 for u_idx in range(num_users):
-                    user_id = user_ids[u_idx]
+                    user_id = user_ids[u_idx] # 文字列ID
                     current_block_start = None
                     current_role = None
                     
+                    # その人のスキルリスト（文字列IDのリスト）
+                    my_skills = user_skill_ids.get(user_id, [])
+
                     for t_idx in range(num_intervals):
                         is_working = solver.Value(shifts[u_idx, t_idx]) == 1
                         
@@ -429,55 +404,78 @@ def auto_calendar():
                             t_time = time_intervals[t_idx]
                             t_str = t_time.strftime("%H:%M")
                             
-                            this_role = "work"
+                            # ==========================================
+                            # ★役割名の決定（「work」にしないための処理）
+                            # ==========================================
+                            role_name = "work" # 初期値
+                            match_found = False
+                            
+                            # 1. この時間の需要とマッチするか確認
                             if t_str in demand_map:
                                 needed = demand_map[t_str]
-                                my_skills = user_skill_ids.get(str(user_id), [])
-                                for pid in my_skills:
+                                for pid in my_skills: # pidは文字列
                                     if pid in needed and needed[pid] > 0:
-                                        # 辞書から名前を探す。なければ "work" にする
-                                        this_role = position_names.get(pid, "work")
+                                        # DBのマスタから名前を取得
+                                        role_name = position_names.get(pid, f"Pos-{pid}")
+                                        match_found = True
                                         break
                             
+                            # 2. 需要とマッチしなくても、本人のスキルがあればその名前を表示
+                            # これで「work」になるのを防ぎ、「洗い場」なども表示される
+                            if not match_found and my_skills:
+                                first_pid = my_skills[0] # 文字列
+                                role_name = position_names.get(first_pid, f"Pos-{first_pid}")
+
                             if current_block_start is None:
                                 current_block_start = t_time
-                                current_role = this_role
-                            elif this_role != current_role:
+                                current_role = role_name
+                            elif role_name != current_role:
                                 end_dt_calc = datetime.combine(base_date, t_time)
                                 all_generated_shifts.append({
-                                    "user_id": user_id, 
-                                    "date": target_date_str,
+                                    "user_id": user_id, "date": target_date_str,
                                     "start_time": current_block_start.strftime("%H:%M"),
-                                    "end_time": end_dt_calc.time().strftime("%H:%M"),
-                                    "type": current_role
+                                    "end_time": end_dt_calc.time().strftime("%H:%M"), "type": current_role
                                 })
                                 current_block_start = t_time
-                                current_role = this_role
-                        
+                                current_role = role_name
                         else:
                             if current_block_start is not None:
                                 end_dt_calc = datetime.combine(base_date, time_intervals[t_idx])
                                 all_generated_shifts.append({
-                                    "user_id": user_id, 
-                                    "date": target_date_str,
+                                    "user_id": user_id, "date": target_date_str,
                                     "start_time": current_block_start.strftime("%H:%M"),
-                                    "end_time": end_dt_calc.time().strftime("%H:%M"),
-                                    "type": current_role
+                                    "end_time": end_dt_calc.time().strftime("%H:%M"), "type": current_role
                                 })
                                 current_block_start = None
                                 current_role = None
-
+                    
                     if current_block_start is not None:
                         last_t = time_intervals[-1]
                         last_end_dt = datetime.combine(base_date, last_t) + timedelta(minutes=INTERVAL_MINUTES)
                         all_generated_shifts.append({
-                            "user_id": user_id, 
-                            "date": target_date_str,
+                            "user_id": user_id, "date": target_date_str,
                             "start_time": current_block_start.strftime("%H:%M"),
-                            "end_time": last_end_dt.time().strftime("%H:%M"),
-                            "type": current_role
+                            "end_time": last_end_dt.time().strftime("%H:%M"), "type": current_role
                         })
+                
+                # 不足アラート
+                for t_idx, t_time in enumerate(time_intervals):
+                    t_str = t_time.strftime("%H:%M")
+                    if t_str in demand_map:
+                        total_needed = sum(demand_map[t_str].values())
+                        actual_working = 0
+                        for u_idx in range(num_users):
+                            if solver.Value(shifts[u_idx, t_idx]) == 1:
+                                actual_working += 1
+                        if actual_working < total_needed:
+                            end_dt_calc = datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)
+                            shortage_list.append({
+                                "user_id": -999, "user_name": "🚨 人手不足", "date": target_date_str,
+                                "start_time": t_time.strftime("%H:%M"), "end_time": end_dt_calc.time().strftime("%H:%M"), "type": "shortage"
+                            })
 
+        # 4. 結合と表示
+        final_display_shifts = []
         if all_generated_shifts:
             sql = "INSERT INTO shift_table (user_id, date, start_time, end_time, type) VALUES (%s, %s, %s, %s, %s)"
             data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type']) for s in all_generated_shifts]
@@ -485,38 +483,51 @@ def auto_calendar():
             conn.commit()
             
             cursor.execute("""
-                SELECT s.*, a.name as user_name 
-                FROM shift_table s 
-                LEFT JOIN account a ON s.user_id = a.ID 
+                SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type 
+                FROM shift_table s LEFT JOIN account a ON s.user_id = a.ID 
                 ORDER BY s.user_id, s.date, s.start_time
             """)
-            final_shifts = cursor.fetchall()
+            raw_shifts = cursor.fetchall()
             
-            formatted = []
-            for s in final_shifts:
-                st = safe_to_time(s['start_time']).strftime("%H:%M")
-                en = safe_to_time(s['end_time']).strftime("%H:%M")
-                
-                formatted.append({
-                    "user_id": s['user_id'],
-                    "user_name": s['user_name'],
-                    "date": str(s['date']),
-                    "start_time": st,
-                    "end_time": en,
-                    "type": s['type']
-                })
-            
-            conn.close()
-            return render_template("auto_calendar.html", settings=settings, shifts=formatted, message=f"{len(formatted)}件のシフトを生成しました。")
-            
+            if raw_shifts:
+                curr = raw_shifts[0]
+                curr['start_time'] = safe_to_time(curr['start_time']).strftime("%H:%M")
+                curr['end_time'] = safe_to_time(curr['end_time']).strftime("%H:%M")
+                curr['date'] = str(curr['date'])
+                for i in range(1, len(raw_shifts)):
+                    nxt = raw_shifts[i]
+                    nxt['start_time'] = safe_to_time(nxt['start_time']).strftime("%H:%M")
+                    nxt['end_time'] = safe_to_time(nxt['end_time']).strftime("%H:%M")
+                    nxt['date'] = str(nxt['date'])
+                    
+                    # ★表示用結合
+                    if (curr['user_id'] == nxt['user_id'] and curr['date'] == nxt['date'] and 
+                        curr['type'] == nxt['type'] and curr['end_time'] == nxt['start_time']):
+                        curr['end_time'] = nxt['end_time']
+                    else:
+                        final_display_shifts.append(curr)
+                        curr = nxt
+                final_display_shifts.append(curr)
+
+        if shortage_list:
+            if len(shortage_list) > 0:
+                curr = shortage_list[0]
+                for i in range(1, len(shortage_list)):
+                    nxt = shortage_list[i]
+                    if (curr['date'] == nxt['date'] and curr['end_time'] == nxt['start_time']):
+                        curr['end_time'] = nxt['end_time']
+                    else:
+                        final_display_shifts.append(curr)
+                        curr = nxt
+                final_display_shifts.append(curr)
+
         conn.close()
-        return render_template("auto_calendar.html", settings=settings, shifts=[], message="シフトが作成されませんでした。")
+        return render_template("auto_calendar.html", settings=settings, shifts=final_display_shifts, message=f"{len(final_display_shifts)}件表示")
 
     except Exception as e:
         conn.close()
-        import traceback
         print(traceback.format_exc())
-        return render_template("auto_calendar.html", settings=settings if 'settings' in locals() else {}, shifts=[], message=f"エラーが発生しました: {str(e)}")
+        return render_template("auto_calendar.html", settings=settings if 'settings' in locals() else {}, shifts=[], message=f"エラー: {str(e)}")
 #-------------------------------------------------------------------------------------------------------------
 # ==========================================
 # 2. 設定画面の表示と基本設定の更新
@@ -778,217 +789,3 @@ def show_user_shift_view(user_id):
     user_name=user_data['name'])
 
 
-
-
-from flask import Blueprint, request, jsonify, render_template
-
-
-# ==========================================
-# 🚑 ヘルプ募集機能 (ワンタップ配信システム)
-# ==========================================
-
-@makeshift_bp.route("/api/help/create", methods=["POST"])
-def create_help_request():
-    """
-    店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
-    """
-    data = request.json
-    target_date = data.get("date")
-    start_time_str = data.get("start_time")
-    end_time_str = data.get("end_time")
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
-        # 1. 募集データをDBに登録
-        cursor.execute("""
-            INSERT INTO help_requests (date, start_time, end_time, status)
-            VALUES (%s, %s, %s, 'open')
-        """, (target_date, start_time_str, end_time_str))
-        request_id = cursor.lastrowid
-        
-        # 2. 【ステップA】「その時間にすでにシフトが入っている人」を除外
-        # (shift_table に重複する時間帯があるユーザーIDを取得)
-        cursor.execute("""
-            SELECT DISTINCT user_id 
-            FROM shift_table
-            WHERE date = %s
-            AND NOT (end_time <= %s OR start_time >= %s) 
-        """, (target_date, start_time_str, end_time_str))
-        
-        # 既にシフトに入っていて忙しいユーザーのIDリスト (文字列に変換して['1002']のようにする)
-        busy_users = [str(row['user_id']) for row in cursor.fetchall()]
-
-        # 3. 【ステップB】全ユーザーを抽出
-        # ここで line_id が NULL のユーザーも取得し、デバッグログで状態を確認できるようにする
-        cursor.execute("SELECT ID, name, line_id FROM account")
-        all_staff = cursor.fetchall()
-        
-        # 4. 【ステップC】通知対象をフィルタリング
-        eligible_staff = []
-        for staff in all_staff:
-            staff_id_str = str(staff['ID'])
-                
-            # 忙しい人を除外 (IDはDBから数値で返ってくる場合があるため、str()で揃える)
-            if staff_id_str in busy_users:
-                continue
-                
-            # LINE ID が設定されている人だけを通知対象とする
-            if staff.get('line_id'):
-                eligible_staff.append(staff)
-
-        # -----------------------------------------------------------
-        # 🚨 デバッグログの出力（強化版） 🚨
-        print(f"--- 通知対象スタッフ数: {len(eligible_staff)}人 ---")
-        print(f"--- 1. 募集時間と重複しているスタッフ (busy_users): {busy_users}")
-        print("--- 2. 全スタッフとLINE IDの有無 ---")
-        for staff in all_staff:
-            staff_id_str = str(staff['ID'])
-            status = "対象外(忙しい)" if staff_id_str in busy_users else ("通知対象" if staff.get('line_id') else "対象外(LINE IDなし)")
-            print(f"ID: {staff['ID']}, Name: {staff['name']}, LINE ID: {staff.get('line_id')}, Status: {status}")
-        print("-------------------------------------------------")
-        # -----------------------------------------------------------
-
-        conn.commit()
-
-        # 5. ターゲットのスタッフにLINE通知を送信
-        target_count = 0
-        
-        # 🚨重要: ここのURLを現在の ngrok URL に書き換えてください！
-        current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev" # あなたの ngrok URL に戻してください
-        help_url = f"{current_ngrok_url}/makeshift/help/respond/{request_id}"
-        
-        request_data = {
-            "date": target_date,
-            "start_time": start_time_str,
-            "end_time": end_time_str,
-            "request_id": request_id
-        }
-
-        for staff in eligible_staff:
-            send_help_request_to_staff(
-                staff_line_id=staff['line_id'],
-                request_data=request_data,
-                help_url=help_url,
-                staff_name=staff['name'] 
-            )
-            target_count += 1
-        
-        conn.commit()
-
-
-        return jsonify({
-            "message": "募集を作成し、通知を送信しました。",
-            "request_id": request_id,
-            "target_count": target_count
-        })
-
-    except Exception as e:
-            conn.rollback()
-            print("--- ❌ CRITICAL ERROR IN create_help_request ---")
-            import traceback
-            traceback.print_exc()
-            return jsonify({"error": "サーバー内部エラー"}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-
-@makeshift_bp.route("/api/help/accept", methods=["POST"])
-def accept_help_request():
-    """
-    スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
-    POSTデータ: { "request_id": 1, "user_id": 5 }
-    """
-    data = request.json
-    req_id = data.get("request_id")
-    user_id = data.get("user_id")
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
-        # 1. トランザクション開始
-        conn.start_transaction()
-
-        # 2. 【重要】早い者勝ち判定
-        # status='open' の場合のみ更新を行う。更新件数が1なら勝ち、0なら既に埋まった。
-        cursor.execute("""
-            UPDATE help_requests 
-            SET status = 'closed', accepted_by = %s
-            WHERE id = %s AND status = 'open'
-        """, (user_id, req_id))
-        
-        if cursor.rowcount == 0:
-            # 既に他の誰かが埋めてしまった場合
-            conn.rollback()
-            return jsonify({"status": "failed", "message": "タッチの差で募集が埋まってしまいました🙇‍♂️"}), 409
-
-        # 3. 募集情報を取得して shift_table に確定シフトとして書き込む
-        cursor.execute("SELECT date, start_time, end_time FROM help_requests WHERE id = %s", (req_id,))
-        req_data = cursor.fetchone()
-
-        cursor.execute("""
-            INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-            VALUES (%s, %s, %s, %s, 'help')
-        """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
-
-        conn.commit()
-
-        return jsonify({
-            "status": "success", 
-            "message": "シフトが確定しました！ありがとうございます！"
-        })
-
-    except Exception as e:
-        conn.rollback()
-        print("--- ❌ CRITICAL ERROR IN accept_help_request ---")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-# ==========================================
-# 🙋‍♂️ ヘルプ応募画面の表示
-# ==========================================
-@makeshift_bp.route("/help/respond/<int:request_id>", methods=["GET"]) # 👈 /makeshift を削除済み
-def help_respond_page(request_id):
-    """
-    スタッフ用: ヘルプ募集の詳細を表示し、応募ボタンを提供する画面
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    # 1. 募集情報を取得
-    try:
-        cursor.execute("""
-            SELECT * FROM help_requests WHERE id = %s
-        """, (request_id,))
-        request_data = cursor.fetchone()
-    
-        if not request_data:
-            return "募集が見つかりませんでした。", 404
-        
-        # 🚨 仮のユーザーIDを設定 (LINE連携実装後に置き換えること)
-        # 🚨 注意: 本番環境では、ここでLINE IDなどからユーザーIDを特定する必要があります
-        # 例: user_id = get_user_id_from_line_session()
-        current_staff_id = 1002 # 仮のID。実際にはセッションや認証から取得
-
-        # 2. 画面をレンダリングして返す
-        # 変数名を 'req' としてテンプレートに渡す
-        return render_template(
-            "help_loading.html", 
-            req=request_data, 
-            staff_id_for_form=current_staff_id # フォームに渡すスタッフID
-        )
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "サーバー内部エラー"}), 500
-    finally:
-        cursor.close()
-        conn.close()
