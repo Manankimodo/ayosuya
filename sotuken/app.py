@@ -31,6 +31,7 @@ from shift import shift_bp
 from makeshift import makeshift_bp
 from line_bot import line_bot_bp
 from store_register import store_bp
+from line import line_bp
 # --- Blueprint登録 ---
 app.register_blueprint(login_bp)
 app.register_blueprint(calendar_bp)
@@ -40,6 +41,7 @@ app.register_blueprint(shift_bp)
 app.register_blueprint(makeshift_bp)
 app.register_blueprint(line_bot_bp)
 app.register_blueprint(store_bp)
+app.register_blueprint(line_bp)
 
 @app.route('/')
 def index():
