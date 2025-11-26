@@ -6,7 +6,7 @@ from ortools.sat.python import cp_model
 import random, traceback
 
 # ブループリントの定義
-makeshift_bp = Blueprint('makeshift', __name__, url_prefix='/makeshift')
+line_bp = Blueprint('line', __name__, url_prefix='/line')
 
 
 # === ユーティリティ関数 ===
@@ -82,7 +82,7 @@ from flask import Blueprint, request, jsonify, render_template
 # 🚑 ヘルプ募集機能 (ワンタップ配信システム)
 # ==========================================
 
-@makeshift_bp.route("/api/help/create", methods=["POST"])
+@line_bp.route("/api/help/create", methods=["POST"])
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
@@ -190,7 +190,7 @@ def create_help_request():
         conn.close()
 
 
-@makeshift_bp.route("/api/help/accept", methods=["POST"])
+@line_bp.route("/api/help/accept", methods=["POST"])
 def accept_help_request():
     """
     スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
@@ -249,7 +249,7 @@ def accept_help_request():
 # ==========================================
 # 🙋‍♂️ ヘルプ応募画面の表示
 # ==========================================
-@makeshift_bp.route("/help/respond/<int:request_id>", methods=["GET"]) # 👈 /makeshift を削除済み
+@line_bp.route("/help/respond/<int:request_id>", methods=["GET"]) # 👈 /makeshift を削除済み
 def help_respond_page(request_id):
     """
     スタッフ用: ヘルプ募集の詳細を表示し、応募ボタンを提供する画面
