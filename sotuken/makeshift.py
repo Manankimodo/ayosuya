@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request, redirect, url_for
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for,flash
 import mysql.connector
 from line_notifier import send_help_request_to_staff
 from datetime import datetime, timedelta, time as time_cls, date as date_cls
@@ -233,12 +233,7 @@ PREFERENCE_REWARD_WEIGHT = 1000
 # ==========================================
 # 1. シフト自動生成ロジック (メイン機能)
 # ==========================================
-# ==========================================
-# 1. シフト自動生成ロジック (ID型統一・役割名完全表示版)
-# ==========================================
-# ==========================================
-# 1. シフト自動生成ロジック (ID型統一・役割名完全表示版)
-# ==========================================
+
 @makeshift_bp.route("/auto_calendar")
 def auto_calendar():
     from datetime import time, datetime, timedelta 
@@ -510,6 +505,7 @@ def auto_calendar():
                 final_display_shifts.append(curr)
 
         if shortage_list:
+            shortage_list.sort(key=lambda x: (x['user_id'], x['start_time']))
             if len(shortage_list) > 0:
                 curr = shortage_list[0]
                 for i in range(1, len(shortage_list)):
@@ -537,62 +533,11 @@ def settings():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # --- 1. 現在の基本設定を取得 ---
-    cursor.execute("SELECT * FROM shift_settings LIMIT 1")
-    settings_data = cursor.fetchone()
-
-    # データがない場合の初期値
-    if not settings_data:
-        settings_data = {
-            "ID": None,
-            "start_time": "09:00",
-            "end_time": "18:00",
-            "break_minutes": 60,
-            "interval_minutes": 60,
-            "max_hours_per_day": 8,
-            "min_hours_per_day": 4,
-            "max_people_per_shift": 3,
-            "auto_mode": "balance",
-        }
-
-    # --- 2. 役割リストを取得 ---
-    cursor.execute("SELECT * FROM positions")
-    positions_list = cursor.fetchall()
-    
-    # --- 3. 現在の需要設定を取得 ---
-    cursor.execute("""
-        SELECT d.id, d.time_slot, d.required_count, p.name as position_name
-        FROM shift_demand d
-        LEFT JOIN positions p ON d.position_id = p.id
-        ORDER BY d.time_slot, d.position_id
-    """)
-    raw_demands = cursor.fetchall()
-    
-    # 時間変換ロジック
-    formatted_demands = []
-    for r in raw_demands:
-        ts = r['time_slot']
-        ts_str = ""
-        if isinstance(ts, timedelta):
-            total_seconds = int(ts.total_seconds())
-            h = total_seconds // 3600
-            m = (total_seconds % 3600) // 60
-            ts_str = f"{h:02d}:{m:02d}"
-        else:
-            ts_str = str(ts)[:5]
-        
-        pos_name = r['position_name'] if r['position_name'] else f"Role-{r['position_id']}"
-        formatted_demands.append({
-            'time_slot': ts_str,
-            'position_name': pos_name,
-            'required_count': r['required_count']
-        })
-
-    # --- 4. POST（更新処理） ---
-    if request.method == "POST":
-        try:
-            start_time = request.form["start_time"]
-            end_time = request.form["end_time"]
+    try:
+        # --- POST: 設定更新処理 ---
+        if request.method == "POST":
+            start_time = request.form.get("start_time", "09:00")
+            end_time = request.form.get("end_time", "22:00")
             break_minutes = request.form.get("break_minutes", 60)
             interval_minutes = request.form.get("interval_minutes", 15)
             max_hours_per_day = request.form.get("max_hours_per_day", 8)
@@ -610,80 +555,128 @@ def settings():
                         max_hours_per_day=%s, min_hours_per_day=%s, max_people_per_shift=%s,
                         auto_mode=%s, updated_at=NOW()
                     WHERE ID = %s
-                """, (
-                    start_time, end_time, break_minutes, interval_minutes,
-                    max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, existing_id["ID"]
-                ))
+                """, (start_time, end_time, break_minutes, interval_minutes,
+                      max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, existing_id["ID"]))
             else:
                 cursor.execute("""
                     INSERT INTO shift_settings 
                     (start_time, end_time, break_minutes, interval_minutes, max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                """, (
-                    start_time, end_time, break_minutes, interval_minutes,
-                    max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode
-                ))
+                """, (start_time, end_time, break_minutes, interval_minutes,
+                      max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode))
             conn.commit()
-        except Exception as e:
-            print(f"Error: {e}")
-            conn.rollback()
-        finally:
-            conn.close()
+            flash("✅ 基本設定を保存しました", "success")
+            return redirect(url_for("makeshift.settings"))
+
+        # --- GET: 画面表示処理 ---
         
-        # POSTの後のリダイレクト（インデント注意：ifの中）
-        return redirect(url_for("makeshift.settings"))
-
-    # --- 5. GET（表示処理） ---
-    conn.close()
-
-    # 時刻フォーマット調整
-    for key in ["start_time", "end_time"]:
-        if settings_data[key]:
-            settings_data[key] = str(settings_data[key])[:5]
+        # 1. 基本設定
+        cursor.execute("SELECT * FROM shift_settings LIMIT 1")
+        settings_data = cursor.fetchone()
+        if not settings_data:
+            settings_data = {
+                "start_time": "09:00", "end_time": "22:00", "break_minutes": 60,
+                "interval_minutes": 15, "max_hours_per_day": 8, "min_hours_per_day": 0,
+                "max_people_per_shift": 30, "auto_mode": "balance"
+            }
         else:
-            settings_data[key] = "09:00" if key == "start_time" else "18:00"
+            # 時間を文字列に変換
+            settings_data["start_time"] = str(settings_data["start_time"])[:5]
+            settings_data["end_time"] = str(settings_data["end_time"])[:5]
 
-    # ★ここが一番大事！このreturnが左端（defと同じ縦ラインの1つ内側）にある必要があります
-    return render_template("shift_setting.html", 
-        settings=settings_data, 
-        positions=positions_list, 
-        demands=formatted_demands)
+        # 2. 役割リスト
+        cursor.execute("SELECT * FROM positions")
+        positions_list = cursor.fetchall()
+        
+        # 3. 需要リスト（表示用）
+        cursor.execute("""
+            SELECT d.time_slot, d.required_count, p.name as position_name
+            FROM shift_demand d
+            LEFT JOIN positions p ON d.position_id = p.id
+            ORDER BY d.time_slot, d.position_id
+        """)
+        raw_demands = cursor.fetchall()
+        
+        formatted_demands = []
+        for r in raw_demands:
+            ts_str = str(r['time_slot'])[:5] # 時間を文字列に
+            if r['required_count'] > 0: # 0人の設定は表示しない
+                formatted_demands.append({
+                    'time_slot': ts_str,
+                    'position_name': r['position_name'] or "不明",
+                    'required_count': r['required_count']
+                })
+
+        return render_template("shift_setting.html", 
+            settings=settings_data, 
+            positions=positions_list, 
+            demands=formatted_demands)
+
+    except Exception as e:
+        print(f"Settings Error: {e}")
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
 # ==========================================
-# 3. 需要（ピークタイム）を追加する処理
+# 3. 需要（ピークタイム）を追加する処理 (修正版)
 # ==========================================
-@makeshift_bp.route("/settings/demand/add", methods=["POST"])
+@makeshift_bp.route("/settings/demand/add", methods=["POST"]) # URLは変えずに中身を修正
 def add_demand():
+    from datetime import datetime, timedelta
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        start_time_str = request.form['start_time']
-        end_time_str = request.form['end_time']
-        position_id = request.form['position_id']
-        count = int(request.form['required_count'])
+        # フォームからデータを受け取る
+        start_str = request.form.get("start_time")
+        end_str = request.form.get("end_time")
+        pos_id = request.form.get("position_id")
+        count = int(request.form.get("required_count"))
         
-        t_start = datetime.strptime(start_time_str, "%H:%M")
-        t_end = datetime.strptime(end_time_str, "%H:%M")
+        # 時間計算の準備
+        fmt = "%H:%M"
+        start_dt = datetime.strptime(start_str, fmt)
+        end_dt = datetime.strptime(end_str, fmt)
         
-        if t_start >= t_end:
-            return redirect(url_for('makeshift.settings'))
-
-        current = t_start
-        while current < t_end:
-            time_slot = current.strftime("%H:%M")
-            cursor.execute("DELETE FROM shift_demand WHERE time_slot = %s AND position_id = %s", (time_slot, position_id))
-            cursor.execute("INSERT INTO shift_demand (time_slot, position_id, required_count) VALUES (%s, %s, %s)", (time_slot, position_id, count))
+        # 日付またぎ対応（例: 23:00〜01:00）
+        if end_dt <= start_dt:
+            end_dt += timedelta(days=1)
+            
+        # ----------------------------------------
+        # 指定された時間を「15分刻み」でループして保存
+        # ----------------------------------------
+        current = start_dt
+        while current < end_dt:
+            time_val = current.strftime(fmt)
+            
+            # 1. その時間の、その役割の古い設定があれば消す（上書きのため）
+            cursor.execute("""
+                DELETE FROM shift_demand 
+                WHERE time_slot = %s AND position_id = %s
+            """, (time_val, pos_id))
+            
+            # 2. 新しい人数で登録（0人の場合は登録しない＝削除のみ）
+            if count > 0:
+                cursor.execute("""
+                    INSERT INTO shift_demand (time_slot, position_id, required_count)
+                    VALUES (%s, %s, %s)
+                """, (time_val, pos_id, count))
+            
             current += timedelta(minutes=15)
             
         conn.commit()
+        flash(f"✅ {start_str}〜{end_str} の設定を保存しました！", "success")
+        
     except Exception as e:
-        print(f"Error adding demand: {e}")
         conn.rollback()
+        print(e)
+        flash("保存に失敗しました", "danger")
     finally:
         conn.close()
         
     return redirect(url_for('makeshift.settings'))
-
 
 # ==========================================
 # 4. 需要をリセット（全削除）する処理
@@ -695,12 +688,13 @@ def reset_demand():
     try:
         cursor.execute("DELETE FROM shift_demand")
         conn.commit()
+        flash("🗑 設定をすべてリセットしました", "warning")
     except Exception as e:
-        print(f"Error resetting demand: {e}")
+        conn.rollback()
+        print(f"Reset Error: {e}")
     finally:
         conn.close()
     return redirect(url_for('makeshift.settings'))
-
 
 # ==========================================
 # 5. 確定シフト取得API

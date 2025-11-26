@@ -283,7 +283,8 @@
         btn.innerText = '配信中...';
 
         try {
-            const response = await fetch("{{ url_for('makeshift.create_help_request') }}", {
+            // line の中を探すように変更！
+                const response = await fetch("{{ url_for('line.create_help_request') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
