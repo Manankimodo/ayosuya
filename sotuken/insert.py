@@ -1,149 +1,142 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 import mysql.connector
-import random
-import string
-from flask_login import current_user
-from werkzeug.security import generate_password_hash
 
+# Blueprintの定義
 insert_bp = Blueprint("insert", __name__, url_prefix="/insert")
 
 # ==========================================
-# データベース接続
+# データベース接続関数
 # ==========================================
 def get_db_connection():
     conn = mysql.connector.connect(
         host='localhost',
-        user='root',
-        password='',
-        database='ayosuya'
+        user='root',        # ← 環境に合わせてください
+        password='',        # ← 環境に合わせてください
+        database='ayosuya' # ← 環境に合わせてください
     )
     return conn
 
-# ==========================================
-# ランダム生成
-# ==========================================
-def generate_employee_id():
-    prefix = "EMP"
-    numbers = ''.join(random.choices(string.digits, k=4))
-    return prefix + numbers
-
-def generate_unique_employee_id(cursor):
-    while True:
-        emp_id = generate_employee_id()
-        cursor.execute("SELECT 1 FROM account WHERE login_id=%s", (emp_id,))
-        if not cursor.fetchone():
-            return emp_id
-
-def generate_password(length=8):
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choices(chars, k=length))
-
-# ==========================================
-# 従業員一覧・登録
-# ==========================================
+# ===============================
+# 🟢 1. 従業員一覧 & 登録機能 (修正済み)
+# ===============================
 @insert_bp.route("/", methods=["GET", "POST"])
 def insert():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        if not name:
-            flash("名前は必須です", "danger")
-            conn.close()
-            return redirect(url_for("insert.insert"))
-
         try:
-            store_id = current_user.store_id
-            employee_id = generate_unique_employee_id(cursor)
-            password_plain = generate_password()
-            password_hash = generate_password_hash(password_plain)
+            # フォームからデータを受け取る
+            name = request.form["name"]
+            password = request.form["password"]
+            store_id = request.form["store_id"]
+            
+            # ★修正ポイント：チェックされた役割をリストで受け取る
+            # 例: ['1', '2'] (ホールとキッチン)
+            positions = request.form.getlist('positions') 
 
+            # 1. account テーブルに登録
             cursor.execute(
-                "INSERT INTO account (login_id, password, name, store_id, role) VALUES (%s, %s, %s, %s, %s)",
-                (employee_id, password_hash, name, store_id, "staff")
+                "INSERT INTO account (name, password, store_id) VALUES (%s, %s, %s)", 
+                (name, password, store_id)
             )
+            
+            # 2. 今登録した人のIDを取得
+            new_user_id = cursor.lastrowid
+
+            # 3. 役割 (user_positions) を登録
+            if positions:
+                for pid in positions:
+                    cursor.execute(
+                        "INSERT INTO user_positions (user_id, position_id) VALUES (%s, %s)",
+                        (new_user_id, pid)
+                    )
 
             conn.commit()
-            flash(f"🎉 従業員を登録しました！ 従業員ID: {employee_id} / パスワード（初回のみ）: {password_plain}", "success")
-
+            flash("✅ 従業員を登録しました！", "success")
+        
         except Exception as e:
             conn.rollback()
             print(f"登録エラー: {e}")
-            flash("登録エラーが発生しました", "danger")
+            flash("エラーが発生しました。", "danger")
         finally:
             conn.close()
 
         return redirect(url_for("insert.insert"))
 
-    # GET 一覧
-    cursor.execute("SELECT id, login_id, name, store_id, role FROM account")
+    # --- GET時の処理（一覧表示） ---
+    # 登録されている従業員を取得
+    cursor.execute("SELECT * FROM account")
     accounts = cursor.fetchall()
     conn.close()
-
+    
     return render_template("accountinsert.html", accounts=accounts)
-# ==========================================
-# 従業員情報更新
-# ==========================================
+
+# ===============================
+# 🟡 2. 更新機能 (作成済み)
+# ===============================
 @insert_bp.route('/update/<int:id>', methods=['GET', 'POST'])
 def update(id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        password_plain = request.form.get('password', '').strip()
-        role = request.form.get('role', 'staff')
-
-        if not name:
-            flash("名前は必須です", "danger")
-            conn.close()
-            return redirect(url_for('insert.update', id=id))
-
         try:
-            if password_plain:
-                # パスワード更新があればハッシュ化
-                password_hash = generate_password_hash(password_plain)
-                cursor.execute("""
-                    UPDATE account 
-                    SET name=%s, password=%s, role=%s 
-                    WHERE id=%s
-                """, (name, password_hash, role, id))
-            else:
-                # パスワード変更なし
-                cursor.execute("""
-                    UPDATE account 
-                    SET name=%s, role=%s 
-                    WHERE id=%s
-                """, (name, role, id))
+            name = request.form['name']
+            password = request.form['password']
+            store_id = request.form['store_id']
+            
+            # チェックされた役割を取得
+            selected_positions = request.form.getlist('positions') 
+
+            # 1. 基本情報の更新
+            cursor.execute("""
+                UPDATE account 
+                SET name=%s, password=%s, store_id=%s 
+                WHERE id=%s
+            """, (name, password, store_id, id))
+
+            # 2. 役割の更新（一度削除して再登録）
+            cursor.execute("DELETE FROM user_positions WHERE user_id = %s", (id,))
+            
+            for pid in selected_positions:
+                cursor.execute("INSERT INTO user_positions (user_id, position_id) VALUES (%s, %s)", (id, pid))
 
             conn.commit()
-            flash('✅ 更新しました！', 'success')
+            flash('✅ 更新しました！', "success")
             return redirect(url_for('insert.insert'))
 
         except Exception as e:
             conn.rollback()
-            print(f"更新エラー: {e}")
-            flash('更新エラーが発生しました', 'danger')
+            print(e)
+            flash('更新エラーが発生しました', "danger")
         finally:
             conn.close()
 
-    # GET 時に従業員情報を取得
-    cursor.execute("SELECT id, login_id, name, store_id, role FROM account WHERE id=%s", (id,))
+    # --- GET時の処理（編集画面表示） ---
+    cursor.execute("SELECT * FROM account WHERE id = %s", (id,))
     account = cursor.fetchone()
+    
+    # 現在の役割を取得してリストにする
+    cursor.execute("SELECT position_id FROM user_positions WHERE user_id = %s", (id,))
+    rows = cursor.fetchall()
+    current_roles = [row['position_id'] for row in rows]
+
     conn.close()
+    
+    return render_template('accountupdate.html', account=account, current_roles=current_roles)
 
-    if not account:
-        flash("従業員が存在しません", "danger")
-        return redirect(url_for('insert.insert'))
-
-    return render_template('accountupdate.html', account=account)
+# ===============================
+# 🔴 3. 削除機能
+# ===============================
 @insert_bp.route("/delete/<int:id>", methods=["POST"])
 def delete(id):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM account WHERE id=%s", (id,))
+        # 関連する user_positions も自動で消える設定になっていなければ先に消すのが安全
+        cursor.execute("DELETE FROM user_positions WHERE user_id = %s", (id,))
+        cursor.execute("DELETE FROM account WHERE id = %s", (id,))
         conn.commit()
         flash("🗑️ 従業員を削除しました！", "danger")
     except Exception as e:
@@ -152,4 +145,5 @@ def delete(id):
         flash("削除エラーが発生しました", "danger")
     finally:
         conn.close()
+        
     return redirect(url_for("insert.insert"))
