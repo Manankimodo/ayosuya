@@ -4,7 +4,6 @@ from extensions import db
 from sqlalchemy import text as sql_text
 import random
 import string
-
 store_bp = Blueprint("store", __name__, url_prefix="/store")
 
 
@@ -12,6 +11,10 @@ store_bp = Blueprint("store", __name__, url_prefix="/store")
 def generate_store_code(length=6):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
+def generate_employee_id(length=4):
+    prefix = "EMP"
+    numbers = ''.join(random.choices(string.digits, k=length))
+    return prefix + numbers
 
 @store_bp.route("/register", methods=["GET", "POST"])
 def register_store():
@@ -52,23 +55,30 @@ def register_store():
         # ===========================
         # ② 店長アカウント登録
         # ===========================
-        db.session.execute(
-            sql_text("""
-                INSERT INTO account (name, password, store_id, role)
-                VALUES (:name, :pw, :sid, :role)
-            """),
-            {
-                "name": manager_name,
-                "pw": manager_password,
-                "sid": store_id,
-                "role": "manager"
-            }
-        )
-        db.session.commit()
+        def generate_employee_id(length=4):
+            prefix = "EMP"
+            numbers = ''.join(random.choices(string.digits, k=length))
+            return prefix + numbers
 
-        return redirect(url_for("store.register_done", store_id=store_id))
+    login_id = generate_employee_id()
 
-    return render_template("store_register.html")
+    db.session.execute(
+    sql_text("""
+        INSERT INTO account (login_id, name, password, store_id, role)
+        VALUES (:login, :name, :pw, :sid, :role)
+    """),
+    {
+        "login": login_id,
+        "name": manager_name,
+        "pw": manager_password,
+        "sid": store_id,
+        "role": "manager"
+    }
+)
+    db.session.commit()
+
+    return redirect(url_for("store.register_done", store_id=store_id))
+
 
 @store_bp.route("/register/done")
 def register_done():
