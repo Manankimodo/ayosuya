@@ -3,7 +3,9 @@
 # ==================================
 from dotenv import load_dotenv
 load_dotenv()
-# ==================================
+# =================================
+
+
 
 # app.py
 from flask import Flask, redirect, url_for
@@ -46,6 +48,14 @@ app.register_blueprint(line_bp)
 @app.route('/')
 def index():
     return redirect(url_for('login.login'))
+
+from flask import send_from_directory
+
+# 🚨 app.py に追加する場合の例 🚨
+@app.route('/favicon.ico')
+def favicon():
+    # 'static' フォルダから 'favicon.ico' ファイルを返します
+    return send_from_directory(app.root_path, 'static/favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 # if __name__ == '__main__':
 #     app.run(debug=True)

@@ -82,7 +82,7 @@ from flask import Blueprint, request, jsonify, render_template
 # 🚑 ヘルプ募集機能 (ワンタップ配信システム)
 # ==========================================
 
-@line_bp.route("/api/help/create", methods=["POST"])
+@line_bp.route("/line/api/help/create", methods=["POST"])
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
@@ -152,7 +152,7 @@ def create_help_request():
         
         # 🚨重要: ここのURLを現在の ngrok URL に書き換えてください！
         current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev" # あなたの ngrok URL に戻してください
-        help_url = f"{current_ngrok_url}/makeshift/help/respond/{request_id}"
+        help_url = f"{current_ngrok_url}/line/help/respond/{request_id}"
         
         request_data = {
             "date": target_date,
