@@ -3,7 +3,9 @@
 # ==================================
 from dotenv import load_dotenv
 load_dotenv()
-# ==================================
+# =================================
+
+
 
 # app.py
 from flask import Flask, redirect, url_for
@@ -31,6 +33,7 @@ from shift import shift_bp
 from makeshift import makeshift_bp
 from line_bot import line_bot_bp
 from store_register import store_bp
+from line import line_bp
 # --- Blueprint登録 ---
 app.register_blueprint(login_bp)
 app.register_blueprint(calendar_bp)
@@ -40,10 +43,19 @@ app.register_blueprint(shift_bp)
 app.register_blueprint(makeshift_bp)
 app.register_blueprint(line_bot_bp)
 app.register_blueprint(store_bp)
+app.register_blueprint(line_bp)
 
 @app.route('/')
 def index():
     return redirect(url_for('login.login'))
+
+from flask import send_from_directory
+
+# 🚨 app.py に追加する場合の例 🚨
+@app.route('/favicon.ico')
+def favicon():
+    # 'static' フォルダから 'favicon.ico' ファイルを返します
+    return send_from_directory(app.root_path, 'static/favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 # if __name__ == '__main__':
 #     app.run(debug=True)
