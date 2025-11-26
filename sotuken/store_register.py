@@ -30,12 +30,10 @@ def register_store():
             flash("店舗名・店長名・パスワードは必須です。", "danger")
             return render_template("store_register.html")
 
-        # 🆕 店舗コード生成
+        # 店舗コード生成
         store_code = generate_store_code()
 
-        # ===========================
-        # ① 店舗を登録（store_code を保存！）
-        # ===========================
+        # ① 店舗を登録
         result = db.session.execute(
             sql_text("""
                 INSERT INTO store (name, open_time, close_time, store_code)
@@ -52,32 +50,28 @@ def register_store():
 
         store_id = result.lastrowid
 
-        # ===========================
         # ② 店長アカウント登録
-        # ===========================
-        def generate_employee_id(length=4):
-            prefix = "EMP"
-            numbers = ''.join(random.choices(string.digits, k=length))
-            return prefix + numbers
+        login_id = generate_employee_id()  # ここで呼び出すだけ
 
-    login_id = generate_employee_id()
+        db.session.execute(
+            sql_text("""
+                INSERT INTO account (login_id, name, password, store_id, role)
+                VALUES (:login, :name, :pw, :sid, :role)
+            """),
+            {
+                "login": login_id,
+                "name": manager_name,
+                "pw": manager_password,
+                "sid": store_id,
+                "role": "manager"
+            }
+        )
+        db.session.commit()
 
-    db.session.execute(
-    sql_text("""
-        INSERT INTO account (login_id, name, password, store_id, role)
-        VALUES (:login, :name, :pw, :sid, :role)
-    """),
-    {
-        "login": login_id,
-        "name": manager_name,
-        "pw": manager_password,
-        "sid": store_id,
-        "role": "manager"
-    }
-)
-    db.session.commit()
+        return redirect(url_for("store.register_done", store_id=store_id))
 
-    return redirect(url_for("store.register_done", store_id=store_id))
+    return render_template("store_register.html")
+
 
 
 @store_bp.route("/register/done")
