@@ -47,24 +47,23 @@ def login():
             return redirect(url_for("login.manager_home"))
 
         # ============================
-        # ② 従業員ログイン (ID検索 - 数字の場合のみ)
+        # ② 従業員ログイン (login_id検索 - 英数字対応)
         # ============================
-        if login_id.isdigit():
-            sql_staff = text("""
-                SELECT id, role
-                FROM account
-                WHERE id = :id AND password = :password
-            """)
+        sql_staff = text("""
+            SELECT id, role, login_id
+            FROM account
+            WHERE login_id = :login_id AND password = :password
+        """)
 
-            staff = db.session.execute(
-                sql_staff,
-                {"id": int(login_id), "password": password} # IDはintに変換
-            ).fetchone()
+        staff = db.session.execute(
+            sql_staff,
+            {"login_id": login_id, "password": password}
+        ).fetchone()
 
-            if staff:
-                session['user_id'] = staff.id
-                session['role'] = staff.role
-                return redirect(url_for("login.staff_home"))
+        if staff:
+            session['user_id'] = staff.id
+            session['role'] = staff.role
+            return redirect(url_for("login.staff_home"))
 
         # 3. ログイン失敗
         flash("ログインID または パスワードが間違っています", "danger")
