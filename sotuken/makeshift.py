@@ -244,6 +244,22 @@ def auto_calendar():
     cursor = conn.cursor(dictionary=True)
     
     try:
+        # ★★★ 時間を安全に文字列変換する関数を追加 ★★★
+        def safe_time_format(val):
+            if val is None:
+                return "00:00"
+            if hasattr(val, 'strftime'):
+                return val.strftime("%H:%M")
+            if hasattr(val, 'total_seconds'):
+                total_seconds = int(val.total_seconds())
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                return f"{hours:02d}:{minutes:02d}"
+            s = str(val)
+            if ':' in s:
+                return s[:5]
+            return "00:00"
+        
         # 0. 設定取得
         cursor.execute("SELECT * FROM shift_settings LIMIT 1")
         row = cursor.fetchone()
@@ -255,8 +271,8 @@ def auto_calendar():
         }
         if row:
             settings.update({
-                "start_time": str(row["start_time"])[:5],
-                "end_time": str(row["end_time"])[:5],
+                "start_time": safe_time_format(row["start_time"]),  # ★ここを修正
+                "end_time": safe_time_format(row["end_time"]),      # ★ここを修正
                 "break_minutes": row.get("break_minutes", 60),
                 "interval_minutes": row.get("interval_minutes", 15),
                 "max_hours_per_day": row.get("max_hours_per_day", 8),
@@ -279,9 +295,10 @@ def auto_calendar():
         SHIFT_START = safe_to_time(settings['start_time'])
         SHIFT_END = safe_to_time(settings['end_time'])
         INTERVAL_MINUTES = int(settings['interval_minutes'])
-        settings['start_time'] = SHIFT_START.strftime("%H:%M")
-        settings['end_time'] = SHIFT_END.strftime("%H:%M")
+        settings['start_time'] = SHIFT_START.strftime("%H:%M")  # ★JSONに渡す前に再度文字列化
+        settings['end_time'] = SHIFT_END.strftime("%H:%M")      # ★JSONに渡す前に再度文字列化
 
+        # ... 以下のコードは変更なし
         cursor.execute("SELECT ID, name FROM account")
         users_data = cursor.fetchall()
         user_ids = [str(u['ID']) for u in users_data]
@@ -579,8 +596,8 @@ def settings():
     try:
         # --- POST: 設定更新処理 ---
         if request.method == "POST":
-            start_time = request.form.get("start_time", "09:00")
-            end_time = request.form.get("end_time", "22:00")
+            start_time = request.form.get("start_time")
+            end_time = request.form.get("end_time")
             break_minutes = request.form.get("break_minutes", 60)
             interval_minutes = request.form.get("interval_minutes", 15)
             max_hours_per_day = request.form.get("max_hours_per_day", 8)
@@ -618,14 +635,32 @@ def settings():
         settings_data = cursor.fetchone()
         if not settings_data:
             settings_data = {
-                "start_time": "09:00", "end_time": "22:00", "break_minutes": 60,
+                "start_time": "00:00", "end_time": "23:59", "break_minutes": 60,
                 "interval_minutes": 15, "max_hours_per_day": 8, "min_hours_per_day": 0,
                 "max_people_per_shift": 30, "auto_mode": "balance"
             }
         else:
-            # 時間を文字列に変換
-            settings_data["start_time"] = str(settings_data["start_time"])[:5]
-            settings_data["end_time"] = str(settings_data["end_time"])[:5]
+            # ★★★ 時間を安全に文字列変換する関数を使用 ★★★
+            def safe_time_format(val):
+                if val is None:
+                    return "00:00"
+                # datetime.time オブジェクトの場合
+                if hasattr(val, 'strftime'):
+                    return val.strftime("%H:%M")
+                # timedelta オブジェクトの場合
+                if hasattr(val, 'total_seconds'):
+                    total_seconds = int(val.total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    return f"{hours:02d}:{minutes:02d}"
+                # 文字列の場合
+                s = str(val)
+                if ':' in s:
+                    return s[:5]  # "HH:MM:SS" → "HH:MM"
+                return "00:00"
+            
+            settings_data["start_time"] = safe_time_format(settings_data["start_time"])
+            settings_data["end_time"] = safe_time_format(settings_data["end_time"])
 
         # 2. 役割リスト
         cursor.execute("SELECT * FROM positions")
@@ -642,8 +677,8 @@ def settings():
         
         formatted_demands = []
         for r in raw_demands:
-            ts_str = str(r['time_slot'])[:5] # 時間を文字列に
-            if r['required_count'] > 0: # 0人の設定は表示しない
+            ts_str = safe_time_format(r['time_slot'])  # ★ここも修正
+            if r['required_count'] > 0:
                 formatted_demands.append({
                     'time_slot': ts_str,
                     'position_name': r['position_name'] or "不明",
@@ -657,10 +692,11 @@ def settings():
 
     except Exception as e:
         print(f"Settings Error: {e}")
+        import traceback
+        traceback.print_exc()  # ★デバッグ用：詳細なエラーを表示
         return f"Error: {e}", 500
     finally:
         conn.close()
-
 # ==========================================
 # 3. 需要（ピークタイム）を追加する処理 (修正版)
 # ==========================================
@@ -738,7 +774,71 @@ def reset_demand():
     finally:
         conn.close()
     return redirect(url_for('makeshift.settings'))
+# ==========================================
+# 4.5 需要をリセット（全削除）する処理
+# ==========================================
+@makeshift_bp.route("/settings/demand/delete", methods=["POST"])
+def delete_demand():
+    # 1. データ取得
+    time_slot = request.form.get('time_slot') # 例: "09:00"
+    position_id_str = request.form.get('position_id')
 
+    if not time_slot or not position_id_str:
+        flash("データが不足しています", "warning")
+        return redirect(url_for('makeshift.settings'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        position_id = int(position_id_str)
+
+        # 2. 時間の形式ゆらぎ対策
+        # 送られてきたのが "09:00" なら "09:00:00" も削除候補にする
+        if len(time_slot) == 5:  # "HH:MM" の形式の場合
+            time_slot_with_seconds = time_slot + ":00"
+        else:
+            time_slot_with_seconds = time_slot
+
+        # デバッグ表示（ターミナルで確認用）
+        print(f"DEBUG: 削除試行 -> time='{time_slot}' or '{time_slot_with_seconds}', id={position_id}")
+
+        # 3. SQL実行（ORを使って、秒があってもなくてもヒットさせる）
+        # データベース内の time_slot が "09:00" でも "09:00:00" でも削除します
+        query = """
+            DELETE FROM shift_demand 
+            WHERE (time_slot = ? OR time_slot = ?) 
+            AND position_id = ?
+        """
+        
+        # パラメータは順序通りに: (短い時間, 秒付き時間, ID)
+        cursor.execute(query, (time_slot, time_slot_with_seconds, position_id))
+        
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        if deleted_count > 0:
+            print(f"DEBUG: {deleted_count} 件削除成功！")
+            flash("設定を削除しました", "success")
+        else:
+            # それでも消えない場合は、DBの中身をターミナルに全表示して確認する
+            print("DEBUG: 削除失敗。現在のDB内のデータを全表示します↓")
+            cursor.execute("SELECT * FROM shift_demand")
+            rows = cursor.fetchall()
+            for row in rows:
+                # row が辞書型かタプル型か環境によるため両対応で表示
+                print(list(row) if row else "空データ")
+            
+            flash("削除対象が見つかりませんでした。コンソールログを確認してください。", "warning")
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Delete Error: {e}")
+        flash("エラーが発生しました", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('makeshift.settings'))
 # ==========================================
 # 5. 確定シフト取得API
 # ==========================================
