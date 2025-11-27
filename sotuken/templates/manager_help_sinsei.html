@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>店長の希望入力 | ShiftForm</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sinsei.css') }}">
+</head>
+<body>
+  <div class="overlay"></div>
+
+  <div class="container">
+    <h1 class="title"><span class="logo">N</span>{{ date }} の希望入力</h1>
+
+    <form method="POST" class="form-card">
+      <div class="form-group">
+        <label>希望有無</label>
+        <select name="work" onchange="toggleTimeInputs()">
+          <option value="1">○ 出勤可能</option>
+          <option value="0">× 出勤不可</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>開始時間</label>
+        <input type="time" name="start_time" required>
+      </div>
+
+      <div class="form-group">
+        <label>終了時間</label>
+        <input type="time" name="end_time" required>
+      </div>
+
+      <button type="submit" class="btn">保存</button>
+    </form>
+
+    <a href="{{ url_for('calendar.manager_help_request') }}" class="back-link">← カレンダーに戻る</a>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/shinsei.js') }}"></script>
+</body>
+</html>
