@@ -86,6 +86,7 @@ from flask import Blueprint, request, jsonify, render_template
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
+    改善点: 募集作成時に help_requests テーブルと shift_table の両方に登録
     """
     data = request.json
     target_date = data.get("date")
@@ -96,6 +97,9 @@ def create_help_request():
     cursor = conn.cursor(dictionary=True)
 
     try:
+        # トランザクション開始
+        conn.start_transaction()
+
         # 1. 募集データをDBに登録
         cursor.execute("""
             INSERT INTO help_requests (date, start_time, end_time, status)
@@ -103,20 +107,27 @@ def create_help_request():
         """, (target_date, start_time_str, end_time_str))
         request_id = cursor.lastrowid
         
+        # 1-2. 📌 【新規追加】募集を shift_table に「pending」ステータスで登録
+        # (まだ誰も応募していない状態)
+        # ※ user_id は NULL として、ヘルプ募集中であることを示す
+        cursor.execute("""
+            INSERT INTO shift_table (user_id, date, start_time, end_time, type)
+            VALUES (NULL, %s, %s, %s, 'help_pending')
+        """, (target_date, start_time_str, end_time_str))
+        help_shift_id = cursor.lastrowid
+        
         # 2. 【ステップA】「その時間にすでにシフトが入っている人」を除外
-        # (shift_table に重複する時間帯があるユーザーIDを取得)
         cursor.execute("""
             SELECT DISTINCT user_id 
             FROM shift_table
             WHERE date = %s
+            AND user_id IS NOT NULL
             AND NOT (end_time <= %s OR start_time >= %s) 
         """, (target_date, start_time_str, end_time_str))
         
-        # 既にシフトに入っていて忙しいユーザーのIDリスト (文字列に変換して['1002']のようにする)
         busy_users = [str(row['user_id']) for row in cursor.fetchall()]
 
         # 3. 【ステップB】全ユーザーを抽出
-        # ここで line_id が NULL のユーザーも取得し、デバッグログで状態を確認できるようにする
         cursor.execute("SELECT ID, name, line_id FROM account")
         all_staff = cursor.fetchall()
         
@@ -125,16 +136,13 @@ def create_help_request():
         for staff in all_staff:
             staff_id_str = str(staff['ID'])
                 
-            # 忙しい人を除外 (IDはDBから数値で返ってくる場合があるため、str()で揃える)
             if staff_id_str in busy_users:
                 continue
                 
-            # LINE ID が設定されている人だけを通知対象とする
             if staff.get('line_id'):
                 eligible_staff.append(staff)
 
-        # -----------------------------------------------------------
-        # 🚨 デバッグログの出力（強化版） 🚨
+        # デバッグログ出力
         print(f"--- 通知対象スタッフ数: {len(eligible_staff)}人 ---")
         print(f"--- 1. 募集時間と重複しているスタッフ (busy_users): {busy_users}")
         print("--- 2. 全スタッフとLINE IDの有無 ---")
@@ -143,15 +151,11 @@ def create_help_request():
             status = "対象外(忙しい)" if staff_id_str in busy_users else ("通知対象" if staff.get('line_id') else "対象外(LINE IDなし)")
             print(f"ID: {staff['ID']}, Name: {staff['name']}, LINE ID: {staff.get('line_id')}, Status: {status}")
         print("-------------------------------------------------")
-        # -----------------------------------------------------------
-
-        conn.commit()
 
         # 5. ターゲットのスタッフにLINE通知を送信
         target_count = 0
         
-        # 🚨重要: ここのURLを現在の ngrok URL に書き換えてください！
-        current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev" # あなたの ngrok URL に戻してください
+        current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev"
         help_url = f"{current_ngrok_url}/line/help/respond/{request_id}"
         
         request_data = {
@@ -170,21 +174,22 @@ def create_help_request():
             )
             target_count += 1
         
+        # トランザクションコミット
         conn.commit()
-
 
         return jsonify({
             "message": "募集を作成し、通知を送信しました。",
             "request_id": request_id,
+            "help_shift_id": help_shift_id,
             "target_count": target_count
         })
 
     except Exception as e:
-            conn.rollback()
-            print("--- ❌ CRITICAL ERROR IN create_help_request ---")
-            import traceback
-            traceback.print_exc()
-            return jsonify({"error": "サーバー内部エラー"}), 500
+        conn.rollback()
+        print("--- ❌ CRITICAL ERROR IN create_help_request ---")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "サーバー内部エラー"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -194,6 +199,7 @@ def create_help_request():
 def accept_help_request():
     """
     スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
+    改善点: help_pending のシフトを確定シフトに更新
     POSTデータ: { "request_id": 1, "user_id": 5 }
     """
     data = request.json
@@ -204,11 +210,9 @@ def accept_help_request():
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # 1. トランザクション開始
         conn.start_transaction()
 
-        # 2. 【重要】早い者勝ち判定
-        # status='open' の場合のみ更新を行う。更新件数が1なら勝ち、0なら既に埋まった。
+        # 1. 【重要】早い者勝ち判定
         cursor.execute("""
             UPDATE help_requests 
             SET status = 'closed', accepted_by = %s
@@ -216,18 +220,51 @@ def accept_help_request():
         """, (user_id, req_id))
         
         if cursor.rowcount == 0:
-            # 既に他の誰かが埋めてしまった場合
             conn.rollback()
             return jsonify({"status": "failed", "message": "タッチの差で募集が埋まってしまいました🙇‍♂️"}), 409
 
-        # 3. 募集情報を取得して shift_table に確定シフトとして書き込む
+        # 2. 募集情報を取得
         cursor.execute("SELECT date, start_time, end_time FROM help_requests WHERE id = %s", (req_id,))
         req_data = cursor.fetchone()
 
+        # 3. 📌 【改善】shift_table の help_pending を確定シフトに更新
+        # (user_id を NULL → 応募ユーザーの ID に変更、type を 'help_pending' → 'help' に変更)
         cursor.execute("""
-            INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-            VALUES (%s, %s, %s, %s, 'help')
+            UPDATE shift_table
+            SET user_id = %s, type = 'help'
+            WHERE date = %s 
+            AND start_time = %s 
+            AND end_time = %s 
+            AND type = 'help_pending'
+            AND user_id IS NULL
+            LIMIT 1
         """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+
+        # もし UPDATE で更新されなかった場合は、新規 INSERT（フォールバック）
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO shift_table (user_id, date, start_time, end_time, type)
+                VALUES (%s, %s, %s, %s, 'help')
+            """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+
+        # 4. 📌 【新規】calendar テーブルに出勤情報を登録
+        # 既に登録されているかチェック（上書きしない方針）
+        cursor.execute("""
+            SELECT ID FROM calendar 
+            WHERE ID = %s AND date = %s
+        """, (user_id, req_data['date']))
+        
+        existing_calendar = cursor.fetchone()
+        
+        if not existing_calendar:
+            # 新規登録: work = 1（出勤）
+            cursor.execute("""
+                INSERT INTO calendar (ID, date, work, start_time, end_time)
+                VALUES (%s, %s, 1, %s, %s)
+            """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+        else:
+            # 既に登録されている場合はスキップ
+            print(f"⚠️ ユーザー {user_id} の {req_data['date']} は既に calendar に登録済みのため、スキップしました")
 
         conn.commit()
 
