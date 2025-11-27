@@ -51,26 +51,25 @@
           return a.start_time.localeCompare(b.start_time);
       });
 
-      // ② 結合ロジック（ここがバーコードを直す魔法！）
+      // ② 結合ロジック
       const mergedShifts = [];
       if (rawData.length > 0) {
           let current = { ...rawData[0] }; 
           for (let i = 1; i < rawData.length; i++) {
               const next = rawData[i];
               
-              // 「同じ人・同じ日・同じ役割・時間が連続」なら合体させる
               if (current.user_id === next.user_id &&
                   current.date === next.date &&
                   current.type === next.type &&
                   current.end_time === next.start_time) {
                   
-                  current.end_time = next.end_time; // 終了時間を後ろに伸ばす
+                  current.end_time = next.end_time; 
               } else {
-                  mergedShifts.push(current); // 途切れたら保存
-                  current = { ...next };      // 次のブロックへ
+                  mergedShifts.push(current); 
+                  current = { ...next };      
               }
           }
-          mergedShifts.push(current); // 最後のブロックを保存
+          mergedShifts.push(current); 
       }
 
       // ③ グラフ設定
@@ -92,20 +91,17 @@
           const container = document.createElement("div");
           container.className = "chart-container";
           
-          // ▼ デザイン調整（白背景、黒文字）
           container.style.marginBottom = "30px";
           container.style.padding = "20px";
-          container.style.background = "#ffffff"; // 背景は白
+          container.style.background = "#ffffff"; 
           container.style.borderRadius = "8px";
           container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
           
-          // ▼ 日付タイトルの文字色を黒(#333)に強制指定！
           container.innerHTML = `<h3 style="color: #333333; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px;">📅 ${date} のシフト</h3><div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>`;
           chartsDiv.appendChild(container);
 
           const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
           
-          // Y軸ラベル（ユーザー名）
           const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
 
           const chartDataPoints = shifts.map(s => {
@@ -116,10 +112,19 @@
                   colorIndex++;
               }
               
-              // 役割ごとの色
               let barColor = userColorMap[s.user_id];
-              if (s.type && s.type.includes("キッチン")) barColor = "#e57373"; // 赤
-              if (s.type && s.type.includes("ホール")) barColor = "#64b5f6";   // 青
+
+              // ★★★ 色の設定エリア ★★★
+              // もしタイプに「不足」が含まれていたら、強制的に赤色にする
+              if (s.type && s.type.indexOf("不足") !== -1) {
+                  barColor = "#ff1744"; // 警告の赤 (Red A400)
+              } 
+              else if (s.type && s.type.includes("キッチン")) {
+                  barColor = "#e57373"; // 通常のキッチン色
+              }
+              else if (s.type && s.type.includes("ホール")) {
+                  barColor = "#64b5f6"; // 通常のホール色
+              }
 
               return {
                   x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
@@ -150,13 +155,13 @@
                           time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
                           min: minTime, max: maxTime,
                           grid: { color: "#f0f0f0" },
-                          ticks: { color: "#333" } // X軸の文字色
+                          ticks: { color: "#333" } 
                       },
                       y: { 
                           type: 'category', 
                           labels: yLabels,
                           grid: { display: false },
-                          ticks: { color: "#333", font: { weight: 'bold' } } // Y軸（名前）の文字色
+                          ticks: { color: "#333", font: { weight: 'bold' } } 
                       }
                   },
                   plugins: {
@@ -173,7 +178,6 @@
                       }
                   }
               },
-              // バーの中に文字（役割名）を表示する設定
               plugins: [{
                   id: 'roleLabels',
                   afterDatasetsDraw(chart) {
@@ -183,12 +187,14 @@
                           if (!meta.hidden) {
                               meta.data.forEach((element, index) => {
                                   const d = dataset.data[index];
+                                  
                                   // "work" 以外のときに文字を表示
                                   if (d.type && d.type !== 'work') {
-                                      ctx.fillStyle = '#ffffff'; // バーの中の文字は白
+                                      ctx.fillStyle = '#ffffff'; 
                                       ctx.font = 'bold 12px "Helvetica Neue", Arial';
                                       ctx.textAlign = 'center';
                                       ctx.textBaseline = 'middle';
+                                      
                                       // 文字に影をつけて読みやすく
                                       ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
                                       ctx.shadowBlur = 3;
@@ -264,13 +270,11 @@
     function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
     function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
     
-    // 🚨 修正: サーバーへのAPI呼び出しロジックを実装 🚨
     async function submitHelpRequest() {
         const helpDate = document.getElementById('helpDate').value;
         const helpStart = document.getElementById('helpStart').value;
         const helpEnd = document.getElementById('helpEnd').value;
         
-        // 必須チェック
         if (!helpDate || !helpStart || !helpEnd) {
             alert('日付と時間をすべて入力してください。');
             return;
@@ -283,8 +287,8 @@
         btn.innerText = '配信中...';
 
         try {
-            // line の中を探すように変更！
-                const response = await fetch("{{ url_for('line.create_help_request') }}", {
+            // line.py の機能を使うように修正済み
+            const response = await fetch("{{ url_for('line.create_help_request') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -296,15 +300,13 @@
                 })
             });
 
-            closeHelpModal(); // 処理が終わったらモーダルを閉じる
+            closeHelpModal(); 
 
             const result = await response.json();
 
             if (response.ok) {
-                // 成功時
                 alert(`🎉 募集を配信しました！ (${result.target_count} 名に通知)`);
             } else {
-                // 失敗時 (サーバーからのエラーメッセージを表示)
                 alert(`❌ 配信失敗: ${result.error || '不明なエラー'}`);
             }
 

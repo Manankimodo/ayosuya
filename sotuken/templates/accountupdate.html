@@ -1,58 +1,14 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>従業員編集</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/accountinsert.css') }}">
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-      <h1><span class="hicon"></span> 従業員情報の編集</h1>
+<form method="POST">
+  <label>名前</label>
+  <input type="text" name="name" value="{{ account.name }}" required>
 
-      <form method="POST">
-        <label>名前</label>
-        <input type="text" name="name" value="{{ account.name }}" required>
+  <label>パスワード（変更する場合のみ）</label>
+  <input type="text" name="password" placeholder="新しいパスワードを入力">
 
-        <label>パスワード</label>
-        <input type="text" name="password" value="{{ account.password }}" required>
-
-        <label>店舗ID</label>
-        <input type="number" name="store_id" value="{{ account.store_id }}" required>
-
-        <label style="margin-top: 15px; font-weight:bold;">担当役割（複数選択可）</label>
-        <div class="radio-group" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; background: #f9f9f9; padding: 10px; border-radius: 5px;">
-            
-            <label style="cursor: pointer;">
-                <input type="checkbox" name="positions" value="1" 
-                {% if 1 in current_roles %}checked{% endif %}> 🛎️ ホール
-            </label>
-
-            <label style="cursor: pointer;">
-                <input type="checkbox" name="positions" value="2" 
-                {% if 2 in current_roles %}checked{% endif %}> 🍳 キッチン
-            </label>
-
-            <label style="cursor: pointer;">
-                <input type="checkbox" name="positions" value="3" 
-                {% if 3 in current_roles %}checked{% endif %}> 🧼 洗い場
-            </label>
-
-            <label style="cursor: pointer;">
-                <input type="checkbox" name="positions" value="4" 
-                {% if 4 in current_roles %}checked{% endif %}> 🔓 開店作業
-            </label>
-
-            <label style="cursor: pointer;">
-                <input type="checkbox" name="positions" value="5" 
-                {% if 5 in current_roles %}checked{% endif %}> 🔒 閉店作業
-            </label>
-        </div>
-        <button type="submit">更新する</button>
-      </form>
-
-      <p class="back"><a href="{{ url_for('insert.insert') }}">← 一覧に戻る</a></p>
-    </div>
+  <!-- 店舗IDは非表示にして安全に送信 -->
+  <input type="hidden" name="store_id" value="{{ account.store_id }}">
   </div>
-</body>
-</html>
+
+  <button type="submit">更新する</button>
+</form>
+<p class="back"><a href="{{ url_for('insert.insert') }}">← 一覧に戻る</a></p>
