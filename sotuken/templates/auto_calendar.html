@@ -44,12 +44,30 @@
           return;
       }
 
-      // ① データをソート（ユーザーID順 -> 日付順 -> 時間順）
+      // ① データをソート（修正版：スタッフ(正)を上、不足(負)を下に）
       rawData.sort((a, b) => {
-          if (a.user_id !== b.user_id) return a.user_id - b.user_id;
-          if (a.date !== b.date) return a.date.localeCompare(b.date);
-          return a.start_time.localeCompare(b.start_time);
-      });
+        const idA = parseInt(a.user_id);
+        const idB = parseInt(b.user_id);
+
+        // 1. 日付順
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+
+        // 2. スタッフ(正) と 不足(負) の分離
+        // Aが正(スタッフ)で、Bが負(不足)なら、Aを先(-1)にする
+        if (idA > 0 && idB < 0) return -1;
+        // Aが負(不足)で、Bが正(スタッフ)なら、Bを先(1)にする
+        if (idA < 0 && idB > 0) return 1;
+
+        // 3. 同じカテゴリー内でのソート
+        if (idA > 0 && idB > 0) {
+            // スタッフ同士ならID順
+            return idA - idB; 
+        } else {
+            // 不足同士なら時間順、あるいは役割順
+            if (a.start_time !== b.start_time) return a.start_time.localeCompare(b.start_time);
+            return idB - idA; // ID順
+        }
+    });
 
       // ② 結合ロジック
       const mergedShifts = [];
@@ -179,33 +197,36 @@
                   }
               },
               plugins: [{
-                  id: 'roleLabels',
-                  afterDatasetsDraw(chart) {
-                      const { ctx } = chart;
-                      chart.data.datasets.forEach((dataset, i) => {
-                          const meta = chart.getDatasetMeta(i);
-                          if (!meta.hidden) {
-                              meta.data.forEach((element, index) => {
-                                  const d = dataset.data[index];
-                                  
-                                  // "work" 以外のときに文字を表示
-                                  if (d.type && d.type !== 'work') {
-                                      ctx.fillStyle = '#ffffff'; 
-                                      ctx.font = 'bold 12px "Helvetica Neue", Arial';
-                                      ctx.textAlign = 'center';
-                                      ctx.textBaseline = 'middle';
-                                      
-                                      // 文字に影をつけて読みやすく
-                                      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-                                      ctx.shadowBlur = 3;
-                                      ctx.fillText(d.type, element.x, element.y);
-                                      ctx.shadowBlur = 0;
-                                  }
-                              });
-                          }
-                      });
-                  }
-              }]
+                id: 'roleLabels',
+                afterDatasetsDraw(chart) {
+                    const { ctx } = chart;
+                    chart.data.datasets.forEach((dataset, i) => {
+                        const meta = chart.getDatasetMeta(i);
+                        if (!meta.hidden) {
+                            meta.data.forEach((element, index) => {
+                                const d = dataset.data[index];
+                                
+                                // "work" 以外のときに文字を表示
+                                if (d.type && d.type !== 'work') {
+                                    // ★フォント設定（太く、少し大きく）
+                                    ctx.font = 'bold 14px "Helvetica Neue", Arial';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    
+                                    // ★文字のフチ取り（黒い枠線）
+                                    ctx.lineWidth = 3; 
+                                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; // 濃い黒
+                                    ctx.strokeText(d.type, element.x, element.y);
+                                    
+                                    // ★文字の中身（白）
+                                    ctx.fillStyle = '#ffffff'; 
+                                    ctx.fillText(d.type, element.x, element.y);
+                                }
+                            });
+                        }
+                    });
+                }
+            }]
           });
       });
     });
