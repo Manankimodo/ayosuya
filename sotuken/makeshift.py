@@ -209,7 +209,6 @@ def get_day_details(date_str):
 # === シフト遷移 ===
 @makeshift_bp.route("/generate")
 def generate_shift():
-    print("🧮 シフト自動作成画面に遷移しました！")
     return redirect(url_for('makeshift.show_admin_shift'))
 
 
@@ -778,67 +777,33 @@ def reset_demand():
 # ==========================================
 # 4.5 需要をリセット（全削除）する処理
 # ==========================================
+# ==========================================
+# 個別の需要設定を削除する処理
+# ==========================================
 @makeshift_bp.route("/settings/demand/delete", methods=["POST"])
 def delete_demand():
-    # 1. データ取得
-    time_slot = request.form.get('time_slot') # 例: "09:00"
-    position_id_str = request.form.get('position_id')
-
-    if not time_slot or not position_id_str:
-        flash("データが不足しています", "warning")
-        return redirect(url_for('makeshift.settings'))
-
     conn = get_db_connection()
     cursor = conn.cursor()
-
+    
     try:
-        position_id = int(position_id_str)
-
-        # 2. 時間の形式ゆらぎ対策
-        # 送られてきたのが "09:00" なら "09:00:00" も削除候補にする
-        if len(time_slot) == 5:  # "HH:MM" の形式の場合
-            time_slot_with_seconds = time_slot + ":00"
-        else:
-            time_slot_with_seconds = time_slot
-
-        # デバッグ表示（ターミナルで確認用）
-        print(f"DEBUG: 削除試行 -> time='{time_slot}' or '{time_slot_with_seconds}', id={position_id}")
-
-        # 3. SQL実行（ORを使って、秒があってもなくてもヒットさせる）
-        # データベース内の time_slot が "09:00" でも "09:00:00" でも削除します
-        query = """
+        time_slot = request.form.get("time_slot")
+        position_id = request.form.get("position_id")
+        
+        cursor.execute("""
             DELETE FROM shift_demand 
-            WHERE (time_slot = ? OR time_slot = ?) 
-            AND position_id = ?
-        """
+            WHERE time_slot = %s AND position_id = %s
+        """, (time_slot, position_id))
         
-        # パラメータは順序通りに: (短い時間, 秒付き時間, ID)
-        cursor.execute(query, (time_slot, time_slot_with_seconds, position_id))
-        
-        deleted_count = cursor.rowcount
         conn.commit()
-
-        if deleted_count > 0:
-            print(f"DEBUG: {deleted_count} 件削除成功！")
-            flash("設定を削除しました", "success")
-        else:
-            # それでも消えない場合は、DBの中身をターミナルに全表示して確認する
-            print("DEBUG: 削除失敗。現在のDB内のデータを全表示します↓")
-            cursor.execute("SELECT * FROM shift_demand")
-            rows = cursor.fetchall()
-            for row in rows:
-                # row が辞書型かタプル型か環境によるため両対応で表示
-                print(list(row) if row else "空データ")
-            
-            flash("削除対象が見つかりませんでした。コンソールログを確認してください。", "warning")
-
+        flash(f"✅ {time_slot} の設定を削除しました", "success")
+        
     except Exception as e:
         conn.rollback()
         print(f"Delete Error: {e}")
-        flash("エラーが発生しました", "danger")
+        flash("削除に失敗しました", "danger")
     finally:
         conn.close()
-
+        
     return redirect(url_for('makeshift.settings'))
 # ==========================================
 # 5. 確定シフト取得API
