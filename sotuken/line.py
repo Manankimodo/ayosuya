@@ -4,7 +4,7 @@ from line_notifier import send_help_request_to_staff
 from datetime import datetime, timedelta, time as time_cls, date as date_cls
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import os
 import traceback
 
@@ -161,7 +161,7 @@ def handle_message(event):
                 # 4. ユーザーに確認メッセージを送信
                 line_bot_api.push_message(
                     to=line_user_id,
-                    messages={"type": "text", "text": "✅ LINE ID の登録が完了しました！\n\nこれからヘルプ募集の通知を受け取れます。"}
+                    messages=TextSendMessage(text="✅ LINE ID の登録が完了しました！\n\nこれからヘルプ募集の通知を受け取れます。")
                 )
 
             else:
@@ -170,7 +170,7 @@ def handle_message(event):
                 # ユーザーに通知
                 line_bot_api.push_message(
                     to=line_user_id,
-                    messages={"type": "text", "text": "申し訳ありません。登録期限が切れてしまいました。\nもう一度「LINE ID登録」から始めてください。"}
+                    messages=TextSendMessage(text="申し訳ありません。登録期限が切れてしまいました。\nもう一度「LINE ID登録」から始めてください。")
                 )
 
         except Exception as e:
@@ -181,7 +181,7 @@ def handle_message(event):
             # エラーメッセージをユーザーに送信
             line_bot_api.push_message(
                 to=line_user_id,
-                messages={"type": "text", "text": "エラーが発生しました。管理者にお問い合わせください。"}
+                messages=TextSendMessage(text="エラーが発生しました。管理者にお問い合わせください。")
             )
 
         finally:
