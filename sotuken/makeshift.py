@@ -870,38 +870,113 @@ def get_all_confirmed_shifts():
 
 @makeshift_bp.route("/api/shifts/user/<int:user_id>")
 def get_user_shifts(user_id):
+    """ユーザーのシフト情報を取得するAPI"""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
-    user_data = cursor.fetchone()
-    if not user_data:
-        conn.close()
-        return jsonify({"error": "User not found"}), 404
+    
+    try:
+        # 1. ユーザー情報を取得
+        cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
         
-    cursor.execute("""
-        SELECT date, start_time, end_time, type
-        FROM shift_table
-        WHERE user_id = %s
-        ORDER BY date, start_time
-    """, (user_id,))
-    user_shifts = cursor.fetchall()
-    cursor.close()
-    conn.close()
+        print(f"🔍 DEBUG: user_id={user_id}, user_data={user_data}")
+        
+        if not user_data:
+            conn.close()
+            print(f"❌ ユーザーID {user_id} が見つかりません")
+            return jsonify({"error": "User not found"}), 404
+        
+        # 2. shift_tableから該当ユーザーのシフトを取得
+        # ★重要: 負のuser_idは除外
+        cursor.execute("""
+            SELECT user_id, date, start_time, end_time, type
+            FROM shift_table
+            WHERE user_id = %s AND user_id > 0
+            ORDER BY date, start_time
+        """, (user_id,))
+        user_shifts = cursor.fetchall()
+        
+        print(f"📊 DEBUG: 取得したシフト件数={len(user_shifts)}")
+        print(f"📋 DEBUG: シフトデータ: {user_shifts}")
+        
+        # 3. 時刻をフォーマット
+        formatted_shifts = []
+        for shift in user_shifts:
+            formatted_shift = {
+                "user_id": shift["user_id"],
+                "user_name": user_data["name"],  # ★追加: ユーザー名を含める
+                "date": shift["date"].strftime("%Y-%m-%d") if hasattr(shift["date"], 'strftime') else str(shift["date"]),
+                "start_time": format_time(shift["start_time"]),
+                "end_time": format_time(shift["end_time"]),
+                "type": shift["type"]
+            }
+            formatted_shifts.append(formatted_shift)
+            print(f"✅ フォーマット済みシフト: {formatted_shift}")
+        
+        response = {
+            "user_id": user_id,
+            "user_name": user_data["name"],
+            "shifts": formatted_shifts
+        }
+        
+        print(f"📤 APIレスポンス: {response}")
+        return jsonify(response)
+        
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
-    formatted_shifts = []
-    for shift in user_shifts:
-        formatted_shifts.append({
-            "date": shift["date"].strftime("%Y-%m-%d"),
-            "start_time": format_time(shift["start_time"]),
-            "end_time": format_time(shift["end_time"]),
-            "type": shift["type"]
+
+# ★新規追加: デバッグ用エンドポイント
+@makeshift_bp.route("/api/debug/shifts_all")
+def debug_all_shifts():
+    """データベースに保存されている全てのシフトを確認するデバッグAPI"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("""
+            SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type
+            FROM shift_table s
+            LEFT JOIN account a ON s.user_id = a.ID
+            ORDER BY s.user_id, s.date, s.start_time
+            LIMIT 100
+        """)
+        all_shifts = cursor.fetchall()
+        
+        print(f"🔍 DEBUG: DB内の全シフト件数={len(all_shifts)}")
+        for shift in all_shifts:
+            print(f"  {shift}")
+        
+        # フォーマット
+        formatted = []
+        for shift in all_shifts:
+            formatted.append({
+                "user_id": shift["user_id"],
+                "user_name": shift["user_name"],
+                "date": shift["date"].strftime("%Y-%m-%d") if hasattr(shift["date"], 'strftime') else str(shift["date"]),
+                "start_time": format_time(shift["start_time"]),
+                "end_time": format_time(shift["end_time"]),
+                "type": shift["type"]
+            })
+        
+        return jsonify({
+            "total_count": len(all_shifts),
+            "shifts": formatted
         })
-    return jsonify({
-        "user_id": user_id,
-        "user_name": user_data["name"],
-        "shifts": formatted_shifts
-    })
-
+        
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 # === 従業員向けシフト確認画面 ===
 @makeshift_bp.route("/user_shift_view/<int:user_id>")
 def show_user_shift_view(user_id):
