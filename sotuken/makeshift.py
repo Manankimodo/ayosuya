@@ -668,19 +668,20 @@ def settings():
         
         # 3. 需要リスト（表示用）
         cursor.execute("""
-            SELECT d.time_slot, d.required_count, p.name as position_name
+            SELECT d.time_slot, d.position_id, d.required_count, p.name as position_name
             FROM shift_demand d
             LEFT JOIN positions p ON d.position_id = p.id
             ORDER BY d.time_slot, d.position_id
         """)
         raw_demands = cursor.fetchall()
-        
+
         formatted_demands = []
         for r in raw_demands:
-            ts_str = safe_time_format(r['time_slot'])  # ★ここも修正
+            ts_str = safe_time_format(r['time_slot'])
             if r['required_count'] > 0:
                 formatted_demands.append({
                     'time_slot': ts_str,
+                    'position_id': r['position_id'],  # ★これを追加
                     'position_name': r['position_name'] or "不明",
                     'required_count': r['required_count']
                 })
