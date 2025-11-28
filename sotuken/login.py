@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from sqlalchemy import text
 from extensions import db
+import os
+
 
 # Blueprintの定義
 login_bp = Blueprint('login', __name__, url_prefix='/login')
@@ -118,3 +120,18 @@ def logout():
     
     # ログイン画面へリダイレクト
     return redirect(url_for("login.login"))
+
+@login_bp.route('/register_line_id')
+def register_line_id():
+    """
+    LINE ID 登録画面（QRコード表示 + Webhook対応版）
+    """
+    if "user_id" not in session:
+        flash("先にログインしてください", "danger")
+        return redirect(url_for("login.login"))
+    
+    # Messaging API設定のQRコード画像URL
+    qr_code_url = os.environ.get('LINE_QR_CODE_URL', 
+                                  'https://qr-official.line.me/yourchannelid')
+    
+    return render_template("register_line_id_qr_webhook.html", qr_code_url=qr_code_url)

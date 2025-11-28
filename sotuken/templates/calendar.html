@@ -24,6 +24,7 @@
   <nav class="menu" id="menu">
     <ul>
         <li><a href="{{ url_for('calendar.my_confirmed_shift') }}">確定シフトを確認</a></li>
+        <li><a href="{{ url_for('login.register_line_id') }}">LINE ID 登録</a></li>
         <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
         <li><a href="{{ url_for('chatbot.chat') }}">FAQ</a></li>
     </ul>
