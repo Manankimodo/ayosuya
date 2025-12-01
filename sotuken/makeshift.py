@@ -379,6 +379,19 @@ def auto_calendar():
                             demand_fulfillment.append(sum(capable))
                 model.Add(sum(shifts[u, t_idx] for u in range(num_users)) <= total_req)
 
+                        # ★★★ ここに追加 ★★★
+            max_hours = float(settings['max_hours_per_day'])
+            max_intervals = int((max_hours * 60) / INTERVAL_MINUTES)
+
+            for u in range(num_users):
+                model.Add(sum(shifts[u, t] for t in range(num_intervals)) <= max_intervals)
+            # ★★★ ここまで追加 ★★★
+
+            users_with_pref = {str(row['ID']) for row in preference_rows}
+            for u, uid in enumerate(user_ids):
+                if str(uid) not in users_with_pref:
+                    for t in range(num_intervals): model.Add(shifts[u, t] == 0)
+
             users_with_pref = {str(row['ID']) for row in preference_rows}
             for u, uid in enumerate(user_ids):
                 if str(uid) not in users_with_pref:

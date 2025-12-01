@@ -289,20 +289,20 @@
             <input type="number" name="max_people_per_shift" value="{{ settings.max_people_per_shift }}" min="1" max="100" required>
             <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">下記の必要人数設定の上限値</small>
           </div>
+                    <!-- 変更後 -->
           <div class="setting-item">
             <label>⏱️ 時間間隔（分）</label>
-            <input type="number" name="interval_minutes" value="{{ settings.interval_minutes }}" min="5" max="60" step="5" required>
+            <input type="text" value="15分（固定）" disabled style="cursor: not-allowed; opacity: 0.7;">
+            <input type="hidden" name="interval_minutes" value="15">
           </div>
+          
           <div class="setting-item">
             <label>📅 1日最大勤務時間</label>
             <input type="number" name="max_hours_per_day" value="{{ settings.max_hours_per_day }}" min="1" max="24" step="0.5" required>
           </div>
-          <div class="setting-item">
-            <label>☕ 休憩時間（分）</label>
-            <input type="number" name="break_minutes" value="{{ settings.break_minutes }}" min="0" max="120" step="15" required>
-          </div>
         </div>
         <!-- 隠しフィールド: 既存のコードが必要とする値 -->
+        <input type="hidden" name="break_minutes" value="{{ settings.break_minutes }}">
         <input type="hidden" name="min_hours_per_day" value="{{ settings.min_hours_per_day }}">
         <input type="hidden" name="auto_mode" value="{{ settings.auto_mode }}">
         
