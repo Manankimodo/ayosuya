@@ -700,7 +700,7 @@ def settings():
 # ==========================================
 # 3. 需要（ピークタイム）を追加する処理 (修正版)
 # ==========================================
-@makeshift_bp.route("/settings/demand/add", methods=["POST"]) # URLは変えずに中身を修正
+@makeshift_bp.route("/settings/demand/add", methods=["POST"])
 def add_demand():
     from datetime import datetime, timedelta
     
@@ -708,35 +708,27 @@ def add_demand():
     cursor = conn.cursor()
     
     try:
-        # フォームからデータを受け取る
         start_str = request.form.get("start_time")
         end_str = request.form.get("end_time")
         pos_id = request.form.get("position_id")
         count = int(request.form.get("required_count"))
         
-        # 時間計算の準備
         fmt = "%H:%M"
         start_dt = datetime.strptime(start_str, fmt)
         end_dt = datetime.strptime(end_str, fmt)
         
-        # 日付またぎ対応（例: 23:00〜01:00）
         if end_dt <= start_dt:
             end_dt += timedelta(days=1)
             
-        # ----------------------------------------
-        # 指定された時間を「15分刻み」でループして保存
-        # ----------------------------------------
         current = start_dt
         while current < end_dt:
             time_val = current.strftime(fmt)
             
-            # 1. その時間の、その役割の古い設定があれば消す（上書きのため）
             cursor.execute("""
                 DELETE FROM shift_demand 
                 WHERE time_slot = %s AND position_id = %s
             """, (time_val, pos_id))
             
-            # 2. 新しい人数で登録（0人の場合は登録しない＝削除のみ）
             if count > 0:
                 cursor.execute("""
                     INSERT INTO shift_demand (time_slot, position_id, required_count)
@@ -754,9 +746,9 @@ def add_demand():
         flash("保存に失敗しました", "danger")
     finally:
         conn.close()
-        
-    return redirect(url_for('makeshift.settings'))
-
+    
+    # ★修正: ページ内の位置を保持するためにフラグメントを追加
+    return redirect(url_for('makeshift.settings') + '#demand-section')
 # ==========================================
 # 4. 需要をリセット（全削除）する処理
 # ==========================================
