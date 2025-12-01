@@ -159,20 +159,33 @@
             color: #ccc;
         }
 
-        /* 削除ボタン */
-        .btn-delete {
+        /* 削除・編集ボタン */
+        .btn-delete, .btn-edit {
             padding: 8px 16px;
-            background: #dc3545;
             color: #fff;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s;
+            margin-right: 5px;
+        }
+
+        .btn-delete {
+            background: #dc3545;
         }
 
         .btn-delete:hover {
             background: #c82333;
+            transform: scale(1.05);
+        }
+
+        .btn-edit {
+            background: #007bff;
+        }
+
+        .btn-edit:hover {
+            background: #0056b3;
             transform: scale(1.05);
         }
 
@@ -271,6 +284,7 @@
                             <td>{{ account.store_name or '未設定' }}</td>
                             <td>{{ account.role }}</td>
                             <td>
+                                <a href="{{ url_for('insert.edit', id=account.id) }}" class="btn-edit">編集</a>
                                 <form method="POST" action="{{ url_for('insert.delete', id=account.id) }}" style="display:inline;" onsubmit="return confirm('本当に削除しますか?');">
                                     <button type="submit" class="btn-delete">削除</button>
                                 </form>
