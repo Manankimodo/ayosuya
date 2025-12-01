@@ -8,13 +8,6 @@
 </head>
 <body>
   <h1 id="monthYear">店長の希望申請</h1>
-  
-  <!-- 🍔 ハンバーガーボタン -->
-  <div class="hamburger" id="hamburger">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
 
   <!-- 月切り替え -->
   <div class="month-switch">
@@ -22,17 +15,25 @@
     <button id="nextMonth">次の月 →</button>
   </div>
 
-  <!-- メニュー -->
-  <nav class="menu" id="menu">
-    <ul>
-        <li><a href="{{ url_for('calendar.admin') }}">シフト管理</a></li>
-        <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
-        <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
-        <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
-        <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
-        <li><a href="{{ url_for('makeshift.generate_shift') }}">シフト作成</a></li>
-    </ul>
-  </nav>
+    <!-- 🍔 ハンバーガーボタン -->
+    <!-- ハンバーガーメニュー -->
+    <div class="menu-icon" id="menuIcon">☰</div>
+    
+    <!-- サイドメニュー -->
+    <div class="side-menu" id="sideMenu">
+        <div class="close-btn" id="closeBtn">×</div>
+        <h3>メニュー</h3>
+        <a href="/shift/manage">❓ FAQ管理画面</a>
+        <a href="/insert/">👥 従業員登録</a>
+        <a href="/makeshift/admin">📝 シフト作成</a>
+        <a href="/makeshift/settings">⚙️ 設定</a>
+        <a href="/login/logout">🚪 ログアウト</a>
+        <a href="/calendar/manager_help_request">👨 店長の希望申請</a>
+    </div>
+    
+    <!-- オーバーレイ -->
+    <div class="overlay" id="overlay"></div>
+
 
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
