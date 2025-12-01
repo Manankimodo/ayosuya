@@ -141,6 +141,81 @@ def insert():
 
 
 # ===============================
+# 🔴 編集機能
+# ===============================
+@insert_bp.route("/edit/<int:id>", methods=["GET", "POST"])
+def edit(id):
+    # 🔴 認証チェック
+    if session.get("role") != "manager":
+        flash("アクセス権限がありません", "danger")
+        return redirect(url_for("login.login"))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # 店長の店舗IDを取得
+        user_id = session.get("user_id")
+        cursor.execute("SELECT store_id FROM account WHERE id = %s", (user_id,))
+        manager_info = cursor.fetchone()
+        
+        if not manager_info:
+            flash("権限エラー", "danger")
+            return redirect(url_for("insert.insert"))
+        
+        store_id = manager_info["store_id"]
+        
+        if request.method == "POST":
+            # フォームから新しい名前を取得
+            new_name = request.form.get("name", "").strip()
+            
+            if not new_name:
+                flash("名前を入力してください", "danger")
+                return redirect(url_for("insert.edit", id=id))
+            
+            # 同じ店舗の従業員のみ更新可能
+            cursor.execute("""
+                UPDATE account 
+                SET name = %s
+                WHERE id = %s AND store_id = %s AND role = 'staff'
+            """, (new_name, id, store_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                flash("✏️ 従業員情報を更新しました！", "success")
+            else:
+                flash("更新対象が見つかりませんでした", "warning")
+            
+            return redirect(url_for("insert.insert"))
+        
+        # GET: 編集対象の従業員情報を取得
+        cursor.execute("""
+            SELECT a.id, a.login_id, a.name, a.role, s.store_code
+            FROM account a
+            LEFT JOIN store s ON a.store_id = s.id
+            WHERE a.id = %s AND a.store_id = %s AND a.role = 'staff'
+        """, (id, store_id))
+        
+        account = cursor.fetchone()
+        
+        if not account:
+            flash("編集対象が見つかりませんでした", "danger")
+            return redirect(url_for("insert.insert"))
+        
+        account['store_name'] = account.get('store_code') or '未設定'
+        
+        return render_template("accountedit.html", account=account)
+        
+    except Exception as e:
+        print(f"編集エラー: {e}")
+        flash("編集エラーが発生しました", "danger")
+        return redirect(url_for("insert.insert"))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ===============================
 # 🔴 削除機能
 # ===============================
 @insert_bp.route("/delete/<int:id>", methods=["POST"])
