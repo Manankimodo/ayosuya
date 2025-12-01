@@ -1,249 +1,10 @@
-<!-- ========================================
-     register_line_id_qr_webhook.html
-     Webhook対応版のQRコード表示画面
-     ======================================== -->
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>LINE ID 登録 | ShiftForm</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }
-
-    .container {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-      padding: 40px;
-      max-width: 600px;
-      width: 100%;
-    }
-
-    h1 {
-      color: #333;
-      margin-bottom: 10px;
-      font-size: 28px;
-      text-align: center;
-    }
-
-    .subtitle {
-      color: #666;
-      font-size: 14px;
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    .content {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      margin-bottom: 30px;
-    }
-
-    @media (max-width: 600px) {
-      .content {
-        grid-template-columns: 1fr;
-        gap: 20px;
-      }
-    }
-
-    .qr-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .qr-section h2 {
-      font-size: 16px;
-      color: #333;
-      margin-bottom: 15px;
-      text-align: center;
-    }
-
-    .qr-code {
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      padding: 10px;
-      background: white;
-    }
-
-    .qr-code img {
-      width: 200px;
-      height: 200px;
-      display: block;
-    }
-
-    .qr-instructions {
-      font-size: 12px;
-      color: #999;
-      text-align: center;
-      margin-top: 15px;
-      line-height: 1.6;
-    }
-
-    .divider {
-      text-align: center;
-      color: #ccc;
-      font-size: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    @media (max-width: 600px) {
-      .divider {
-        display: none;
-      }
-    }
-
-    .form-section {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-
-    .form-section h2 {
-      font-size: 16px;
-      color: #333;
-      margin-bottom: 20px;
-    }
-
-    .status-box {
-      background: #f0f0f0;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-
-    .status-icon {
-      font-size: 32px;
-      margin-bottom: 10px;
-    }
-
-    .status-text {
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-
-    .status-text.waiting {
-      color: #667eea;
-      font-weight: bold;
-    }
-
-    .status-text.registered {
-      color: #28a745;
-      font-weight: bold;
-    }
-
-    button {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: transform 0.2s;
-      margin-bottom: 10px;
-    }
-
-    button:hover:not(:disabled) {
-      transform: translateY(-2px);
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-secondary {
-      background: #ccc;
-    }
-
-    .alert {
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
-
-    .alert-success {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-
-    .alert-error {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-
-    .alert-info {
-      background-color: #d1ecf1;
-      color: #0c5460;
-      border: 1px solid #bee5eb;
-    }
-
-    .loading {
-      display: none;
-      text-align: center;
-      color: #667eea;
-    }
-
-    .spinner {
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #667eea;
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      animation: spin 1s linear infinite;
-      display: inline-block;
-      margin-right: 10px;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    .skip-link {
-      text-align: center;
-      margin-top: 20px;
-    }
-
-    .skip-link a {
-      color: #999;
-      text-decoration: none;
-      font-size: 14px;
-    }
-
-    .skip-link a:hover {
-      color: #666;
-      text-decoration: underline;
-    }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register_line_id.css') }}">
 </head>
 <body>
   <div class="container">
@@ -346,8 +107,7 @@
     }
 
     function startPolling() {
-      // 定期的に登録状況を確認（30秒ごと、最大10分）
-      const maxAttempts = 20; // 10分 / 30秒 = 20回
+      const maxAttempts = 20;
       let attempts = 0;
 
       pollInterval = setInterval(() => {
@@ -361,9 +121,8 @@
           return;
         }
 
-        // 登録完了をチェック
         checkRegistrationStatus();
-      }, 30000); // 30秒ごと
+      }, 30000);
     }
 
     async function checkRegistrationStatus() {
