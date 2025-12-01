@@ -125,14 +125,6 @@ document.addEventListener("DOMContentLoaded", function() {
     renderCalendar();
 });
 
-// ハンバーガーメニュー
-const hamburger = document.getElementById("hamburger");
-const menu = document.getElementById("menu");
-hamburger.addEventListener("click", () => {
-    hamburger.classList.toggle("active");
-    menu.classList.toggle("open");
-});
-
 const logoutLink = document.getElementById("logout-link");
 
 if (logoutLink) { // 要素が存在することを確認
@@ -152,11 +144,30 @@ if (logoutLink) { // 要素が存在することを確認
         }
     });
 }
-// モーダル閉じる処理
-const modal = document.getElementById("shift-modal");
-const closeBtn = document.getElementById("modal-close");
+// ハンバーガーメニューの制御
+const menuIcon = document.getElementById('menuIcon');
+const menuCloseBtn = document.getElementById('closeBtn'); // 名前を変更
+const sideMenu = document.getElementById('sideMenu');
+const overlay = document.getElementById('overlay');
 
-closeBtn.addEventListener("click", () => modal.style.display = "none");
-window.addEventListener("click", (e) => {
-    if (e.target === modal) modal.style.display = "none";
-});
+if (menuIcon && menuCloseBtn && sideMenu && overlay) {
+    // メニューを開く
+    menuIcon.addEventListener('click', function() {
+        console.log('メニューアイコンクリック'); // デバッグ用
+        sideMenu.classList.add('active');
+        overlay.classList.add('active');
+    });
+
+    // メニューを閉じる
+    menuCloseBtn.addEventListener('click', function() {
+        console.log('閉じるボタンクリック'); // デバッグ用
+        sideMenu.classList.remove('active');
+        overlay.classList.remove('active');
+    });
+
+    // オーバーレイをクリックで閉じる
+    overlay.addEventListener('click', function() {
+        sideMenu.classList.remove('active');
+        overlay.classList.remove('active');
+    });
+}

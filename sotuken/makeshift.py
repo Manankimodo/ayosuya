@@ -209,7 +209,6 @@ def get_day_details(date_str):
 # === シフト遷移 ===
 @makeshift_bp.route("/generate")
 def generate_shift():
-    print("🧮 シフト自動作成画面に遷移しました！")
     return redirect(url_for('makeshift.show_admin_shift'))
 
 
@@ -668,19 +667,20 @@ def settings():
         
         # 3. 需要リスト（表示用）
         cursor.execute("""
-            SELECT d.time_slot, d.required_count, p.name as position_name
+            SELECT d.time_slot, d.position_id, d.required_count, p.name as position_name
             FROM shift_demand d
             LEFT JOIN positions p ON d.position_id = p.id
             ORDER BY d.time_slot, d.position_id
         """)
         raw_demands = cursor.fetchall()
-        
+
         formatted_demands = []
         for r in raw_demands:
-            ts_str = safe_time_format(r['time_slot'])  # ★ここも修正
+            ts_str = safe_time_format(r['time_slot'])
             if r['required_count'] > 0:
                 formatted_demands.append({
                     'time_slot': ts_str,
+                    'position_id': r['position_id'],  # ★これを追加
                     'position_name': r['position_name'] or "不明",
                     'required_count': r['required_count']
                 })
@@ -700,7 +700,7 @@ def settings():
 # ==========================================
 # 3. 需要（ピークタイム）を追加する処理 (修正版)
 # ==========================================
-@makeshift_bp.route("/settings/demand/add", methods=["POST"]) # URLは変えずに中身を修正
+@makeshift_bp.route("/settings/demand/add", methods=["POST"])
 def add_demand():
     from datetime import datetime, timedelta
     
@@ -708,35 +708,27 @@ def add_demand():
     cursor = conn.cursor()
     
     try:
-        # フォームからデータを受け取る
         start_str = request.form.get("start_time")
         end_str = request.form.get("end_time")
         pos_id = request.form.get("position_id")
         count = int(request.form.get("required_count"))
         
-        # 時間計算の準備
         fmt = "%H:%M"
         start_dt = datetime.strptime(start_str, fmt)
         end_dt = datetime.strptime(end_str, fmt)
         
-        # 日付またぎ対応（例: 23:00〜01:00）
         if end_dt <= start_dt:
             end_dt += timedelta(days=1)
             
-        # ----------------------------------------
-        # 指定された時間を「15分刻み」でループして保存
-        # ----------------------------------------
         current = start_dt
         while current < end_dt:
             time_val = current.strftime(fmt)
             
-            # 1. その時間の、その役割の古い設定があれば消す（上書きのため）
             cursor.execute("""
                 DELETE FROM shift_demand 
                 WHERE time_slot = %s AND position_id = %s
             """, (time_val, pos_id))
             
-            # 2. 新しい人数で登録（0人の場合は登録しない＝削除のみ）
             if count > 0:
                 cursor.execute("""
                     INSERT INTO shift_demand (time_slot, position_id, required_count)
@@ -754,9 +746,9 @@ def add_demand():
         flash("保存に失敗しました", "danger")
     finally:
         conn.close()
-        
-    return redirect(url_for('makeshift.settings'))
-
+    
+    # ★修正: ページ内の位置を保持するためにフラグメントを追加
+    return redirect(url_for('makeshift.settings') + '#demand-section')
 # ==========================================
 # 4. 需要をリセット（全削除）する処理
 # ==========================================
@@ -777,67 +769,33 @@ def reset_demand():
 # ==========================================
 # 4.5 需要をリセット（全削除）する処理
 # ==========================================
+# ==========================================
+# 個別の需要設定を削除する処理
+# ==========================================
 @makeshift_bp.route("/settings/demand/delete", methods=["POST"])
 def delete_demand():
-    # 1. データ取得
-    time_slot = request.form.get('time_slot') # 例: "09:00"
-    position_id_str = request.form.get('position_id')
-
-    if not time_slot or not position_id_str:
-        flash("データが不足しています", "warning")
-        return redirect(url_for('makeshift.settings'))
-
     conn = get_db_connection()
     cursor = conn.cursor()
-
+    
     try:
-        position_id = int(position_id_str)
-
-        # 2. 時間の形式ゆらぎ対策
-        # 送られてきたのが "09:00" なら "09:00:00" も削除候補にする
-        if len(time_slot) == 5:  # "HH:MM" の形式の場合
-            time_slot_with_seconds = time_slot + ":00"
-        else:
-            time_slot_with_seconds = time_slot
-
-        # デバッグ表示（ターミナルで確認用）
-        print(f"DEBUG: 削除試行 -> time='{time_slot}' or '{time_slot_with_seconds}', id={position_id}")
-
-        # 3. SQL実行（ORを使って、秒があってもなくてもヒットさせる）
-        # データベース内の time_slot が "09:00" でも "09:00:00" でも削除します
-        query = """
+        time_slot = request.form.get("time_slot")
+        position_id = request.form.get("position_id")
+        
+        cursor.execute("""
             DELETE FROM shift_demand 
-            WHERE (time_slot = ? OR time_slot = ?) 
-            AND position_id = ?
-        """
+            WHERE time_slot = %s AND position_id = %s
+        """, (time_slot, position_id))
         
-        # パラメータは順序通りに: (短い時間, 秒付き時間, ID)
-        cursor.execute(query, (time_slot, time_slot_with_seconds, position_id))
-        
-        deleted_count = cursor.rowcount
         conn.commit()
-
-        if deleted_count > 0:
-            print(f"DEBUG: {deleted_count} 件削除成功！")
-            flash("設定を削除しました", "success")
-        else:
-            # それでも消えない場合は、DBの中身をターミナルに全表示して確認する
-            print("DEBUG: 削除失敗。現在のDB内のデータを全表示します↓")
-            cursor.execute("SELECT * FROM shift_demand")
-            rows = cursor.fetchall()
-            for row in rows:
-                # row が辞書型かタプル型か環境によるため両対応で表示
-                print(list(row) if row else "空データ")
-            
-            flash("削除対象が見つかりませんでした。コンソールログを確認してください。", "warning")
-
+        flash(f"✅ {time_slot} の設定を削除しました", "success")
+        
     except Exception as e:
         conn.rollback()
         print(f"Delete Error: {e}")
-        flash("エラーが発生しました", "danger")
+        flash("削除に失敗しました", "danger")
     finally:
         conn.close()
-
+        
     return redirect(url_for('makeshift.settings'))
 # ==========================================
 # 5. 確定シフト取得API
@@ -870,38 +828,113 @@ def get_all_confirmed_shifts():
 
 @makeshift_bp.route("/api/shifts/user/<int:user_id>")
 def get_user_shifts(user_id):
+    """ユーザーのシフト情報を取得するAPI"""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
-    user_data = cursor.fetchone()
-    if not user_data:
-        conn.close()
-        return jsonify({"error": "User not found"}), 404
+    
+    try:
+        # 1. ユーザー情報を取得
+        cursor.execute("SELECT name FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
         
-    cursor.execute("""
-        SELECT date, start_time, end_time, type
-        FROM shift_table
-        WHERE user_id = %s
-        ORDER BY date, start_time
-    """, (user_id,))
-    user_shifts = cursor.fetchall()
-    cursor.close()
-    conn.close()
+        print(f"🔍 DEBUG: user_id={user_id}, user_data={user_data}")
+        
+        if not user_data:
+            conn.close()
+            print(f"❌ ユーザーID {user_id} が見つかりません")
+            return jsonify({"error": "User not found"}), 404
+        
+        # 2. shift_tableから該当ユーザーのシフトを取得
+        # ★重要: 負のuser_idは除外
+        cursor.execute("""
+            SELECT user_id, date, start_time, end_time, type
+            FROM shift_table
+            WHERE user_id = %s AND user_id > 0
+            ORDER BY date, start_time
+        """, (user_id,))
+        user_shifts = cursor.fetchall()
+        
+        print(f"📊 DEBUG: 取得したシフト件数={len(user_shifts)}")
+        print(f"📋 DEBUG: シフトデータ: {user_shifts}")
+        
+        # 3. 時刻をフォーマット
+        formatted_shifts = []
+        for shift in user_shifts:
+            formatted_shift = {
+                "user_id": shift["user_id"],
+                "user_name": user_data["name"],  # ★追加: ユーザー名を含める
+                "date": shift["date"].strftime("%Y-%m-%d") if hasattr(shift["date"], 'strftime') else str(shift["date"]),
+                "start_time": format_time(shift["start_time"]),
+                "end_time": format_time(shift["end_time"]),
+                "type": shift["type"]
+            }
+            formatted_shifts.append(formatted_shift)
+            print(f"✅ フォーマット済みシフト: {formatted_shift}")
+        
+        response = {
+            "user_id": user_id,
+            "user_name": user_data["name"],
+            "shifts": formatted_shifts
+        }
+        
+        print(f"📤 APIレスポンス: {response}")
+        return jsonify(response)
+        
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
-    formatted_shifts = []
-    for shift in user_shifts:
-        formatted_shifts.append({
-            "date": shift["date"].strftime("%Y-%m-%d"),
-            "start_time": format_time(shift["start_time"]),
-            "end_time": format_time(shift["end_time"]),
-            "type": shift["type"]
+
+# ★新規追加: デバッグ用エンドポイント
+@makeshift_bp.route("/api/debug/shifts_all")
+def debug_all_shifts():
+    """データベースに保存されている全てのシフトを確認するデバッグAPI"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("""
+            SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type
+            FROM shift_table s
+            LEFT JOIN account a ON s.user_id = a.ID
+            ORDER BY s.user_id, s.date, s.start_time
+            LIMIT 100
+        """)
+        all_shifts = cursor.fetchall()
+        
+        print(f"🔍 DEBUG: DB内の全シフト件数={len(all_shifts)}")
+        for shift in all_shifts:
+            print(f"  {shift}")
+        
+        # フォーマット
+        formatted = []
+        for shift in all_shifts:
+            formatted.append({
+                "user_id": shift["user_id"],
+                "user_name": shift["user_name"],
+                "date": shift["date"].strftime("%Y-%m-%d") if hasattr(shift["date"], 'strftime') else str(shift["date"]),
+                "start_time": format_time(shift["start_time"]),
+                "end_time": format_time(shift["end_time"]),
+                "type": shift["type"]
+            })
+        
+        return jsonify({
+            "total_count": len(all_shifts),
+            "shifts": formatted
         })
-    return jsonify({
-        "user_id": user_id,
-        "user_name": user_data["name"],
-        "shifts": formatted_shifts
-    })
-
+        
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 # === 従業員向けシフト確認画面 ===
 @makeshift_bp.route("/user_shift_view/<int:user_id>")
 def show_user_shift_view(user_id):

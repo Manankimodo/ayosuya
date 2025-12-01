@@ -1,13 +1,25 @@
-from flask import Blueprint, render_template, jsonify, request, redirect, url_for
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for, session
 import mysql.connector
 from line_notifier import send_help_request_to_staff
 from datetime import datetime, timedelta, time as time_cls, date as date_cls
-from ortools.sat.python import cp_model
-import random, traceback
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import os
+import traceback
 
 # ブループリントの定義
 line_bp = Blueprint('line', __name__, url_prefix='/line')
 
+# LINE Bot 設定
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
+
+if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_CHANNEL_SECRET:
+    raise ValueError("環境変数 'LINE_ACCESS_TOKEN' または 'LINE_CHANNEL_SECRET' が設定されていません。")
+
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+webhook_handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # === ユーティリティ関数 ===
 
@@ -21,26 +33,21 @@ def get_db_connection():
     )
 
 # 時刻フォーマット変換
-# === ユーティリティ関数 (修正案) ===
-# ... (他のコードはそのまま) ...
-# 時刻フォーマット変換
 def format_time(value):
     """MySQL TIME型 (timedelta, time, or str) → HH:MM形式に変換"""
     if not value:
         return None
     if isinstance(value, str):
         return value[:5]
-    elif hasattr(value, "seconds"): # timedelta の処理
+    elif hasattr(value, "seconds"):
         total_seconds = value.seconds
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
-    # ✅ 追加: datetime.time オブジェクトの場合の処理
     elif isinstance(value, time_cls):
         return value.strftime("%H:%M")
     
     return None
-# ... (他のコードはそのまま) ...
 
 # datetime.timeオブジェクトへの変換を保証
 def ensure_time_obj(v):
@@ -75,18 +82,213 @@ def to_time_str(v):
     else:
         return "00:00:00"
 
-from flask import Blueprint, request, jsonify, render_template
+
+# ========================================
+# 🔗 Webhook エンドポイント
+# ========================================
+
+@line_bp.route("/webhook", methods=['POST'])
+def webhook():
+    """
+    LINE Messaging API からのイベント受信
+    """
+    signature = request.headers.get('X-Line-Signature', '')
+    body = request.get_data(as_text=True)
+
+    try:
+        # 署名検証
+        webhook_handler.handle(body, signature)
+    except InvalidSignatureError:
+        print("❌ Invalid signature. Please check your channel access token/channel secret.")
+        return jsonify({"status": "error"}), 403
+    except Exception as e:
+        print(f"❌ Webhook Error: {e}")
+        return jsonify({"status": "error"}), 500
+
+    return jsonify({"status": "ok"}), 200
+
+
+# ========================================
+# 📨 メッセージ受信イベントハンドラ
+# ========================================
+
+@webhook_handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    """
+    ユーザーからのテキストメッセージを受信
+    LINE User ID を取得して account テーブルに登録
+    """
+    try:
+        line_user_id = event.source.user_id
+        user_message = event.message.text
+        
+        print(f"📨 受信メッセージ - User ID: {line_user_id}, Message: {user_message}")
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # 1. 一時登録テーブルから account_id を取得
+            cursor.execute("""
+                SELECT account_id FROM line_id_registration_temp
+                WHERE line_user_id IS NULL
+                AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+                ORDER BY created_at DESC
+                LIMIT 1
+            """)
+            temp_record = cursor.fetchone()
+
+            if temp_record:
+                account_id = temp_record['account_id']
+
+                # 2. account テーブルに LINE User ID を登録
+                cursor.execute("""
+                    UPDATE account
+                    SET line_id = %s
+                    WHERE id = %s
+                """, (line_user_id, account_id))
+
+                # 3. 一時テーブルのレコードを削除
+                cursor.execute("""
+                    DELETE FROM line_id_registration_temp
+                    WHERE account_id = %s
+                """, (account_id,))
+
+                conn.commit()
+
+                print(f"✅ LINE User ID 登録成功: Account ID {account_id} → {line_user_id}")
+
+                # 4. ユーザーに確認メッセージを送信
+                line_bot_api.push_message(
+                    to=line_user_id,
+                    messages=TextSendMessage(text="✅ LINE ID の登録が完了しました！\n\nこれからヘルプ募集の通知を受け取れます。")
+                )
+
+            else:
+                print(f"⚠️ 一時登録レコードが見つかりません")
+                
+                # ユーザーに通知
+                line_bot_api.push_message(
+                    to=line_user_id,
+                    messages=TextSendMessage(text="申し訳ありません。登録期限が切れてしまいました。\nもう一度「LINE ID登録」から始めてください。")
+                )
+
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ LINE ID 登録エラー: {e}")
+            traceback.print_exc()
+
+            # エラーメッセージをユーザーに送信
+            line_bot_api.push_message(
+                to=line_user_id,
+                messages=TextSendMessage(text="エラーが発生しました。管理者にお問い合わせください。")
+            )
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Handle Message Error: {e}")
+        traceback.print_exc()
+
+
+# ========================================
+# 🆕 LINE ID 登録開始ルート（Flask）
+# ========================================
+
+@line_bp.route("/start_line_id_registration", methods=['POST'])
+def start_line_id_registration():
+    """
+    スタッフが「LINE ID登録開始」ボタンをクリックした時のルート
+    セッションの account_id を一時テーブルに保存
+    """
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "ログインしてください"}), 401
+
+    account_id = session["user_id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 既存レコードを削除（同じアカウントが複数回クリックした場合）
+        cursor.execute("""
+            DELETE FROM line_id_registration_temp
+            WHERE account_id = %s
+        """, (account_id,))
+
+        # 新しいレコードを作成
+        cursor.execute("""
+            INSERT INTO line_id_registration_temp (account_id, created_at)
+            VALUES (%s, NOW())
+        """, (account_id,))
+
+        conn.commit()
+
+        print(f"✅ LINE ID登録開始: Account ID {account_id}")
+
+        return jsonify({
+            "status": "success",
+            "message": "登録を開始しました。公式LINEに何かメッセージを送ってください。"
+        }), 200
+
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error in start_line_id_registration: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "エラーが発生しました"}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ========================================
+# 🔍 LINE ID 登録状況確認ルート
+# ========================================
+
+@line_bp.route("/check_line_id_registration", methods=['GET'])
+def check_line_id_registration():
+    """
+    登録完了をチェックするAPI（画面のポーリング用）
+    """
+    if "user_id" not in session:
+        return jsonify({"status": "error", "registered": False}), 401
+    
+    account_id = session["user_id"]
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("""
+            SELECT line_id FROM account WHERE id = %s AND line_id IS NOT NULL
+        """, (account_id,))
+        result = cursor.fetchone()
+        
+        if result and result['line_id']:
+            return jsonify({"status": "success", "registered": True}), 200
+        else:
+            return jsonify({"status": "pending", "registered": False}), 200
+    
+    except Exception as e:
+        print(f"❌ Error checking registration: {e}")
+        return jsonify({"status": "error", "registered": False}), 500
+    
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # ==========================================
 # 🚑 ヘルプ募集機能 (ワンタップ配信システム)
 # ==========================================
 
-@line_bp.route("/line/api/help/create", methods=["POST"])
+@line_bp.route("/api/help/create", methods=["POST"])
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
-    改善点: 募集作成時に help_requests テーブルと shift_table の両方に登録
     """
     data = request.json
     target_date = data.get("date")
@@ -97,7 +299,6 @@ def create_help_request():
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # トランザクション開始
         conn.start_transaction()
 
         # 1. 募集データをDBに登録
@@ -107,16 +308,14 @@ def create_help_request():
         """, (target_date, start_time_str, end_time_str))
         request_id = cursor.lastrowid
         
-        # 1-2. 📌 【新規追加】募集を shift_table に「pending」ステータスで登録
-        # (まだ誰も応募していない状態)
-        # ※ user_id は NULL として、ヘルプ募集中であることを示す
+        # 2. 募集を shift_table に「pending」ステータスで登録
         cursor.execute("""
             INSERT INTO shift_table (user_id, date, start_time, end_time, type)
             VALUES (NULL, %s, %s, %s, 'help_pending')
         """, (target_date, start_time_str, end_time_str))
         help_shift_id = cursor.lastrowid
         
-        # 2. 【ステップA】「その時間にすでにシフトが入っている人」を除外
+        # 3. 「その時間にすでにシフトが入っている人」を除外
         cursor.execute("""
             SELECT DISTINCT user_id 
             FROM shift_table
@@ -127,11 +326,11 @@ def create_help_request():
         
         busy_users = [str(row['user_id']) for row in cursor.fetchall()]
 
-        # 3. 【ステップB】全ユーザーを抽出
+        # 4. 全ユーザーを抽出
         cursor.execute("SELECT ID, name, line_id FROM account")
         all_staff = cursor.fetchall()
         
-        # 4. 【ステップC】通知対象をフィルタリング
+        # 5. 通知対象をフィルタリング
         eligible_staff = []
         for staff in all_staff:
             staff_id_str = str(staff['ID'])
@@ -142,17 +341,9 @@ def create_help_request():
             if staff.get('line_id'):
                 eligible_staff.append(staff)
 
-        # デバッグログ出力
         print(f"--- 通知対象スタッフ数: {len(eligible_staff)}人 ---")
-        print(f"--- 1. 募集時間と重複しているスタッフ (busy_users): {busy_users}")
-        print("--- 2. 全スタッフとLINE IDの有無 ---")
-        for staff in all_staff:
-            staff_id_str = str(staff['ID'])
-            status = "対象外(忙しい)" if staff_id_str in busy_users else ("通知対象" if staff.get('line_id') else "対象外(LINE IDなし)")
-            print(f"ID: {staff['ID']}, Name: {staff['name']}, LINE ID: {staff.get('line_id')}, Status: {status}")
-        print("-------------------------------------------------")
 
-        # 5. ターゲットのスタッフにLINE通知を送信
+        # 6. ターゲットのスタッフにLINE通知を送信
         target_count = 0
         
         current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev"
@@ -174,7 +365,6 @@ def create_help_request():
             )
             target_count += 1
         
-        # トランザクションコミット
         conn.commit()
 
         return jsonify({
@@ -187,7 +377,6 @@ def create_help_request():
     except Exception as e:
         conn.rollback()
         print("--- ❌ CRITICAL ERROR IN create_help_request ---")
-        import traceback
         traceback.print_exc()
         return jsonify({"error": "サーバー内部エラー"}), 500
     finally:
@@ -199,8 +388,6 @@ def create_help_request():
 def accept_help_request():
     """
     スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
-    改善点: help_pending のシフトを確定シフトに更新
-    POSTデータ: { "request_id": 1, "user_id": 5 }
     """
     data = request.json
     req_id = data.get("request_id")
@@ -227,8 +414,7 @@ def accept_help_request():
         cursor.execute("SELECT date, start_time, end_time FROM help_requests WHERE id = %s", (req_id,))
         req_data = cursor.fetchone()
 
-        # 3. 📌 【改善】shift_table の help_pending を確定シフトに更新
-        # (user_id を NULL → 応募ユーザーの ID に変更、type を 'help_pending' → 'help' に変更)
+        # 3. shift_table の help_pending を確定シフトに更新
         cursor.execute("""
             UPDATE shift_table
             SET user_id = %s, type = 'help'
@@ -240,15 +426,13 @@ def accept_help_request():
             LIMIT 1
         """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
 
-        # もし UPDATE で更新されなかった場合は、新規 INSERT（フォールバック）
         if cursor.rowcount == 0:
             cursor.execute("""
                 INSERT INTO shift_table (user_id, date, start_time, end_time, type)
                 VALUES (%s, %s, %s, %s, 'help')
             """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
 
-        # 4. 📌 【新規】calendar テーブルに出勤情報を登録
-        # 既に登録されているかチェック（上書きしない方針）
+        # 4. calendar テーブルに出勤情報を登録
         cursor.execute("""
             SELECT ID FROM calendar 
             WHERE ID = %s AND date = %s
@@ -257,14 +441,10 @@ def accept_help_request():
         existing_calendar = cursor.fetchone()
         
         if not existing_calendar:
-            # 新規登録: work = 1（出勤）
             cursor.execute("""
                 INSERT INTO calendar (ID, date, work, start_time, end_time)
                 VALUES (%s, %s, 1, %s, %s)
             """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
-        else:
-            # 既に登録されている場合はスキップ
-            print(f"⚠️ ユーザー {user_id} の {req_data['date']} は既に calendar に登録済みのため、スキップしました")
 
         conn.commit()
 
@@ -276,17 +456,18 @@ def accept_help_request():
     except Exception as e:
         conn.rollback()
         print("--- ❌ CRITICAL ERROR IN accept_help_request ---")
-        import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
+
 # ==========================================
 # 🙋‍♂️ ヘルプ応募画面の表示
 # ==========================================
-@line_bp.route("/help/respond/<int:request_id>", methods=["GET"]) # 👈 /makeshift を削除済み
+
+@line_bp.route("/help/respond/<int:request_id>", methods=["GET"])
 def help_respond_page(request_id):
     """
     スタッフ用: ヘルプ募集の詳細を表示し、応募ボタンを提供する画面
@@ -294,7 +475,6 @@ def help_respond_page(request_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # 1. 募集情報を取得
     try:
         cursor.execute("""
             SELECT * FROM help_requests WHERE id = %s
@@ -304,21 +484,15 @@ def help_respond_page(request_id):
         if not request_data:
             return "募集が見つかりませんでした。", 404
         
-        # 🚨 仮のユーザーIDを設定 (LINE連携実装後に置き換えること)
-        # 🚨 注意: 本番環境では、ここでLINE IDなどからユーザーIDを特定する必要があります
-        # 例: user_id = get_user_id_from_line_session()
-        current_staff_id = 1002 # 仮のID。実際にはセッションや認証から取得
+        current_staff_id = 1002
 
-        # 2. 画面をレンダリングして返す
-        # 変数名を 'req' としてテンプレートに渡す
         return render_template(
             "help_loading.html", 
             req=request_data, 
-            staff_id_for_form=current_staff_id # フォームに渡すスタッフID
+            staff_id_for_form=current_staff_id
         )
 
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return jsonify({"error": "サーバー内部エラー"}), 500
     finally:
