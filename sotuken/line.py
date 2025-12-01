@@ -484,7 +484,7 @@ def help_respond_page(request_id):
         if not request_data:
             return "募集が見つかりませんでした。", 404
         
-        current_staff_id = 1002
+        # current_staff_id = 1002
 
         return render_template(
             "help_loading.html", 
