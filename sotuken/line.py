@@ -484,7 +484,12 @@ def help_respond_page(request_id):
         if not request_data:
             return "募集が見つかりませんでした。", 404
         
-        # current_staff_id = 1002
+        # セッションからuser_idを取得
+        if "user_id" in session:
+            current_staff_id = session["user_id"]
+        else:
+            # セッションがない場合はエラー
+            return "ログインしてください", 401
 
         return render_template(
             "help_loading.html", 
