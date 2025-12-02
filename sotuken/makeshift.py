@@ -316,13 +316,23 @@ def auto_calendar():
             if uid not in user_skill_ids: user_skill_ids[uid] = []
             user_skill_ids[uid].append(pid)
             
-        demand_map = {}
-        cursor.execute("SELECT time_slot, position_id, required_count FROM shift_demand")
+                # 修正後
+        # ★★★ 平日と土日祝の需要データを分けて取得 ★★★
+        demand_weekday = {}
+        demand_weekend = {}
+
+        cursor.execute("SELECT time_slot, position_id, required_count, day_type FROM shift_demand")
         for row in cursor.fetchall():
             t_str = safe_to_time(row['time_slot']).strftime("%H:%M")
             pid = str(row['position_id'])
-            if t_str not in demand_map: demand_map[t_str] = {}
-            demand_map[t_str][pid] = row['required_count']
+            day_type = row.get('day_type', 'weekday')
+            
+            if day_type == 'weekday':
+                if t_str not in demand_weekday: demand_weekday[t_str] = {}
+                demand_weekday[t_str][pid] = row['required_count']
+            else:  # weekend
+                if t_str not in demand_weekend: demand_weekend[t_str] = {}
+                demand_weekend[t_str][pid] = row['required_count']
 
         cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
         target_dates = [row['date'] for row in cursor.fetchall()]
@@ -338,6 +348,14 @@ def auto_calendar():
 
         for target_date_obj in target_dates:
             target_date_str = target_date_obj.strftime("%Y-%m-%d")
+            
+            # ★★★ 曜日を判定（0=月曜, 6=日曜） ★★★
+            weekday = target_date_obj.weekday()
+            is_weekend = weekday >= 5  # 土曜(5)、日曜(6)
+            
+            # ★★★ 適切な需要マップを選択 ★★★
+            demand_map = demand_weekend if is_weekend else demand_weekday
+            
             cursor.execute("SELECT ID, start_time, end_time FROM calendar WHERE date = %s AND work = 1", (target_date_str,))
             preference_rows = cursor.fetchall()
             
@@ -711,7 +729,7 @@ def settings():
     finally:
         conn.close()
 # ==========================================
-# 3. 需要（ピークタイム）を追加する処理 (修正版)
+# 3. 需要（ピークタイム）を追加する処理 (修正版: 平日/土日祝対応)
 # ==========================================
 @makeshift_bp.route("/settings/demand/add", methods=["POST"])
 def add_demand():
@@ -725,6 +743,7 @@ def add_demand():
         end_str = request.form.get("end_time")
         pos_id = request.form.get("position_id")
         count = int(request.form.get("required_count"))
+        day_type = request.form.get("day_type", "weekday")  # ★追加: weekday or weekend
         
         fmt = "%H:%M"
         start_dt = datetime.strptime(start_str, fmt)
@@ -737,21 +756,24 @@ def add_demand():
         while current < end_dt:
             time_val = current.strftime(fmt)
             
+            # ★修正: day_typeも条件に追加
             cursor.execute("""
                 DELETE FROM shift_demand 
-                WHERE time_slot = %s AND position_id = %s
-            """, (time_val, pos_id))
+                WHERE time_slot = %s AND position_id = %s AND day_type = %s
+            """, (time_val, pos_id, day_type))
             
             if count > 0:
+                # ★修正: day_typeも保存
                 cursor.execute("""
-                    INSERT INTO shift_demand (time_slot, position_id, required_count)
-                    VALUES (%s, %s, %s)
-                """, (time_val, pos_id, count))
+                    INSERT INTO shift_demand (time_slot, position_id, required_count, day_type)
+                    VALUES (%s, %s, %s, %s)
+                """, (time_val, pos_id, count, day_type))
             
             current += timedelta(minutes=15)
             
         conn.commit()
-        flash(f"✅ {start_str}〜{end_str} の設定を保存しました！", "success")
+        day_type_label = "平日" if day_type == "weekday" else "土日祝"
+        flash(f"✅ {day_type_label} {start_str}〜{end_str} の設定を保存しました！", "success")
         
     except Exception as e:
         conn.rollback()
@@ -760,7 +782,6 @@ def add_demand():
     finally:
         conn.close()
     
-    # ★修正: ページ内の位置を保持するためにフラグメントを追加
     return redirect(url_for('makeshift.settings') + '#demand-section')
 # ==========================================
 # 4. 需要をリセット（全削除）する処理
