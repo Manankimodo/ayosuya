@@ -347,7 +347,6 @@ def create_help_request():
         target_count = 0
         
         current_ngrok_url = "https://jaleesa-waxlike-wilily.ngrok-free.dev"
-        help_url = f"{current_ngrok_url}/line/help/respond/{request_id}"
         
         request_data = {
             "date": target_date,
@@ -357,6 +356,9 @@ def create_help_request():
         }
 
         for staff in eligible_staff:
+            # URLにuser_idを含める
+            help_url = f"{current_ngrok_url}/line/help/respond/{request_id}?user_id={staff['ID']}"
+            
             send_help_request_to_staff(
                 staff_line_id=staff['line_id'],
                 request_data=request_data,
@@ -484,12 +486,11 @@ def help_respond_page(request_id):
         if not request_data:
             return "募集が見つかりませんでした。", 404
         
-        # セッションからuser_idを取得
-        if "user_id" in session:
-            current_staff_id = session["user_id"]
-        else:
-            # セッションがない場合はエラー
-            return "ログインしてください", 401
+        # URLパラメータからuser_idを取得
+        current_staff_id = request.args.get('user_id')
+        
+        if not current_staff_id:
+            return "URLが無効です。LINEからのリンクを使用してください。", 400
 
         return render_template(
             "help_loading.html", 
