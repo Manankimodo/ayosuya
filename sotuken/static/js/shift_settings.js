@@ -16,3 +16,5 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('ハンバーガーメニューに必要な要素が見つかりません。');
     }
 });
+
+
