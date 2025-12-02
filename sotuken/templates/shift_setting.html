@@ -254,9 +254,30 @@
           countInput.dispatchEvent(new Event('input'));
         });
       });
+
+      // ★★★ ここから追加 ★★★
+      // ページ読み込み時にタブを復元
+      const savedTab = sessionStorage.getItem('activeTab');
+      if (savedTab === 'holiday') {
+        switchTab('holiday');
+      }
+
+      // フォーム送信時にタブを保存
+      document.querySelectorAll('form[action*="add_demand"]').forEach(form => {
+        form.addEventListener('submit', function() {
+          const dayType = this.querySelector('input[name="day_type"]').value;
+          sessionStorage.setItem('activeTab', dayType === 'holiday' ? 'holiday' : 'weekday');
+        });
+      });
+      // ★★★ ここまで追加 ★★★
     });
   </script>
+  
+</body>
+</html>
 </head>
+
+
 <body>
 
   <div class="menu-btn" id="menuBtn"><span></span><span></span><span></span></div>
@@ -434,11 +455,11 @@
           // エリアの表示・非表示
           document.getElementById('area-weekday').style.display = (type === 'weekday') ? 'block' : 'none';
           document.getElementById('area-holiday').style.display = (type === 'holiday') ? 'block' : 'none';
-  
+      
           // 説明文の切り替え
           document.getElementById('desc-weekday').style.display = (type === 'weekday') ? 'inline' : 'none';
           document.getElementById('desc-holiday').style.display = (type === 'holiday') ? 'inline' : 'none';
-  
+      
           // ボタンのアクティブ状態切り替え
           const btnW = document.getElementById('btn-weekday');
           const btnH = document.getElementById('btn-holiday');
@@ -450,8 +471,12 @@
               btnH.classList.add('active');
               btnW.classList.remove('active');
           }
+      
+          // タブの状態を保存
+          sessionStorage.setItem('activeTab', type);
       }
       </script>
+      
 
 
     <div id="area-holiday" class="demand-area" style="display:none;">
