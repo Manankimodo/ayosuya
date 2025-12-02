@@ -15,7 +15,7 @@
     <form method="POST" class="form-card">
       <div class="form-group">
         <label>ID</label>
-        <input type="text" name="name" required>
+        <input type="text" name="name" value="{{ session.get('user_id', '') }}" readonly>
       </div>
 
       <div class="form-group">

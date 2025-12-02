@@ -14,6 +14,12 @@
 
     <form method="POST" class="form-card">
       <div class="form-group">
+        <label>ID</label>
+        <div class="readonly-text">{{ session.get('user_id', '') }}</div>
+        <input type="hidden" name="name" value="{{ session.get('user_id', '') }}">
+      </div>
+
+      <div class="form-group">
         <label>希望有無</label>
         <select name="work" onchange="toggleTimeInputs()">
           <option value="1">○ 出勤可能</option>
