@@ -122,9 +122,21 @@
     .demand-area { animation: fadeIn 0.3s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     
+
+        /* タブの初期表示を制御（ちらつき防止） */
+    #area-weekday, #area-holiday {
+      display: none;
+    }
+
+    #area-weekday {
+      display: block; /* デフォルトは平日を表示 */
+}
   </style>
 
   <script>
+    // ★★★ DOMContentLoadedより前に実行（ちらつき防止） ★★★
+    const savedTab = sessionStorage.getItem('activeTab');
+
     document.addEventListener("DOMContentLoaded", function() {
       const menuBtn = document.getElementById('menuBtn');
       const sideMenu = document.getElementById('sideMenu');
@@ -135,6 +147,11 @@
                   sideMenu.classList.remove('active');
               }
           });
+      }
+
+      // ★★★ タブを復元（最優先で実行） ★★★
+      if (savedTab === 'holiday') {
+        switchTab('holiday');
       }
 
       // 時間帯最大人数の制限を各フォームに適用
@@ -255,13 +272,6 @@
         });
       });
 
-      // ★★★ ここから追加 ★★★
-      // ページ読み込み時にタブを復元
-      const savedTab = sessionStorage.getItem('activeTab');
-      if (savedTab === 'holiday') {
-        switchTab('holiday');
-      }
-
       // フォーム送信時にタブを保存
       document.querySelectorAll('form[action*="add_demand"]').forEach(form => {
         form.addEventListener('submit', function() {
@@ -269,7 +279,6 @@
           sessionStorage.setItem('activeTab', dayType === 'holiday' ? 'holiday' : 'weekday');
         });
       });
-      // ★★★ ここまで追加 ★★★
     });
   </script>
   
