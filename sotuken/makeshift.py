@@ -698,29 +698,38 @@ def settings():
         
         # 3. 需要リスト（表示用）
         cursor.execute("""
-            SELECT d.time_slot, d.position_id, d.required_count, p.name as position_name
+            SELECT d.time_slot, d.position_id, d.required_count, d.day_type, p.name as position_name
             FROM shift_demand d
             LEFT JOIN positions p ON d.position_id = p.id
-            ORDER BY d.time_slot, d.position_id
+            ORDER BY d.day_type, d.time_slot, d.position_id
         """)
         raw_demands = cursor.fetchall()
 
-        formatted_demands = []
+        # ★★★ 平日と土日祝に分ける ★★★
+        weekday_demands = []
+        holiday_demands = []
+
         for r in raw_demands:
             ts_str = safe_time_format(r['time_slot'])
             if r['required_count'] > 0:
-                formatted_demands.append({
+                demand_item = {
                     'time_slot': ts_str,
-                    'position_id': r['position_id'],  # ★これを追加
+                    'position_id': r['position_id'],
                     'position_name': r['position_name'] or "不明",
                     'required_count': r['required_count']
-                })
+                }
+                
+                day_type = r.get('day_type', 'weekday')
+                if day_type == 'holiday':
+                    holiday_demands.append(demand_item)
+                else:
+                    weekday_demands.append(demand_item)
 
         return render_template("shift_setting.html", 
             settings=settings_data, 
             positions=positions_list, 
-            demands=formatted_demands)
-
+            weekday_demands=weekday_demands,  # ★変更
+            holiday_demands=holiday_demands)   # ★追加
     except Exception as e:
         print(f"Settings Error: {e}")
         import traceback
@@ -803,9 +812,6 @@ def reset_demand():
 # ==========================================
 # 4.5 需要をリセット（全削除）する処理
 # ==========================================
-# ==========================================
-# 個別の需要設定を削除する処理
-# ==========================================
 @makeshift_bp.route("/settings/demand/delete", methods=["POST"])
 def delete_demand():
     conn = get_db_connection()
@@ -814,11 +820,12 @@ def delete_demand():
     try:
         time_slot = request.form.get("time_slot")
         position_id = request.form.get("position_id")
+        day_type = request.form.get("day_type", "weekday")  # ★追加
         
         cursor.execute("""
             DELETE FROM shift_demand 
-            WHERE time_slot = %s AND position_id = %s
-        """, (time_slot, position_id))
+            WHERE time_slot = %s AND position_id = %s AND day_type = %s
+        """, (time_slot, position_id, day_type))  # ★day_type追加
         
         conn.commit()
         flash(f"✅ {time_slot} の設定を削除しました", "success")
@@ -827,6 +834,32 @@ def delete_demand():
         conn.rollback()
         print(f"Delete Error: {e}")
         flash("削除に失敗しました", "danger")
+    finally:
+        conn.close()
+        
+    return redirect(url_for('makeshift.settings'))
+
+# ==========================================
+# 4.8曜日タイプ別の需要リセット処理（新規追加）
+# ==========================================
+@makeshift_bp.route("/settings/demand/reset_by_type", methods=["POST"])
+def reset_demand_by_type():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        day_type = request.form.get("day_type", "weekday")
+        
+        cursor.execute("DELETE FROM shift_demand WHERE day_type = %s", (day_type,))
+        conn.commit()
+        
+        type_label = "平日" if day_type == "weekday" else "土日祝"
+        flash(f"🗑 {type_label}の設定をリセットしました", "warning")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Reset By Type Error: {e}")
+        flash("リセットに失敗しました", "danger")
     finally:
         conn.close()
         
