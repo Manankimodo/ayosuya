@@ -4,6 +4,7 @@ from extensions import db
 from sqlalchemy import text as sql_text
 import random
 import string
+
 store_bp = Blueprint("store", __name__, url_prefix="/store")
 
 
@@ -18,6 +19,17 @@ def generate_employee_id(length=4):
 
 @store_bp.route("/register", methods=["GET", "POST"])
 def register_store():
+    # すでに店舗が登録済みの場合はログイン画面へリダイレクト（保護機能）
+    result = db.session.execute(
+        sql_text("SELECT COUNT(*) as count FROM store")
+    ).fetchone()
+    
+    store_count = result.count if result else 0
+    
+    if store_count > 0:
+        flash("店舗はすでに登録されています。", "warning")
+        return redirect(url_for('login'))
+    
     if request.method == "POST":
         store_name = request.form.get("store_name")
         open_time = request.form.get("open_time")
@@ -51,7 +63,7 @@ def register_store():
         store_id = result.lastrowid
 
         # ② 店長アカウント登録
-        login_id = generate_employee_id()  # ここで呼び出すだけ
+        login_id = generate_employee_id()
 
         db.session.execute(
             sql_text("""
@@ -71,7 +83,6 @@ def register_store():
         return redirect(url_for("store.register_done", store_id=store_id))
 
     return render_template("store_register.html")
-
 
 
 @store_bp.route("/register/done")
