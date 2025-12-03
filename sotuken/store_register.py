@@ -28,7 +28,7 @@ def register_store():
     
     if store_count > 0:
         flash("店舗はすでに登録されています。", "warning")
-        return redirect(url_for('login'))
+        return redirect(url_for('login.login'))
     
     if request.method == "POST":
         store_name = request.form.get("store_name")
