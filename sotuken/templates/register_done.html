@@ -1,6 +1,27 @@
-<h2>店舗登録が完了しました！</h2>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/register_done.css') }}">
+    <title>店舗登録完了</title>
+</head>
+<body>
 
-<p>店舗名：{{ store.name }}</p>
-<p>店舗コード：<strong>{{ store.store_code }}</strong></p>
+<div class="complete-container">
+    <div class="success-icon">✓</div>
+    
+    <h2>店舗登録が完了しました！</h2>
 
-<p>※店長ログイン時に使用します</p>
+    <div class="info-box">
+        <p>店舗名：{{ store.name }}</p>
+        <p>店舗コード：<strong>{{ store.store_code }}</strong></p>
+    </div>
+
+    <p class="note">※店長ログイン時に使用します</p>
+
+    <a href="/login" class="login-button">ログイン画面へ</a>
+</div>
+
+</body>
+</html>
