@@ -582,48 +582,111 @@
 
     <div class="demand-list">
       <h3>📊 現在保存されている設定一覧</h3>
-      <div style="max-height: 400px; overflow-y: auto;">
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 100px;">時間帯</th>
-              <th>役割</th>
-              <th style="width: 100px;">必要人数</th>
-              <th style="width: 80px; text-align: center;">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for d in demands %}
-            <tr>
-              <td>{{ d.time_slot }}</td>
-              <td>
-                {% if 'キッチン' in d.position_name %}
-                  <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
-                {% elif 'ホール' in d.position_name %}
-                  <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
-                {% else %}
-                  {{ d.position_name }}
-                {% endif %}
-              </td>
-              <td><b>{{ d.required_count }}</b> 名</td>
-              <td style="text-align: center;">
-                <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
-                  <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
-                  <input type="hidden" name="position_id" value="{{ d.position_id }}">
-                  <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか？')">削除</button>
-                </form>
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" style="text-align:center; color:#aaa;">設定がありません</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      
+      <!-- 平日の設定一覧 -->
+      <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0; color:#3f51b5;">🏢 平日の設定 ({{ weekday_demands|length }} 件)</h4>
+          <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;">
+            <input type="hidden" name="day_type" value="weekday">
+            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;" onclick="return confirm('平日の設定を全て削除しますか？')">🗑 平日をリセット</button>
+          </form>
+        </div>
+        <div style="max-height: 300px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 100px;">時間帯</th>
+                <th>役割</th>
+                <th style="width: 100px;">必要人数</th>
+                <th style="width: 80px; text-align: center;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in weekday_demands %}
+              <tr>
+                <td>{{ d.time_slot }}</td>
+                <td>
+                  {% if 'キッチン' in d.position_name %}
+                    <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
+                  {% elif 'ホール' in d.position_name %}
+                    <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
+                  {% else %}
+                    {{ d.position_name }}
+                  {% endif %}
+                </td>
+                <td><b>{{ d.required_count }}</b> 名</td>
+                <td style="text-align: center;">
+                  <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
+                    <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
+                    <input type="hidden" name="position_id" value="{{ d.position_id }}">
+                    <input type="hidden" name="day_type" value="weekday">
+                    <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか？')">削除</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" style="text-align:center; color:#aaa;">平日の設定がありません</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="color:#666; font-size:0.9em;">合計 {{ demands|length }} 件の設定</span>
-        <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0;">
-          <button type="submit" class="btn" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="return confirm('全ての設定を削除してリセットしますか？')">🗑 全て削除してリセット</button>
+    
+      <!-- 土日祝の設定一覧 -->
+      <div style="background:#fff3e0; padding:15px; border-radius:8px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0; color:#d32f2f;">🎉 土日祝の設定 ({{ holiday_demands|length }} 件)</h4>
+          <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;">
+            <input type="hidden" name="day_type" value="holiday">
+            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;" onclick="return confirm('土日祝の設定を全て削除しますか？')">🗑 土日祝をリセット</button>
+          </form>
+        </div>
+        <div style="max-height: 300px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 100px;">時間帯</th>
+                <th>役割</th>
+                <th style="width: 100px;">必要人数</th>
+                <th style="width: 80px; text-align: center;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in holiday_demands %}
+              <tr>
+                <td>{{ d.time_slot }}</td>
+                <td>
+                  {% if 'キッチン' in d.position_name %}
+                    <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
+                  {% elif 'ホール' in d.position_name %}
+                    <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
+                  {% else %}
+                    {{ d.position_name }}
+                  {% endif %}
+                </td>
+                <td><b>{{ d.required_count }}</b> 名</td>
+                <td style="text-align: center;">
+                  <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
+                    <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
+                    <input type="hidden" name="position_id" value="{{ d.position_id }}">
+                    <input type="hidden" name="day_type" value="holiday">
+                    <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか？')">削除</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" style="text-align:center; color:#aaa;">土日祝の設定がありません</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    
+      <!-- 全体リセットボタン -->
+      <div style="text-align:right;">
+        <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0; display:inline;">
+          <button type="submit" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="return confirm('平日・土日祝の全ての設定を削除してリセットしますか？')">🗑 全て削除してリセット</button>
         </form>
       </div>
     </div>
