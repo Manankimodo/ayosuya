@@ -170,8 +170,13 @@
 
     function goHome() {
       if (pollInterval) clearInterval(pollInterval);
-      const homeUrl = '{{ url_for("login.staff_home") if session.get("role") == "staff" else url_for("login.manager_home") }}';
-      window.location.href = homeUrl;
+      // ★ 修正: 従業員の場合は /calendar へリダイレクト
+      const userRole = '{{ session.get("role", "") }}';
+      if (userRole === 'staff') {
+        window.location.href = '/calendar';
+      } else {
+        window.location.href = '{{ url_for("login.manager_home") }}';
+      }
     }
   </script>
 </body>
