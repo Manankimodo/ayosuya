@@ -65,7 +65,7 @@ def login():
         if staff:
             session['user_id'] = staff.id
             session['role'] = staff.role
-            return redirect(url_for("login.staff_home"))
+            return redirect('/calendar')
 
         # 3. ログイン失敗
         flash("ログインID または パスワードが間違っています", "danger")
