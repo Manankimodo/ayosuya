@@ -289,6 +289,7 @@ def check_line_id_registration():
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
+    改善: 店舗ごとに通知を送り分け
     """
     data = request.json
     target_date = data.get("date")
@@ -300,6 +301,23 @@ def create_help_request():
 
     try:
         conn.start_transaction()
+
+        # 0. 【新規】店長のstore_idを取得
+        if "user_id" not in session:
+            return jsonify({"error": "ログインしてください"}), 401
+        
+        manager_id = session["user_id"]
+        
+        cursor.execute("""
+            SELECT store_id FROM account WHERE id = %s
+        """, (manager_id,))
+        manager_data = cursor.fetchone()
+        
+        if not manager_data or not manager_data['store_id']:
+            return jsonify({"error": "店舗情報が見つかりません"}), 400
+        
+        manager_store_id = manager_data['store_id']
+        print(f"📍 店長の店舗ID: {manager_store_id}")
 
         # 1. 募集データをDBに登録
         cursor.execute("""
@@ -315,19 +333,25 @@ def create_help_request():
         """, (target_date, start_time_str, end_time_str))
         help_shift_id = cursor.lastrowid
         
-        # 3. 「その時間にすでにシフトが入っている人」を除外
+        # 3. 【修正】「その時間にすでにシフトが入っている人」を除外（同じ店舗のみ）
         cursor.execute("""
-            SELECT DISTINCT user_id 
-            FROM shift_table
-            WHERE date = %s
-            AND user_id IS NOT NULL
-            AND NOT (end_time <= %s OR start_time >= %s) 
-        """, (target_date, start_time_str, end_time_str))
+            SELECT DISTINCT s.user_id 
+            FROM shift_table s
+            JOIN account a ON s.user_id = a.ID
+            WHERE s.date = %s
+            AND s.user_id IS NOT NULL
+            AND a.store_id = %s
+            AND NOT (s.end_time <= %s OR s.start_time >= %s) 
+        """, (target_date, manager_store_id, start_time_str, end_time_str))
         
         busy_users = [str(row['user_id']) for row in cursor.fetchall()]
 
-        # 4. 全ユーザーを抽出
-        cursor.execute("SELECT ID, name, line_id FROM account")
+        # 4. 【修正】同じ店舗のユーザーのみを抽出
+        cursor.execute("""
+            SELECT ID, name, line_id, store_id 
+            FROM account 
+            WHERE store_id = %s
+        """, (manager_store_id,))
         all_staff = cursor.fetchall()
         
         # 5. 通知対象をフィルタリング
@@ -341,7 +365,8 @@ def create_help_request():
             if staff.get('line_id'):
                 eligible_staff.append(staff)
 
-        print(f"--- 通知対象スタッフ数: {len(eligible_staff)}人 ---")
+        print(f"--- 📍 店舗ID {manager_store_id} の通知対象スタッフ数: {len(eligible_staff)}人 ---")
+        print(f"--- 忙しいスタッフ: {busy_users}")
 
         # 6. ターゲットのスタッフにLINE通知を送信
         target_count = 0
@@ -370,10 +395,11 @@ def create_help_request():
         conn.commit()
 
         return jsonify({
-            "message": "募集を作成し、通知を送信しました。",
+            "message": f"店舗ID {manager_store_id} のスタッフに募集を送信しました。",
             "request_id": request_id,
             "help_shift_id": help_shift_id,
-            "target_count": target_count
+            "target_count": target_count,
+            "store_id": manager_store_id
         })
 
     except Exception as e:
