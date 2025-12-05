@@ -10,6 +10,10 @@
   <div class="overlay"></div>
 
   <div class="container">
+    <!-- ユーザー情報をここに移動 -->
+    <div class="user-info">
+      <p>{{ store_id }}号店 {{ user_name }}さん</p>
+    </div>
     <h1 class="title"><span class="logo">N</span>{{ date }} の希望入力</h1>
 
     <form method="POST" class="form-card">
@@ -29,12 +33,12 @@
 
       <div class="form-group">
         <label>開始時間</label>
-        <input type="time" name="start_time" required>
+        <input type="time" name="start_time" step="1800" required>
       </div>
 
       <div class="form-group">
         <label>終了時間</label>
-        <input type="time" name="end_time" required>
+        <input type="time" name="end_time" step="1800" required>
       </div>
 
       <button type="submit" class="btn">保存</button>
