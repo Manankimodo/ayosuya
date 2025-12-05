@@ -170,12 +170,15 @@
 
     function goHome() {
       if (pollInterval) clearInterval(pollInterval);
-      // ★ 修正: 従業員の場合は /calendar へリダイレクト
+      
       const userRole = '{{ session.get("role", "") }}';
-      if (userRole === 'staff') {
-        window.location.href = '/calendar';
-      } else {
+      
+      if (userRole === 'manager') {
+        // 店長 → calendar2.html
         window.location.href = '{{ url_for("login.manager_home") }}';
+      } else {
+        // 従業員 → calendar.html
+        window.location.href = '{{ url_for("calendar.calendar") }}';
       }
     }
   </script>
