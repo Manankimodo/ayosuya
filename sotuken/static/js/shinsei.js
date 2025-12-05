@@ -75,3 +75,104 @@ window.onload = toggleTimeInputs;
             et.disabled = false; et.required = true;
         }
     }
+
+
+    // バリデーション関数
+    function validateForm() {
+      const workSelect = document.getElementById('workSelect');
+      const startTime = document.getElementById('startTime').value;
+      const endTime = document.getElementById('endTime').value;
+      
+      // 出勤不可の場合はチェック不要
+      if (workSelect.value === '0') {
+        return true;
+      }
+      
+      if (!startTime || !endTime) {
+        alert('開始時間と終了時間を入力してください。');
+        return false;
+      }
+      
+      const settings = document.getElementById('shift-settings');
+      const minHours = parseFloat(settings.dataset.minHours);
+      const startLimit = settings.dataset.startLimit;
+      const endLimit = settings.dataset.endLimit;
+      
+      // 時間差を計算
+      const start = new Date(`2000-01-01T${startTime}:00`);
+      const end = new Date(`2000-01-01T${endTime}:00`);
+      
+      let diffHours = (end - start) / (1000 * 60 * 60);
+      
+      // 日付をまたぐ場合の処理
+      if (diffHours < 0) {
+        diffHours += 24;
+      }
+      
+      // 最低勤務時間チェック
+      if (diffHours < minHours) {
+        alert(`❌ 希望時間が短すぎます\n\n最低 ${minHours} 時間以上の希望を入力してください。\n現在の入力: ${diffHours.toFixed(1)} 時間`);
+        return false;
+      }
+      
+      // 営業時間内チェック（簡易版）
+      if (startTime < startLimit || startTime > endLimit) {
+        alert(`開始時間は ${startLimit} 〜 ${endLimit} の範囲で入力してください。`);
+        return false;
+      }
+      
+      if (endTime < startLimit || endTime > endLimit) {
+        alert(`終了時間は ${startLimit} 〜 ${endLimit} の範囲で入力してください。`);
+        return false;
+      }
+      
+      return true;
+    }
+
+    // 出勤有無の切り替え
+    function toggleTimeInputs() {
+      const workSelect = document.getElementById('workSelect');
+      const startTime = document.getElementById('startTime');
+      const endTime = document.getElementById('endTime');
+      
+      if (workSelect.value === '0') {
+        startTime.disabled = true;
+        endTime.disabled = true;
+        startTime.required = false;
+        endTime.required = false;
+      } else {
+        startTime.disabled = false;
+        endTime.disabled = false;
+        startTime.required = true;
+        endTime.required = true;
+      }
+    }
+    
+    // ページ読み込み時に初期化
+    document.addEventListener('DOMContentLoaded', toggleTimeInputs);
+
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // ... 既存のコード ...
+      
+        // ★★★ 特別時間フォームにもスクロール位置保存を適用 ★★★
+        const specialHoursForm = document.querySelector('form[action*="add_special_hours"]');
+        const deleteSpecialForms = document.querySelectorAll('form[action*="delete_special_hours"]');
+        
+        if (specialHoursForm) {
+          specialHoursForm.addEventListener('submit', function() {
+            sessionStorage.setItem('scrollPosition', window.scrollY);
+          });
+        }
+        
+        deleteSpecialForms.forEach(form => {
+          form.addEventListener('submit', function() {
+            sessionStorage.setItem('scrollPosition', window.scrollY);
+          });
+        });
+      
+        // 既存のスクロール復元処理はそのまま
+      });
+
+
+

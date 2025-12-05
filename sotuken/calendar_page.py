@@ -41,29 +41,49 @@ def admin():
 # ==========================
 @calendar_bp.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
-    # 1. ログイン確認 (そのまま)
+    # 1. ログイン確認
     if "user_id" not in session:
         return redirect(url_for("login.login"))
 
     # ======================================================
-    # ★修正1: 設定の取得を「一番最初」に行う (ここへ移動)
+    # ★設定と特別時間の取得
     # ======================================================
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT min_hours_per_day FROM shift_settings LIMIT 1")
+    
+    # 基本設定を取得
+    cursor.execute("SELECT start_time, end_time, min_hours_per_day FROM shift_settings LIMIT 1")
     settings_row = cursor.fetchone()
     
-    # データがない場合やNoneの場合の対策をしておく
-    if settings_row and settings_row['min_hours_per_day'] is not None:
-        min_hours = float(settings_row['min_hours_per_day'])
+    if settings_row:
+        min_hours = float(settings_row['min_hours_per_day']) if settings_row['min_hours_per_day'] is not None else 0
+        default_start = str(settings_row['start_time'])[:5] if settings_row['start_time'] else "09:00"
+        default_end = str(settings_row['end_time'])[:5] if settings_row['end_time'] else "22:00"
     else:
-        min_hours = 0  # 設定がなければ0時間
-        
+        min_hours = 0
+        default_start = "09:00"
+        default_end = "22:00"
+    
+    # 特別時間があるか確認
+    cursor.execute("SELECT start_time, end_time, reason FROM special_hours WHERE date = %s", (date,))
+    special = cursor.fetchone()
+    
+    if special:
+        # 特別時間を優先
+        start_limit = str(special['start_time'])[:5]
+        end_limit = str(special['end_time'])[:5]
+        notice = f"⚠️ {special.get('reason', 'この日')}のため、営業時間が変更されています"
+    else:
+        # 基本設定を使用
+        start_limit = default_start
+        end_limit = default_end
+        notice = None
+    
     cursor.close()
     conn.close()
 
     # ======================================================
-    # 2. 保存処理 (POST) (中身は元のまま)
+    # 2. 保存処理 (POST)
     # ======================================================
     if request.method == "POST":
         user_id = session["user_id"]
@@ -71,6 +91,25 @@ def sinsei(date):
         work = request.form.get("work")
         start_time = request.form.get("start_time")
         end_time = request.form.get("end_time")
+
+        # ★★★ バリデーション: 最低勤務時間チェック ★★★
+        if work == "1" and start_time and end_time and min_hours > 0:
+            from datetime import datetime
+            start_dt = datetime.strptime(start_time, "%H:%M")
+            end_dt = datetime.strptime(end_time, "%H:%M")
+            diff = (end_dt - start_dt).total_seconds() / 3600
+            
+            if diff < 0:  # 日付またぎ
+                diff += 24
+            
+            if diff < min_hours:
+                flash(f"❌ 希望時間が短すぎます。最低 {min_hours} 時間以上入力してください（現在: {diff} 時間）", "danger")
+                return render_template("sinsei.html", 
+                                     date=date, 
+                                     start_limit=start_limit,
+                                     end_limit=end_limit,
+                                     min_hours=min_hours,
+                                     notice=notice)
 
         # 出勤不可なら時間はNone
         if work == "0":
@@ -117,13 +156,17 @@ def sinsei(date):
             flash(f"{date} の希望を提出しました。", "success")
 
         db.session.commit()
-
         return redirect(url_for("calendar.calendar"))
 
     # ======================================================
-    # ★修正2: ここで min_hours を HTML に渡す！
+    # GET: フォーム表示
     # ======================================================
-    return render_template("sinsei.html", date=date, min_hours=min_hours)
+    return render_template("sinsei.html", 
+                         date=date, 
+                         start_limit=start_limit,
+                         end_limit=end_limit,
+                         min_hours=min_hours,
+                         notice=notice)
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================

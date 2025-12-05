@@ -148,7 +148,7 @@
               }
           });
       }
-
+      
       // ★★★ タブを復元（最優先で実行） ★★★
       if (savedTab === 'holiday') {
         switchTab('holiday');
@@ -157,6 +157,23 @@
       // 時間帯最大人数の制限を各フォームに適用
       const maxPeopleInput = document.querySelector('input[name="max_people_per_shift"]');
       const demandForms = document.querySelectorAll('.zone-card form');
+
+      // ★★★ 特別時間フォームにもスクロール位置保存を適用 ★★★
+      const specialHoursForm = document.querySelector('form[action*="add_special_hours"]');
+      const deleteSpecialForms = document.querySelectorAll('form[action*="delete_special_hours"]');
+      
+      if (specialHoursForm) {
+        specialHoursForm.addEventListener('submit', function() {
+          sessionStorage.setItem('scrollPosition', window.scrollY);
+        });
+      }
+      
+      deleteSpecialForms.forEach(form => {
+        form.addEventListener('submit', function() {
+          sessionStorage.setItem('scrollPosition', window.scrollY);
+        });
+      });
+    
 
       // ★★★ スクロール位置の復元 ★★★
       const savedScrollPos = sessionStorage.getItem('scrollPosition');
@@ -694,6 +711,66 @@
         <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0; display:inline;">
           <button type="submit" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="return confirm('平日・土日祝の全ての設定を削除してリセットしますか？')">🗑 全て削除してリセット</button>
         </form>
+      </div>
+    </div>
+    <div style="background:#fff; padding:20px; border-radius:8px; margin-top:30px;">
+      <h3>📅 特別営業時間の設定</h3>
+      <p style="color:#666; margin-bottom:20px;">工事・イベントなど、特定の日の営業時間を個別に設定できます。</p>
+      
+      <form action="{{ url_for('makeshift.add_special_hours') }}" method="POST" style="background:#f5f5f5; padding:20px; border-radius:8px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:15px;">
+          <div>
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">📆 日付</label>
+            <input type="date" name="date" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          </div>
+          <div>
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">🕐 開始時間</label>
+            <input type="time" name="start_time" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          </div>
+          <div>
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">🕙 終了時間</label>
+            <input type="time" name="end_time" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          </div>
+          <div>
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">📝 理由</label>
+            <input type="text" name="reason" placeholder="例: 工事" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          </div>
+        </div>
+        <button type="submit" style="background:#4caf50; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">➕ 特別時間を追加</button>
+      </form>
+    
+      <div style="margin-top:20px;">
+        <h4>現在の特別設定</h4>
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f9f9f9;">
+              <th style="padding:10px; text-align:left;">日付</th>
+              <th style="padding:10px; text-align:left;">開始時間</th>
+              <th style="padding:10px; text-align:left;">終了時間</th>
+              <th style="padding:10px; text-align:left;">理由</th>
+              <th style="padding:10px; text-align:center;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sh in special_hours %}
+            <tr style="border-bottom:1px solid #eee;">
+              <td style="padding:10px;">{{ sh.date }}</td>
+              <td style="padding:10px;">{{ sh.start_time }}</td>
+              <td style="padding:10px;">{{ sh.end_time }}</td>
+              <td style="padding:10px;">{{ sh.reason or '-' }}</td>
+              <td style="padding:10px; text-align:center;">
+                <form action="{{ url_for('makeshift.delete_special_hours') }}" method="POST" style="display:inline;">
+                  <input type="hidden" name="date" value="{{ sh.date }}">
+                  <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;" onclick="return confirm('削除しますか？')">削除</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="text-align:center; padding:20px; color:#aaa;">特別設定なし</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        
       </div>
     </div>
 

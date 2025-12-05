@@ -10,10 +10,19 @@
   <div class="overlay"></div>
 
   <div class="container">
-    <h1 class="title"><span class="logo">N</span>{{ date }} の希望入力</h1>
+    <h1 class="title"><span class="logo">M</span>{{ date }} の希望入力</h1>
+    
+    {% if notice %}
+    <div style="background:#fff3cd; border-left:4px solid #ff9800; padding:15px; margin-bottom:20px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+      <strong style="color:#856404;">{{ notice }}</strong><br>
+      <span style="color:#666;">営業時間: {{ start_limit }} 〜 {{ end_limit }}</span>
+    </div>
+    {% endif %}
     
     <div id="shift-settings" 
-         data-min-hours="{{ min_hours }}">
+         data-min-hours="{{ min_hours }}"
+         data-start-limit="{{ start_limit }}"
+         data-end-limit="{{ end_limit }}">
     </div>
 
     <form method="POST" class="form-card" onsubmit="return validateForm()">
@@ -32,12 +41,14 @@
 
       <div class="form-group">
         <label>開始時間</label>
-        <input type="time" id="startTime" name="start_time" required>
+        <input type="time" id="startTime" name="start_time" min="{{ start_limit }}" max="{{ end_limit }}" required>
+        <small style="color:#666; font-size:0.85em; display:block; margin-top:5px;">営業時間: {{ start_limit }} 〜 {{ end_limit }}</small>
       </div>
 
       <div class="form-group">
         <label>終了時間</label>
-        <input type="time" id="endTime" name="end_time" required>
+        <input type="time" id="endTime" name="end_time" min="{{ start_limit }}" max="{{ end_limit }}" required>
+        <small style="color:#666; font-size:0.85em; display:block; margin-top:5px;">最低勤務時間: {{ min_hours }} 時間</small>
       </div>
 
       <button type="submit" class="btn">保存</button>

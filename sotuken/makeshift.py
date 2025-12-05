@@ -435,6 +435,36 @@ def auto_calendar():
             # ========================================================
             # ★★★ 追加ここまで ★★★
             # ========================================================
+            # ... (最低勤務時間のコードの下) ...
+
+            # ========================================================
+            # ★★★ 解決策：勤務の連続性制約 (中抜け禁止) ★★★
+            # 「勤務開始」というイベントは、1日に1回しか起こっちゃダメ！というルール
+            # ========================================================
+            for u in range(num_users):
+                # 「勤務開始フラグ」を入れるリスト
+                start_flags = []
+                
+                # 0番目の時間(朝イチ)がシフト入りなら、それは「開始」とみなす
+                s0 = model.NewBoolVar(f'start_{u}_0')
+                model.Add(s0 == shifts[u, 0])
+                start_flags.append(s0)
+                
+                # それ以降の時間について
+                for t in range(1, num_intervals):
+                    st = model.NewBoolVar(f'start_{u}_{t}')
+                    
+                    # 「今(t)が仕事」かつ「さっき(t-1)が休み」の時だけ、st は 1 になる
+                    # つまり「シフトが始まった瞬間」だけを検知する
+                    model.AddBoolAnd([shifts[u, t], shifts[u, t-1].Not()]).OnlyEnforceIf(st)
+                    model.AddBoolOr([shifts[u, t].Not(), shifts[u, t-1]]).OnlyEnforceIf(st.Not())
+                    
+                    start_flags.append(st)
+                
+                # ★ここが鉄の掟！
+                # 「勤務開始」の瞬間は、1日に1回以下でなければならない。
+                # (これで、仕事→休み→仕事 というサンドイッチができなくなります)
+                model.Add(sum(start_flags) <= 1)
 
             users_with_pref = {str(row['ID']) for row in preference_rows}
             for u, uid in enumerate(user_ids):
@@ -755,12 +785,17 @@ def settings():
                     holiday_demands.append(demand_item)
                 else:
                     weekday_demands.append(demand_item)
-
+            # 特別営業時間を取得
+        cursor.execute("SELECT * FROM special_hours ORDER BY date")
+        special_hours_list = cursor.fetchall()
+        
         return render_template("shift_setting.html", 
             settings=settings_data, 
             positions=positions_list, 
-            weekday_demands=weekday_demands,  # ★変更
-            holiday_demands=holiday_demands)   # ★追加
+            weekday_demands=weekday_demands,
+            holiday_demands=holiday_demands,
+            special_hours=special_hours_list)  # ★追加
+
     except Exception as e:
         print(f"Settings Error: {e}")
         import traceback
@@ -1055,5 +1090,63 @@ def show_user_shift_view(user_id):
     return render_template("user_shift_view.html", 
     user_id=user_id, 
     user_name=user_data['name'])
+#----------------------------------------------------------------------------------------------
+# ==========================================
+# 特別営業時間の追加
+# ==========================================
+@makeshift_bp.route("/settings/special_hours/add", methods=["POST"])
+def add_special_hours():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        date = request.form.get("date")
+        start_time = request.form.get("start_time")
+        end_time = request.form.get("end_time")
+        reason = request.form.get("reason", "")
+        
+        # 既存データがあれば更新、なければ挿入
+        cursor.execute("""
+            INSERT INTO special_hours (date, start_time, end_time, reason)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                start_time = VALUES(start_time),
+                end_time = VALUES(end_time),
+                reason = VALUES(reason)
+        """, (date, start_time, end_time, reason))
+        
+        conn.commit()
+        flash(f"✅ {date} の特別時間を設定しました", "success")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Special Hours Error: {e}")
+        flash("設定に失敗しました", "danger")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('makeshift.settings'))
 
+# ==========================================
+# 特別営業時間の削除
+# ==========================================
+@makeshift_bp.route("/settings/special_hours/delete", methods=["POST"])
+def delete_special_hours():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        date = request.form.get("date")
+        cursor.execute("DELETE FROM special_hours WHERE date = %s", (date,))
+        conn.commit()
+        flash(f"✅ {date} の特別設定を削除しました", "success")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Delete Special Hours Error: {e}")
+        flash("削除に失敗しました", "danger")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('makeshift.settings'))
 
