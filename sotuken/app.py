@@ -75,4 +75,14 @@ def favicon():
     return send_from_directory(app.root_path, 'static/favicon.ico', mimetype='image/vnd.microsoft.icon')
  
 if __name__ == "__main__":
+    # app.py の一番下あたり
+    print("\n" + "="*30)
+    print("🚀 現在登録されているURL一覧:")
+    for rule in app.url_map.iter_rules():
+        print(f"{rule} -> {rule.endpoint}")
+    print("="*30 + "\n")
+    # ▲▲▲ 追加する魔法のコード（ここまで） ▲▲▲
+
+    # use_reloader=False のままでOKです
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True)

@@ -10,22 +10,24 @@
   <div class="overlay"></div>
 
   <div class="container">
-    <!-- ユーザー情報をここに移動 -->
     <div class="user-info">
       <p>{{ store_id }}号店 {{ user_name }}さん</p>
     </div>
     <h1 class="title"><span class="logo">N</span>{{ date }} の希望入力</h1>
 
-    <form method="POST" class="form-card">
+    <div id="shift-settings" 
+         data-min-hours="{{ min_hours }}">
+    </div>
+
+    <form method="POST" class="form-card" onsubmit="return validateForm()">
       <div class="form-group">
         <label>ID</label>
-        <div class="readonly-text">{{ session.get('user_id', '') }}</div>
-        <input type="hidden" name="name" value="{{ session.get('user_id', '') }}">
+        <input type="text" name="name" value="{{ session.get('user_id', '') }}" readonly>
       </div>
 
       <div class="form-group">
-        <label>希望有無</label>
-        <select name="work" onchange="toggleTimeInputs()">
+        <label>出勤有無</label>
+        <select id="workSelect" name="work" onchange="toggleTimeInputs()">
           <option value="1">○ 出勤可能</option>
           <option value="0">× 出勤不可</option>
         </select>
@@ -33,12 +35,12 @@
 
       <div class="form-group">
         <label>開始時間</label>
-        <input type="time" name="start_time" step="1800" required>
+        <input type="time" id="startTime" name="start_time" required>
       </div>
 
       <div class="form-group">
         <label>終了時間</label>
-        <input type="time" name="end_time" step="1800" required>
+        <input type="time" id="endTime" name="end_time" required>
       </div>
 
       <button type="submit" class="btn">保存</button>
@@ -48,5 +50,7 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/shinsei.js') }}"></script>
+  
+  
 </body>
 </html>

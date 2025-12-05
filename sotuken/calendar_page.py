@@ -167,6 +167,26 @@ def manager_help_sinsei(date):
     if "user_id" not in session:
         return redirect(url_for("login.login"))
 
+    # ======================================================
+    # ★追加: 設定 (min_hours) を取得して変数に入れる
+    # ======================================================
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT min_hours_per_day FROM shift_settings LIMIT 1")
+    settings_row = cursor.fetchone()
+    
+    # データがない場合やNoneの場合の対策
+    if settings_row and settings_row['min_hours_per_day'] is not None:
+        min_hours = float(settings_row['min_hours_per_day'])
+    else:
+        min_hours = 0
+        
+    cursor.close()
+    conn.close()
+
+    # ======================================================
+    # 保存処理 (POST)
+    # ======================================================
     if request.method == "POST":
         user_id = session["user_id"]
         work = request.form.get("work")
@@ -221,4 +241,9 @@ def manager_help_sinsei(date):
 
         return redirect(url_for("calendar.manager_help_request"))
 
-    return render_template("manager_help_sinsei.html", date=date)
+    # ======================================================
+    # ★修正: ここで min_hours を HTML に渡す！
+    # ======================================================
+    # HTML側で {{ store_id }} や {{ user_name }} を使っているなら、それらもここで渡す必要がありますが、
+    # 今回は最低時間に関する修正のみ行っています。
+    return render_template("manager_help_sinsei.html", date=date, min_hours=min_hours)
