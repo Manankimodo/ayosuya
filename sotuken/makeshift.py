@@ -404,6 +404,37 @@ def auto_calendar():
             for u in range(num_users):
                 model.Add(sum(shifts[u, t] for t in range(num_intervals)) <= max_intervals)
             # ★★★ --------------------------------------------------------------------------- ★★★
+            # ========================================================
+            # ★★★ ここに追加！「最低勤務時間」の制約 ★★★
+            # ========================================================
+            
+            # 1. 設定から「最低何時間？」を取得（設定がなければ0）
+            min_hours = float(settings.get('min_hours_per_day', 0))
+            
+            # 2. 時間を「コマ数」に変換（例: 2時間 ÷ 15分 = 8コマ）
+            min_slots = int((min_hours * 60) / INTERVAL_MINUTES)
+
+            if min_slots > 0:
+                for u in range(num_users):
+                    # 「今日働くかどうか」を表すスイッチ変数を作る (1=働く, 0=休み)
+                    is_working = model.NewBoolVar(f'is_working_{u}')
+                    
+                    # その人の今日の合計勤務コマ数
+                    total_worked_slots = sum(shifts[u, t] for t in range(num_intervals))
+                    
+                    # ルールA: 働くなら、合計コマ数は min_slots 以上でなければならない
+                    model.Add(total_worked_slots >= min_slots).OnlyEnforceIf(is_working)
+                    
+                    # ルールB: 働かないなら、合計コマ数は 0 でなければならない
+                    model.Add(total_worked_slots == 0).OnlyEnforceIf(is_working.Not())
+                    
+                    # (補足) スイッチと実態をリンクさせるための補助制約
+                    # total_worked_slots > 0 なら is_working は必ず 1 になる
+                    model.Add(total_worked_slots > 0).OnlyEnforceIf(is_working)
+
+            # ========================================================
+            # ★★★ 追加ここまで ★★★
+            # ========================================================
 
             users_with_pref = {str(row['ID']) for row in preference_rows}
             for u, uid in enumerate(user_ids):
