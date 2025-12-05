@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 # =================================
  
- 
+from flask import session
  
 # app.py
 from flask import Flask, redirect, url_for
@@ -23,8 +23,24 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
  
 # --- DB初期化 ---
 db.init_app(app)
+
+# --- ✅ context_processor をここに移動 ---
+@app.context_processor
+def inject_user_info():
+    """全てのテンプレートでuser_infoを使えるようにする"""
+    user_info = session.get('user', {})
+    print("=" * 50)
+    print("DEBUG: セッション全体:", dict(session))
+    print("DEBUG: user_info:", user_info)
+    print("DEBUG: store_id:", user_info.get('store_id', ''))
+    print("DEBUG: name:", user_info.get('name', ''))
+    print("=" * 50)
+    return dict(
+        store_id=user_info.get('store_id', ''),
+        user_name=user_info.get('name', '')
+    )
  
-# --- Blueprintの読み込み ---z
+# --- Blueprintの読み込み ---
 from login import login_bp
 from calendar_page import calendar_bp
 from insert import insert_bp
@@ -34,6 +50,7 @@ from makeshift import makeshift_bp
 from line_bot import line_bot_bp
 from store_register import store_bp
 from line import line_bp
+
 # --- Blueprint登録 ---
 app.register_blueprint(login_bp)
 app.register_blueprint(calendar_bp)
@@ -56,9 +73,6 @@ from flask import send_from_directory
 def favicon():
     # 'static' フォルダから 'favicon.ico' ファイルを返します
     return send_from_directory(app.root_path, 'static/favicon.ico', mimetype='image/vnd.microsoft.icon')
- 
-# if __name__ == '__main__':
-#     app.run(debug=True)
  
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
