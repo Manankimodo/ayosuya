@@ -62,3 +62,14 @@ def favicon():
  
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+
+from flask import session, g
+
+@app.context_processor
+def inject_user_info():
+    """全てのテンプレートでuser_infoを使えるようにする"""
+    user_info = session.get('user', {})
+    return dict(
+        store_id=user_info.get('store_id', ''),
+        user_name=user_info.get('name', '')
+    )
