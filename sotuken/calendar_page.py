@@ -1,8 +1,18 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash
 from sqlalchemy import text
 from extensions import db  # ← extensionsからimport
+import mysql.connector
 
 calendar_bp = Blueprint("calendar", __name__, url_prefix="/calendar")
+
+# DB接続
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="ayosuya"
+    )
 
 # ==========================
 # 🔹 カレンダー画面
@@ -31,9 +41,30 @@ def admin():
 # ==========================
 @calendar_bp.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
+    # 1. ログイン確認 (そのまま)
     if "user_id" not in session:
         return redirect(url_for("login.login"))
 
+    # ======================================================
+    # ★修正1: 設定の取得を「一番最初」に行う (ここへ移動)
+    # ======================================================
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT min_hours_per_day FROM shift_settings LIMIT 1")
+    settings_row = cursor.fetchone()
+    
+    # データがない場合やNoneの場合の対策をしておく
+    if settings_row and settings_row['min_hours_per_day'] is not None:
+        min_hours = float(settings_row['min_hours_per_day'])
+    else:
+        min_hours = 0  # 設定がなければ0時間
+        
+    cursor.close()
+    conn.close()
+
+    # ======================================================
+    # 2. 保存処理 (POST) (中身は元のまま)
+    # ======================================================
     if request.method == "POST":
         user_id = session["user_id"]
         name = request.form.get("name")
@@ -51,12 +82,12 @@ def sinsei(date):
             if end_time and not end_time.endswith(":00"):
                 end_time += ":00"
 
-        # ✅ すでに同じ日付の申請があるか確認
+        # すでに同じ日付の申請があるか確認
         check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
         result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
 
         if result > 0:
-            # ✅ 更新
+            # 更新
             update_sql = text("""
                 UPDATE calendar
                 SET work = :work, start_time = :start_time, end_time = :end_time
@@ -71,7 +102,7 @@ def sinsei(date):
             })
             flash(f"{date} の希望を更新しました。", "info")
         else:
-            # ✅ 新規登録
+            # 新規登録
             insert_sql = text("""
                 INSERT INTO calendar (ID, date, work, start_time, end_time)
                 VALUES (:user_id, :date, :work, :start_time, :end_time)
@@ -89,8 +120,10 @@ def sinsei(date):
 
         return redirect(url_for("calendar.calendar"))
 
-    return render_template("sinsei.html", date=date)
-
+    # ======================================================
+    # ★修正2: ここで min_hours を HTML に渡す！
+    # ======================================================
+    return render_template("sinsei.html", date=date, min_hours=min_hours)
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================
