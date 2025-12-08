@@ -153,7 +153,10 @@
       if (savedTab === 'holiday') {
         switchTab('holiday');
       }
-    
+
+      // ★★★ 変数定義を追加（エラー防止） ★★★
+      const maxPeopleInput = document.querySelector('input[name="max_people_per_shift"]');
+      const demandForms = document.querySelectorAll('.zone-card form');
 
       // ★★★ スクロール位置の復元 ★★★
       const savedScrollPos = sessionStorage.getItem('scrollPosition');
@@ -269,7 +272,7 @@
         });
       });
 
-            // フォーム送信時にタブを保存
+      // フォーム送信時にタブを保存
       document.querySelectorAll('form[action*="add_demand"]').forEach(form => {
         form.addEventListener('submit', function() {
           const dayType = this.querySelector('input[name="day_type"]').value;
@@ -280,13 +283,13 @@
       // ★★★ 特別時間フォームにもスクロール位置保存を適用 ★★★
       const specialHoursForm = document.querySelector('form[action*="add_special_hours"]');
       const deleteSpecialForms = document.querySelectorAll('form[action*="delete_special_hours"]');
-
+      
       if (specialHoursForm) {
         specialHoursForm.addEventListener('submit', function() {
           sessionStorage.setItem('scrollPosition', window.scrollY);
         });
       }
-
+      
       deleteSpecialForms.forEach(form => {
         form.addEventListener('submit', function() {
           sessionStorage.setItem('scrollPosition', window.scrollY);
@@ -294,7 +297,7 @@
       });
     });
   </script>
-  
+
 </body>
 </html>
 </head>
