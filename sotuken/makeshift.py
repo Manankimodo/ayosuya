@@ -170,27 +170,44 @@ def get_day_details(date_str):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # ★追加: ログインユーザーの店舗IDを取得
-    user_id = session["user_id"]
-    cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
-    store_result = cursor.fetchone()
-    
-    if not store_result or not store_result['store_id']:
+    try:
+        # ★追加: ログインユーザーの店舗IDを取得
+        user_id = session["user_id"]
+        print(f"🔍 DEBUG: user_id = {user_id}, type = {type(user_id)}")  # デバッグ用
+        
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        store_result = cursor.fetchone()
+        
+        print(f"🔍 DEBUG: store_result = {store_result}")  # デバッグ用
+        
+        if not store_result or not store_result.get('store_id'):
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "店舗情報が見つかりません"}), 404
+        
+        store_id = store_result['store_id']
+        print(f"🔍 DEBUG: store_id = {store_id}")  # デバッグ用
+        
+        # ★修正: 同じ店舗のユーザーのみ取得
+        cursor.execute("""
+            SELECT c.ID, c.date, c.start_time, c.end_time
+            FROM calendar c
+            JOIN account a ON c.ID = a.ID
+            WHERE c.date = %s AND a.store_id = %s
+            ORDER BY c.start_time
+        """, (date_str, store_id))
+        rows = cursor.fetchall()
+        
+        print(f"🔍 DEBUG: rows count = {len(rows)}")  # デバッグ用
+        
+    except Exception as e:
+        print(f"❌ ERROR: {e}")  # デバッグ用
+        import traceback
+        traceback.print_exc()
         cursor.close()
         conn.close()
-        return jsonify({"error": "店舗情報が見つかりません"}), 404
+        return jsonify({"error": str(e)}), 500
     
-    store_id = store_result['store_id']
-    
-    # ★修正: 同じ店舗のユーザーのみ取得
-    cursor.execute("""
-        SELECT c.ID, c.date, c.start_time, c.end_time
-        FROM calendar c
-        JOIN account a ON c.ID = a.ID
-        WHERE c.date = %s AND a.store_id = %s
-        ORDER BY c.start_time
-    """, (date_str, store_id))
-    rows = cursor.fetchall()
     cursor.close()
     conn.close()
 
