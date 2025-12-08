@@ -161,15 +161,53 @@ def show_admin_shift():
 
 @makeshift_bp.route("/day/<date_str>")
 def get_day_details(date_str):
+    from flask import session
+    
+    # ★追加: ログインチェック
+    if "user_id" not in session:
+        return jsonify({"error": "未ログイン"}), 401
+    
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT ID, date, start_time, end_time
-        FROM calendar
-        WHERE date = %s
-        ORDER BY start_time
-    """, (date_str,))
-    rows = cursor.fetchall()
+    
+    try:
+        # ★追加: ログインユーザーの店舗IDを取得
+        user_id = session["user_id"]
+        print(f"🔍 DEBUG: user_id = {user_id}, type = {type(user_id)}")  # デバッグ用
+        
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        store_result = cursor.fetchone()
+        
+        print(f"🔍 DEBUG: store_result = {store_result}")  # デバッグ用
+        
+        if not store_result or not store_result.get('store_id'):
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "店舗情報が見つかりません"}), 404
+        
+        store_id = store_result['store_id']
+        print(f"🔍 DEBUG: store_id = {store_id}")  # デバッグ用
+        
+        # ★修正: 同じ店舗のユーザーのみ取得
+        cursor.execute("""
+            SELECT c.ID, c.date, c.start_time, c.end_time
+            FROM calendar c
+            JOIN account a ON c.ID = a.ID
+            WHERE c.date = %s AND a.store_id = %s
+            ORDER BY c.start_time
+        """, (date_str, store_id))
+        rows = cursor.fetchall()
+        
+        print(f"🔍 DEBUG: rows count = {len(rows)}")  # デバッグ用
+        
+    except Exception as e:
+        print(f"❌ ERROR: {e}")  # デバッグ用
+        import traceback
+        traceback.print_exc()
+        cursor.close()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    
     cursor.close()
     conn.close()
 

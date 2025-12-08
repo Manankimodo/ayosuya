@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash
 from sqlalchemy import text
-from extensions import db  # ← extensionsからimport
+from extensions import db
 import mysql.connector
 
 calendar_bp = Blueprint("calendar", __name__, url_prefix="/calendar")
@@ -13,6 +13,20 @@ def get_db_connection():
         password="",
         database="ayosuya"
     )
+
+# ★追加: ユーザーのstore_idを取得する関数
+def get_user_store_id(user_id):
+    """ユーザーのstore_idを取得"""
+    sql = text("SELECT store_id FROM account WHERE ID = :user_id")
+    result = db.session.execute(sql, {"user_id": user_id}).fetchone()
+    return result[0] if result else None
+
+# ★追加: makeshift.pyで使用するためのヘルパー関数
+def get_user_store_id_raw(user_id, cursor):
+    """mysql.connectorのカーソルを使ってstore_idを取得"""
+    cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+    result = cursor.fetchone()
+    return result['store_id'] if result else None
 
 # ==========================
 # 🔹 カレンダー画面
@@ -45,14 +59,25 @@ def sinsei(date):
     if "user_id" not in session:
         return redirect(url_for("login.login"))
 
+    user_id = session["user_id"]
+    
+    # ★追加: ユーザーの店舗IDを取得
+    store_id = get_user_store_id(user_id)
+    if not store_id:
+        flash("❌ 店舗情報が取得できませんでした。", "danger")
+        return redirect(url_for("calendar.calendar"))
+
     # ======================================================
-    # ★設定と特別時間の取得
+    # ★修正: 設定と特別時間の取得（store_id条件を追加）
     # ======================================================
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # 基本設定を取得
-    cursor.execute("SELECT start_time, end_time, min_hours_per_day FROM shift_settings LIMIT 1")
+    # ★修正: 店舗ごとの基本設定を取得
+    cursor.execute(
+        "SELECT start_time, end_time, min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
+        (store_id,)
+    )
     settings_row = cursor.fetchone()
     
     if settings_row:
@@ -64,8 +89,11 @@ def sinsei(date):
         default_start = "09:00"
         default_end = "22:00"
     
-    # 特別時間があるか確認
-    cursor.execute("SELECT start_time, end_time, reason FROM special_hours WHERE date = %s", (date,))
+    # ★修正: 店舗ごとの特別時間があるか確認
+    cursor.execute(
+        "SELECT start_time, end_time, reason FROM special_hours WHERE store_id = %s AND date = %s",
+        (store_id, date)
+    )
     special = cursor.fetchone()
     
     if special:
@@ -86,7 +114,6 @@ def sinsei(date):
     # 2. 保存処理 (POST)
     # ======================================================
     if request.method == "POST":
-        user_id = session["user_id"]
         name = request.form.get("name")
         work = request.form.get("work")
         start_time = request.form.get("start_time")
@@ -167,6 +194,7 @@ def sinsei(date):
                          end_limit=end_limit,
                          min_hours=min_hours,
                          notice=notice)
+
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================
@@ -176,13 +204,9 @@ def my_confirmed_shift():
     セッションからIDを取得し、makeshiftブループリントの確認画面へ遷移させる。
     """
     if "user_id" not in session:
-        # ログインしていない場合はログインページへ
         return redirect(url_for("login.login"))
         
     user_id = session["user_id"]
-    
-    # makeshift_bpで定義したシフト確認ビューへリダイレクト
-    # user_idを引数として渡します。
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
 
 
@@ -210,15 +234,25 @@ def manager_help_sinsei(date):
     if "user_id" not in session:
         return redirect(url_for("login.login"))
 
+    user_id = session["user_id"]
+    
+    # ★追加: ユーザーの店舗IDを取得
+    store_id = get_user_store_id(user_id)
+    if not store_id:
+        flash("❌ 店舗情報が取得できませんでした。", "danger")
+        return redirect(url_for("calendar.manager_help_request"))
+
     # ======================================================
-    # ★追加: 設定 (min_hours) を取得して変数に入れる
+    # ★修正: 店舗ごとの設定 (min_hours) を取得
     # ======================================================
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT min_hours_per_day FROM shift_settings LIMIT 1")
+    cursor.execute(
+        "SELECT min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
+        (store_id,)
+    )
     settings_row = cursor.fetchone()
     
-    # データがない場合やNoneの場合の対策
     if settings_row and settings_row['min_hours_per_day'] is not None:
         min_hours = float(settings_row['min_hours_per_day'])
     else:
@@ -231,7 +265,6 @@ def manager_help_sinsei(date):
     # 保存処理 (POST)
     # ======================================================
     if request.method == "POST":
-        user_id = session["user_id"]
         work = request.form.get("work")
         start_time = request.form.get("start_time")
         end_time = request.form.get("end_time")
@@ -246,12 +279,12 @@ def manager_help_sinsei(date):
             if end_time and not end_time.endswith(":00"):
                 end_time += ":00"
 
-        # ✅ すでに同じ日付の申請があるか確認
+        # すでに同じ日付の申請があるか確認
         check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
         result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
 
         if result > 0:
-            # ✅ 更新
+            # 更新
             update_sql = text("""
                 UPDATE calendar
                 SET work = :work, start_time = :start_time, end_time = :end_time
@@ -266,7 +299,7 @@ def manager_help_sinsei(date):
             })
             flash(f"{date} のヘルプ希望を更新しました。", "info")
         else:
-            # ✅ 新規登録
+            # 新規登録
             insert_sql = text("""
                 INSERT INTO calendar (ID, date, work, start_time, end_time)
                 VALUES (:user_id, :date, :work, :start_time, :end_time)
@@ -281,12 +314,9 @@ def manager_help_sinsei(date):
             flash(f"{date} のヘルプ希望を提出しました。", "success")
 
         db.session.commit()
-
         return redirect(url_for("calendar.manager_help_request"))
 
     # ======================================================
-    # ★修正: ここで min_hours を HTML に渡す！
+    # GET: フォーム表示
     # ======================================================
-    # HTML側で {{ store_id }} や {{ user_name }} を使っているなら、それらもここで渡す必要がありますが、
-    # 今回は最低時間に関する修正のみ行っています。
     return render_template("manager_help_sinsei.html", date=date, min_hours=min_hours)
