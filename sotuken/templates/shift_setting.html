@@ -153,26 +153,6 @@
       if (savedTab === 'holiday') {
         switchTab('holiday');
       }
-
-      // 時間帯最大人数の制限を各フォームに適用
-      const maxPeopleInput = document.querySelector('input[name="max_people_per_shift"]');
-      const demandForms = document.querySelectorAll('.zone-card form');
-
-      // ★★★ 特別時間フォームにもスクロール位置保存を適用 ★★★
-      const specialHoursForm = document.querySelector('form[action*="add_special_hours"]');
-      const deleteSpecialForms = document.querySelectorAll('form[action*="delete_special_hours"]');
-      
-      if (specialHoursForm) {
-        specialHoursForm.addEventListener('submit', function() {
-          sessionStorage.setItem('scrollPosition', window.scrollY);
-        });
-      }
-      
-      deleteSpecialForms.forEach(form => {
-        form.addEventListener('submit', function() {
-          sessionStorage.setItem('scrollPosition', window.scrollY);
-        });
-      });
     
 
       // ★★★ スクロール位置の復元 ★★★
@@ -289,11 +269,27 @@
         });
       });
 
-      // フォーム送信時にタブを保存
+            // フォーム送信時にタブを保存
       document.querySelectorAll('form[action*="add_demand"]').forEach(form => {
         form.addEventListener('submit', function() {
           const dayType = this.querySelector('input[name="day_type"]').value;
           sessionStorage.setItem('activeTab', dayType === 'holiday' ? 'holiday' : 'weekday');
+        });
+      });
+
+      // ★★★ 特別時間フォームにもスクロール位置保存を適用 ★★★
+      const specialHoursForm = document.querySelector('form[action*="add_special_hours"]');
+      const deleteSpecialForms = document.querySelectorAll('form[action*="delete_special_hours"]');
+
+      if (specialHoursForm) {
+        specialHoursForm.addEventListener('submit', function() {
+          sessionStorage.setItem('scrollPosition', window.scrollY);
+        });
+      }
+
+      deleteSpecialForms.forEach(form => {
+        form.addEventListener('submit', function() {
+          sessionStorage.setItem('scrollPosition', window.scrollY);
         });
       });
     });
