@@ -161,14 +161,35 @@ def show_admin_shift():
 
 @makeshift_bp.route("/day/<date_str>")
 def get_day_details(date_str):
+    from flask import session
+    
+    # ★追加: ログインチェック
+    if "user_id" not in session:
+        return jsonify({"error": "未ログイン"}), 401
+    
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
+    
+    # ★追加: ログインユーザーの店舗IDを取得
+    user_id = session["user_id"]
+    cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+    store_result = cursor.fetchone()
+    
+    if not store_result or not store_result['store_id']:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "店舗情報が見つかりません"}), 404
+    
+    store_id = store_result['store_id']
+    
+    # ★修正: 同じ店舗のユーザーのみ取得
     cursor.execute("""
-        SELECT ID, date, start_time, end_time
-        FROM calendar
-        WHERE date = %s
-        ORDER BY start_time
-    """, (date_str,))
+        SELECT c.ID, c.date, c.start_time, c.end_time
+        FROM calendar c
+        JOIN account a ON c.ID = a.ID
+        WHERE c.date = %s AND a.store_id = %s
+        ORDER BY c.start_time
+    """, (date_str, store_id))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
