@@ -8,7 +8,11 @@ chatbot_bp = Blueprint("chatbot", __name__, url_prefix="/chatbot")
  
 # --- AI設定 ---
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> d4d8f9439c9cd38e9c9d4846d48b4dec31bfa882
 # --- 応答キャッシュ ---
 answer_cache = {}
  
@@ -22,6 +26,16 @@ def get_user_name():
         return str(user_info.get("name", "guest"))
     return "guest"
  
+# ===========================
+# ヘルパー関数：ユーザー名を取得
+# ===========================
+def get_user_name():
+    """セッションからユーザー名（文字列）を取得"""
+    user_info = session.get("user", {})
+    if isinstance(user_info, dict):
+        return str(user_info.get("name", "guest"))
+    return "guest"
+
 # ===========================
 # DB操作ヘルパー
 # ===========================
@@ -40,14 +54,22 @@ def load_chat(user_name):
         {"u": user_name}
     ).fetchall()
     return [{"role": r.role, "text": r.text} for r in rows]
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> d4d8f9439c9cd38e9c9d4846d48b4dec31bfa882
 def get_all_faqs():
     """FAQテーブルから全てのQ&Aを取得"""
     rows = db.session.execute(
         sql_text("SELECT id, question, answer FROM faqs")
     ).fetchall()
     return [{"id": r.id, "question": r.question, "answer": r.answer} for r in rows]
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> d4d8f9439c9cd38e9c9d4846d48b4dec31bfa882
 # ===========================
 # チャット画面
 # ===========================
@@ -102,7 +124,11 @@ def generate_answer(user_question):
         
         if not faqs:
             return "FAQがまだ登録されていません。"
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> d4d8f9439c9cd38e9c9d4846d48b4dec31bfa882
         # 質問の埋め込みベクトルを作成
         query_emb = embedder.encode(user_question)
         
@@ -127,10 +153,17 @@ def generate_answer(user_question):
             f"Q: {faq['question']}\nA: {faq['answer']}"
             for _, faq in top_faqs
         ])
+<<<<<<< HEAD
  
         prompt = f"""
 以下はFAQです。ユーザーの質問に最も関連する回答を、FAQの内容を参考にして日本語で答えてください。
  
+=======
+
+        prompt = f"""
+以下はFAQです。ユーザーの質問に最も関連する回答を、FAQの内容を参考にして日本語で答えてください。
+
+>>>>>>> d4d8f9439c9cd38e9c9d4846d48b4dec31bfa882
 {context}
  
 ユーザーの質問: {user_question}
@@ -144,7 +177,11 @@ def generate_answer(user_question):
         import traceback
         traceback.print_exc()
         return "申し訳ございません。回答の生成中にエラーが発生しました。"
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> d4d8f9439c9cd38e9c9d4846d48b4dec31bfa882
 # ===========================
 # 履歴削除
 # ===========================
