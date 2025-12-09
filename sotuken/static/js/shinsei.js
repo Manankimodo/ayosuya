@@ -77,7 +77,7 @@ window.onload = toggleTimeInputs;
     }
 
 
-    // バリデーション関数
+        // バリデーション関数
     function validateForm() {
       const workSelect = document.getElementById('workSelect');
       const startTime = document.getElementById('startTime').value;
@@ -98,6 +98,17 @@ window.onload = toggleTimeInputs;
       const startLimit = settings.dataset.startLimit;
       const endLimit = settings.dataset.endLimit;
       
+      // ★★★ 時刻を分単位に変換して比較 ★★★
+      function timeToMinutes(timeStr) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      }
+      
+      const startMinutes = timeToMinutes(startTime);
+      const endMinutes = timeToMinutes(endTime);
+      const startLimitMinutes = timeToMinutes(startLimit);
+      const endLimitMinutes = timeToMinutes(endLimit);
+      
       // 時間差を計算
       const start = new Date(`2000-01-01T${startTime}:00`);
       const end = new Date(`2000-01-01T${endTime}:00`);
@@ -115,13 +126,13 @@ window.onload = toggleTimeInputs;
         return false;
       }
       
-      // 営業時間内チェック（簡易版）
-      if (startTime < startLimit || startTime > endLimit) {
+      // ★★★ 営業時間内チェック（修正版） ★★★
+      if (startMinutes < startLimitMinutes || startMinutes > endLimitMinutes) {
         alert(`開始時間は ${startLimit} 〜 ${endLimit} の範囲で入力してください。`);
         return false;
       }
       
-      if (endTime < startLimit || endTime > endLimit) {
+      if (endMinutes < startLimitMinutes || endMinutes > endLimitMinutes) {
         alert(`終了時間は ${startLimit} 〜 ${endLimit} の範囲で入力してください。`);
         return false;
       }
@@ -151,28 +162,5 @@ window.onload = toggleTimeInputs;
     // ページ読み込み時に初期化
     document.addEventListener('DOMContentLoaded', toggleTimeInputs);
 
-
-    document.addEventListener("DOMContentLoaded", function() {
-        // ... 既存のコード ...
-      
-        // ★★★ 特別時間フォームにもスクロール位置保存を適用 ★★★
-        const specialHoursForm = document.querySelector('form[action*="add_special_hours"]');
-        const deleteSpecialForms = document.querySelectorAll('form[action*="delete_special_hours"]');
-        
-        if (specialHoursForm) {
-          specialHoursForm.addEventListener('submit', function() {
-            sessionStorage.setItem('scrollPosition', window.scrollY);
-          });
-        }
-        
-        deleteSpecialForms.forEach(form => {
-          form.addEventListener('submit', function() {
-            sessionStorage.setItem('scrollPosition', window.scrollY);
-          });
-        });
-      
-        // 既存のスクロール復元処理はそのまま
-      });
-
-
+    
 
