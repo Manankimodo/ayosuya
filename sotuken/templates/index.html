@@ -3,22 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <!-- Jinja: CSSファイルへのリンク -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbot.css') }}">
-    
-    <!-- JavaScriptのファイル名を 'chatbot.js' に統一し、defer属性を追加 -->
-    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
-    
+    <script defer src="{{ url_for('static', filename='js/index.js') }}"></script>
     <title>AI チャットボット</title>
 </head>
 <body>
-    <!-- ハンバーガー -->
-    <!-- <div class="hamburger" id="hamburger">
-        <span></span><span></span><span></span>
-    </div> -->
-    <body>
-
-    <!-- ★★ 新しく header でまとめる ★★ -->
     <header class="top-bar">
         <div class="hamburger" id="hamburger">
             <span></span><span></span><span></span>
@@ -26,8 +15,6 @@
         <h1>アルバイト教育支援チャットボット</h1>
     </header>
 
-
-    <!-- メニュー -->
     <nav class="menu" id="menu">
         <ul>
             <li><a href="{{ url_for('calendar.calendar') }}">希望シフト入力へ戻る</a></li>
@@ -36,16 +23,13 @@
         </ul>
     </nav>
 
-    <h1>アルバイト教育支援チャットボット</h1>
-
-    <!-- 💬 チャットエリア -->
     <div class="chat-container" id="chat-container">
         {% if chat_history %}
             {% for msg in chat_history %}
                 <div class="message {{ 'user' if msg.role == 'user' else 'bot' }}">
                     {{ msg.text }}
+                    
                     {% if msg.role == 'bot' and loop.previtem and loop.previtem.role == 'user' %}
-                        <!-- 🔄 再生成ボタン -->
                         <button class="regen-btn" data-question="{{ loop.previtem.text }}">🔄再生成</button>
                     {% endif %}
                 </div>
@@ -55,7 +39,6 @@
         {% endif %}
     </div>
 
-    <!-- ✏️ 入力欄 -->
     <form id="chat-form" method="POST" action="/chatbot/">
         <input type="text" id="question" name="question" placeholder="質問を入力..." required>
         <button type="submit">送信</button>
