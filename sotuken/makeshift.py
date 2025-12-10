@@ -280,15 +280,16 @@ PREFERENCE_REWARD_WEIGHT = 1000
 @makeshift_bp.route("/auto_calendar")
 def auto_calendar():
     from datetime import time, datetime, timedelta 
+    from ortools.sat.python import cp_model
     import traceback
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # ---------------------------------------------------
-        # ヘルパー関数定義
-        # ---------------------------------------------------
+        # ========================================================
+        # 1. ヘルパー関数定義（安全な時間変換など）
+        # ========================================================
         def safe_time_format(val):
             if val is None: return "00:00"
             if hasattr(val, 'strftime'): return val.strftime("%H:%M")
@@ -310,58 +311,60 @@ def auto_calendar():
             except: pass
             return time(0, 0)
 
-        # ---------------------------------------------------
-        # 1. 基本設定の取得
-        # ---------------------------------------------------
+        # ========================================================
+        # 2. 設定取得（設定必須）
+        # ========================================================
         cursor.execute("SELECT * FROM shift_settings LIMIT 1")
         row = cursor.fetchone()
         
+        if not row:
+            conn.close()
+            return render_template("auto_calendar.html", 
+                                   settings={}, 
+                                   shifts=[], 
+                                   message="⚠️ エラー: 管理者設定が行われていません。先に「設定」メニューから営業時間などを保存してください。")
+
         settings = {
-            "start_time": "09:00", "end_time": "22:00", "break_minutes": 60,
-            "interval_minutes": 15, "max_hours_per_day": 8, "min_hours_per_day": 0,
-            "max_people_per_shift": 30, "auto_mode": "balance"
+            "start_time": safe_time_format(row["start_time"]),
+            "end_time": safe_time_format(row["end_time"]),
+            "break_minutes": row.get("break_minutes", 60),
+            "interval_minutes": row.get("interval_minutes", 15),
+            "max_hours_per_day": row.get("max_hours_per_day", 8),
+            "min_hours_per_day": row.get("min_hours_per_day", 0),
+            "max_people_per_shift": row.get("max_people_per_shift", 30),
+            "auto_mode": row.get("auto_mode", "balance")
         }
-        if row:
-            settings.update({
-                "start_time": safe_time_format(row["start_time"]),
-                "end_time": safe_time_format(row["end_time"]),
-                "break_minutes": row.get("break_minutes", 60),
-                "interval_minutes": row.get("interval_minutes", 15),
-                "max_hours_per_day": row.get("max_hours_per_day", 8),
-                "min_hours_per_day": row.get("min_hours_per_day", 0),
-                "max_people_per_shift": row.get("max_people_per_shift", 30),
-                "auto_mode": row.get("auto_mode", "balance")
-            })
 
         SHIFT_START = safe_to_time(settings['start_time'])
         SHIFT_END = safe_to_time(settings['end_time'])
         INTERVAL_MINUTES = int(settings['interval_minutes'])
-        
-        # 画面表示用に再整形
         settings['start_time'] = SHIFT_START.strftime("%H:%M")
         settings['end_time'] = SHIFT_END.strftime("%H:%M")
 
-        # ---------------------------------------------------
-        # 2. ユーザー、スキル、需要データの取得
-        # ---------------------------------------------------
+        # ========================================================
+        # 3. ユーザー情報の取得
+        # ========================================================
         cursor.execute("SELECT ID, name FROM account")
         users_data = cursor.fetchall()
         user_ids = [str(u['ID']) for u in users_data]
         num_users = len(user_ids)
         user_map = {str(user_id): i for i, user_id in enumerate(user_ids)}
         
+        # 役職・スキルの取得
         position_names = {}
         cursor.execute("SELECT id, name FROM positions")
-        for p in cursor.fetchall(): position_names[str(p['id'])] = p['name']
+        for p in cursor.fetchall(): 
+            position_names[str(p['id'])] = p['name']
 
         user_skill_ids = {}
         cursor.execute("SELECT user_id, position_id FROM user_positions")
         for row in cursor.fetchall():
             uid = str(row['user_id'])
             pid = str(row['position_id'])
-            if uid not in user_skill_ids: user_skill_ids[uid] = []
+            if uid not in user_skill_ids: 
+                user_skill_ids[uid] = []
             user_skill_ids[uid].append(pid)
-            
+
         # 需要データ（平日/休日）
         demand_weekday = {}
         demand_weekend = {}
@@ -370,54 +373,51 @@ def auto_calendar():
             t_str = safe_to_time(row['time_slot']).strftime("%H:%M")
             pid = str(row['position_id'])
             day_type = row.get('day_type', 'weekday')
-            
             target_map = demand_weekend if day_type == 'holiday' else demand_weekday
-            if t_str not in target_map: target_map[t_str] = {}
+            if t_str not in target_map: 
+                target_map[t_str] = {}
             target_map[t_str][pid] = row['required_count']
 
-        # ---------------------------------------------------
-        # ★★★ 追加: 特別営業時間の取得 ★★★
-        # ---------------------------------------------------
-        special_hours_map = {}
-        # accountテーブルからstore_idを取得できるなら絞り込むべきですが、今回は全件または既存ロジックに従います
-        cursor.execute("SELECT date, start_time, end_time FROM special_hours")
-        for sh in cursor.fetchall():
-            d_str = str(sh['date'])
-            special_hours_map[d_str] = {
-                'start': safe_to_time(sh['start_time']),
-                'end': safe_to_time(sh['end_time'])
-            }
-
-        # ---------------------------------------------------
-        # 3. シフト生成対象日の取得と初期化
-        # ---------------------------------------------------
+        # ========================================================
+        # 4. 削除処理（ロック機能対応）
+        # ========================================================
+        mode = request.args.get('mode', 'fill')
+        
         cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
         target_dates = [row['date'] for row in cursor.fetchall()]
+
+        if not target_dates:
+            conn.close()
+            return render_template("auto_calendar.html", 
+                                   message="希望シフトが登録されていません", 
+                                   shifts=[], 
+                                   settings=settings)
+
+        dates_list = [str(d) for d in target_dates]
+        placeholders = ','.join(['%s'] * len(dates_list))
+
+        if mode == 'reset':
+            # 完全リセット（ロックも無視して全削除）
+            sql = f"DELETE FROM shift_table WHERE date IN ({placeholders})"
+            cursor.execute(sql, tuple(dates_list))
+        else:
+            # 通常作成（ロックされていないもののみ削除）
+            sql = f"DELETE FROM shift_table WHERE (is_locked = 0 OR user_id < 0) AND date IN ({placeholders})"
+            cursor.execute(sql, tuple(dates_list))
         
-        # 既存シフトを削除
-        cursor.execute("DELETE FROM shift_table")
         conn.commit()
         
         all_generated_shifts = []
 
-        if not target_dates:
-             conn.close()
-             return render_template("auto_calendar.html", message="希望シフトなし", shifts=[], settings=settings)
-
-        # ---------------------------------------------------
-        # 4. 日付ごとのループ処理 (メインロジック)
-        # ---------------------------------------------------
+        # ========================================================
+        # 5. 日付ごとの最適化ループ
+        # ========================================================
         for target_date_obj in target_dates:
             target_date_str = target_date_obj.strftime("%Y-%m-%d")
             
-            # 曜日判定 (0=月...5=土,6=日)
-            weekday = target_date_obj.weekday()
-            is_weekend = weekday >= 5
+            # 曜日判定・需要マップ選択
+            is_weekend = target_date_obj.weekday() >= 5
             demand_map = demand_weekend if is_weekend else demand_weekday
-            
-            # 希望シフト取得
-            cursor.execute("SELECT ID, start_time, end_time FROM calendar WHERE date = %s AND work = 1", (target_date_str,))
-            preference_rows = cursor.fetchall()
             
             # 時間枠の作成
             time_intervals = []
@@ -428,120 +428,194 @@ def auto_calendar():
             while current_dt < target_end_dt:
                 time_intervals.append(current_dt.time())
                 current_dt += timedelta(minutes=INTERVAL_MINUTES)
-            num_intervals = len(time_intervals)
-            if num_intervals == 0: continue 
-
-            # ★★★ 特別時間の判定 ★★★
-            # その日に特別設定があれば、開始・終了時間を取得。なければ基本設定。
-            day_limit_start = SHIFT_START
-            day_limit_end = SHIFT_END
             
-            if target_date_str in special_hours_map:
-                sh_data = special_hours_map[target_date_str]
-                day_limit_start = sh_data['start']
-                day_limit_end = sh_data['end']
+            num_intervals = len(time_intervals)
+            if num_intervals == 0: 
+                continue
 
-            # Solver初期化
+            # ========================================================
+            # 6. ロック済みシフト（固定データ）の取得
+            # ========================================================
+            cursor.execute("""
+                SELECT user_id, start_time, end_time, type 
+                FROM shift_table 
+                WHERE date = %s AND is_locked = 1 AND user_id > 0
+            """, (target_date_str,))
+            locked_shifts_data = cursor.fetchall()
+            
+            locked_user_ids_set = set()
+            for ls in locked_shifts_data:
+                locked_user_ids_set.add(str(ls['user_id']))
+
+            # ========================================================
+            # 7. CP-SATモデルの初期化
+            # ========================================================
             model = cp_model.CpModel()
             shifts = {}
             for u in range(num_users):
                 for t in range(num_intervals):
                     shifts[u, t] = model.NewBoolVar(f's_{u}_{t}')
-            
-            # ---------------------------------------------------
-            # 制約: 需要と特別時間
-            # ---------------------------------------------------
+
+            # ========================================================
+            # 制約A: ロックされたシフトを強制適用
+            # ========================================================
+            for ls in locked_shifts_data:
+                uid_str = str(ls['user_id'])
+                if uid_str not in user_map: 
+                    continue
+                u_idx = user_map[uid_str]
+                
+                l_start = safe_to_time(ls['start_time'])
+                l_end = safe_to_time(ls['end_time'])
+                
+                for t_idx, t_time in enumerate(time_intervals):
+                    if l_start <= t_time < l_end:
+                        model.Add(shifts[u_idx, t_idx] == 1)
+                    else:
+                        # ロック範囲外は働かせない（二重勤務防止）
+                        model.Add(shifts[u_idx, t_idx] == 0)
+
+            # ========================================================
+            # 制約B: 需要（スキル・人数）
+            # ========================================================
             demand_fulfillment = []
-            
+            over_staff_penalty = []
+
             for t_idx, t_time in enumerate(time_intervals):
                 t_str = t_time.strftime("%H:%M")
                 
-                # ★★★ 重要: 特別営業時間の範囲外なら強制的にシフトなし(0)にする ★★★
-                # 例: 18:00閉店なら、18:00以降のコマは全員 0 に固定
-                if t_time < day_limit_start or t_time >= day_limit_end:
-                    for u in range(num_users):
-                        model.Add(shifts[u, t_idx] == 0)
-                    continue # この時間の需要計算はスキップ
-
-                # 以下、通常の需要計算
-                total_req = 0
                 if t_str in demand_map:
                     current_demand = demand_map[t_str]
                     needed_pids = [pid for pid, cnt in current_demand.items() if cnt > 0]
                     
-                    # 必要なスキルがない人は0
+                    # スキルがない人は配置不可
                     for u_idx in range(num_users):
                         user_id = user_ids[u_idx]
                         user_skills = user_skill_ids.get(user_id, [])
+                        
                         if needed_pids and not any(pid in needed_pids for pid in user_skills):
                             model.Add(shifts[u_idx, t_idx] == 0)
                     
-                    # 各役割の人数確保
+                    # 役職ごとの人数制約
                     for pid, count in current_demand.items():
-                        total_req += count
-                        capable = [shifts[u, t_idx] for u in range(num_users) if pid in user_skill_ids.get(user_ids[u], [])]
+                        capable = [shifts[u, t_idx] for u in range(num_users) 
+                                   if pid in user_skill_ids.get(user_ids[u], [])]
+                        
                         if capable:
-                            model.Add(sum(capable) <= count)
-                            demand_fulfillment.append(sum(capable))
-                
-                model.Add(sum(shifts[u, t_idx] for u in range(num_users)) <= total_req)
+                            actual_count = sum(capable)
+                            
+                            # 定員+1名まで許容（柔軟性確保）
+                            model.Add(actual_count <= count + 1)
+                            
+                            # 定員内の人数（スコア加算用）
+                            capped_count = model.NewIntVar(0, count, f'capped_{t_str}_{pid}')
+                            model.Add(capped_count <= actual_count)
+                            model.Add(capped_count <= count)
+                            demand_fulfillment.append(capped_count)
 
-            # ---------------------------------------------------
-            # 制約: 労働時間上限
-            # ---------------------------------------------------
+                            # 定員オーバーの人数（ペナルティ用）
+                            excess_count = model.NewIntVar(0, 1, f'excess_{t_str}_{pid}')
+                            model.Add(excess_count == actual_count - capped_count)
+                            over_staff_penalty.append(excess_count)
+
+                # 総人数の制限
+                total_req = sum(demand_map[t_str].values()) if t_str in demand_map else 0
+                current_total_shifts = sum(shifts[u, t_idx] for u in range(num_users))
+                
+                if total_req == 0:
+                    model.Add(current_total_shifts == 0)
+                else:
+                    model.Add(current_total_shifts <= total_req + 3)
+
+            # ========================================================
+            # 制約C: 労働時間（最大・最小）
+            # ========================================================
             max_hours = float(settings['max_hours_per_day'])
             max_intervals = int((max_hours * 60) / INTERVAL_MINUTES)
-            for u in range(num_users):
-                model.Add(sum(shifts[u, t] for t in range(num_intervals)) <= max_intervals)
-
-            # ---------------------------------------------------
-            # 制約: 最低勤務時間 (min_hours)
-            # ---------------------------------------------------
             min_hours = float(settings.get('min_hours_per_day', 0))
             min_slots = int((min_hours * 60) / INTERVAL_MINUTES)
 
-            if min_slots > 0:
-                for u in range(num_users):
+            user_total_hours = []
+            for u in range(num_users):
+                total_worked = sum(shifts[u, t] for t in range(num_intervals))
+                user_total_hours.append(total_worked)
+                
+                # 最大時間
+                model.Add(total_worked <= max_intervals)
+                
+                # 最小時間（働く場合は最低時間を確保）
+                if min_slots > 0:
                     is_working = model.NewBoolVar(f'is_working_{u}')
-                    total_worked_slots = sum(shifts[u, t] for t in range(num_intervals))
-                    
-                    model.Add(total_worked_slots >= min_slots).OnlyEnforceIf(is_working)
-                    model.Add(total_worked_slots == 0).OnlyEnforceIf(is_working.Not())
-                    model.Add(total_worked_slots > 0).OnlyEnforceIf(is_working)
+                    model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
+                    model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
 
-            # ---------------------------------------------------
-            # 制約: 連続性 (中抜け禁止)
-            # ---------------------------------------------------
+            # ========================================================
+            # 制約D: 公平性（勤務時間の偏り最小化）
+            # ========================================================
+            max_hours_var = model.NewIntVar(0, max_intervals, 'max_hours')
+            min_hours_var = model.NewIntVar(0, max_intervals, 'min_hours')
+
+            for total in user_total_hours:
+                model.Add(max_hours_var >= total)
+                # 働いている人の最小値のみ考慮
+                is_working_user = model.NewBoolVar(f'is_working_check')
+                model.Add(total > 0).OnlyEnforceIf(is_working_user)
+                model.Add(total == 0).OnlyEnforceIf(is_working_user.Not())
+                model.Add(min_hours_var <= total).OnlyEnforceIf(is_working_user)
+
+            balance_penalty = max_hours_var - min_hours_var
+
+            # ========================================================
+            # 制約E: 連続性（中抜け禁止）
+            # ========================================================
             for u in range(num_users):
                 start_flags = []
+                
+                # 最初のコマの開始判定
                 s0 = model.NewBoolVar(f'start_{u}_0')
                 model.Add(s0 == shifts[u, 0])
                 start_flags.append(s0)
                 
+                # 2コマ目以降の開始判定
                 for t in range(1, num_intervals):
                     st = model.NewBoolVar(f'start_{u}_{t}')
+                    # 「今働いていて、前は働いていない」= 開始
                     model.AddBoolAnd([shifts[u, t], shifts[u, t-1].Not()]).OnlyEnforceIf(st)
                     model.AddBoolOr([shifts[u, t].Not(), shifts[u, t-1]]).OnlyEnforceIf(st.Not())
                     start_flags.append(st)
                 
+                # 開始は1回まで（連続勤務のみ許可）
                 model.Add(sum(start_flags) <= 1)
 
-            # ---------------------------------------------------
-            # 制約: ユーザーの希望範囲のみ
-            # ---------------------------------------------------
-            users_with_pref = {str(row['ID']) for row in preference_rows}
-            pref_score = []
+            # ========================================================
+            # 制約F: 希望シフト範囲内のみ配置
+            # ========================================================
+            cursor.execute("""
+                SELECT ID, start_time, end_time 
+                FROM calendar 
+                WHERE date = %s AND work = 1
+            """, (target_date_str,))
+            preference_rows = cursor.fetchall()
             
-            # 希望を出していない人は全休
+            # 希望を出していない人は配置不可（ロック済みを除く）
+            users_with_pref = {str(row['ID']) for row in preference_rows}
             for u, uid in enumerate(user_ids):
-                if str(uid) not in users_with_pref:
-                    for t in range(num_intervals): model.Add(shifts[u, t] == 0)
+                if str(uid) not in locked_user_ids_set and str(uid) not in users_with_pref:
+                    for t in range(num_intervals): 
+                        model.Add(shifts[u, t] == 0)
 
-            # 希望範囲外はシフト入れない
+            # 希望範囲内でのみ配置可能（スコア計算も含む）
+            pref_score = []
             for row in preference_rows:
                 uid_str = str(row['ID'])
-                if uid_str not in user_map: continue
+                if uid_str not in user_map: 
+                    continue
                 u = user_map[uid_str]
+                
+                # ロック済みユーザーは希望制約をスキップ
+                if uid_str in locked_user_ids_set:
+                    continue
+                
                 s_val = safe_to_time(row['start_time'])
                 e_val = safe_to_time(row['end_time'])
                 
@@ -551,191 +625,317 @@ def auto_calendar():
                     else:
                         model.Add(shifts[u, t] == 0)
 
-            # ---------------------------------------------------
-            # ソルバー実行
-            # ---------------------------------------------------
-            model.Maximize(sum(demand_fulfillment)*10 + sum(pref_score))
-            solver = cp_model.CpSolver()
-            status = solver.Solve(model)
+            # ========================================================
+            # 制約G: 連続勤務日数の考慮（過去の勤務状況）
+            # ========================================================
+            recent_work_penalty = []
+            cursor.execute("""
+                SELECT user_id, COUNT(DISTINCT date) as work_days
+                FROM shift_table
+                WHERE date BETWEEN %s AND %s AND user_id > 0
+                GROUP BY user_id
+            """, (target_date_obj - timedelta(days=6), target_date_obj - timedelta(days=1)))
             
+            recent_work_days = {str(row['user_id']): row['work_days'] for row in cursor.fetchall()}
+            
+            # 5日以上連続勤務している人にはペナルティ
+            for u_idx, user_id in enumerate(user_ids):
+                if recent_work_days.get(user_id, 0) >= 5:
+                    # 働いた時間数をペナルティとして記録
+                    penalty = sum(shifts[u_idx, t] for t in range(num_intervals))
+                    recent_work_penalty.append(penalty)
+
+            # ========================================================
+            # 目的関数の設定
+            # ========================================================
+            # 重み付けの定義
+            WEIGHT_DEMAND = 100        # 需要充足（最優先）
+            WEIGHT_PREFERENCE = 10     # 希望シフト適合
+            WEIGHT_OVERSTAFF = -15     # 定員オーバーのペナルティ
+            WEIGHT_BALANCE = -3        # 勤務時間の偏りペナルティ
+            WEIGHT_RECENT_WORK = -2    # 連続勤務ペナルティ
+
+            model.Maximize(
+                sum(demand_fulfillment) * WEIGHT_DEMAND + 
+                sum(pref_score) * WEIGHT_PREFERENCE - 
+                sum(over_staff_penalty) * WEIGHT_OVERSTAFF -
+                balance_penalty * WEIGHT_BALANCE -
+                sum(recent_work_penalty) * WEIGHT_RECENT_WORK
+            )
+
+            # ========================================================
+            # ソルバー実行
+            # ========================================================
+            solver = cp_model.CpSolver()
+            solver.parameters.num_search_workers = 1
+            solver.parameters.random_seed = 42
+            solver.parameters.max_time_in_seconds = 30.0  # タイムアウト設定
+            
+            status = solver.Solve(model)
+
+            # ========================================================
+            # 8. 結果の処理
+            # ========================================================
             if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
                 user_assigned_roles = {}
-                
-                # 不足データの管理
                 active_shortages = {} 
                 shortage_list_day = []
 
+                # 各時間枠での役割割り当て
                 for t_idx, t_time in enumerate(time_intervals):
                     t_str = t_time.strftime("%H:%M")
                     
-                    # シフトが入っている人
+                    # 勤務者の特定
                     working_users = []
                     for u_idx in range(num_users):
                         if solver.Value(shifts[u_idx, t_idx]) == 1:
                             working_users.append(u_idx)
                     
-                    # 空き枠（需要）
+                    # 空きスロット（需要）の取得
                     open_slots = []
-                    # ★ 特別時間の範囲外なら需要も0とみなす
-                    if t_time >= day_limit_start and t_time < day_limit_end:
-                        if t_str in demand_map:
-                            for pid, count in demand_map[t_str].items():
-                                for _ in range(count): open_slots.append(pid)
+                    if t_str in demand_map:
+                        for pid, count in demand_map[t_str].items():
+                            for _ in range(count): 
+                                open_slots.append(pid)
                     
-                    # 役割割り当て
+                    # スキルマッチングによる役割割り当て
                     working_users.sort(key=lambda u: len([p for p in user_skill_ids.get(user_ids[u], []) if p in open_slots]))
-                    assigned_pids = {} 
+                    assigned_pids = {}
+                    
                     for u_idx in working_users:
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
                         filled = False
+                        
                         for i, slot_pid in enumerate(open_slots):
                             if slot_pid in skills:
                                 assigned_pids[u_idx] = slot_pid
                                 open_slots.pop(i)
                                 filled = True
                                 break
+                        
                         if not filled:
                             assigned_pids[u_idx] = skills[0] if skills else "Staff"
 
                     for u_idx in working_users:
                         role_name = position_names.get(assigned_pids.get(u_idx), "Work")
-                        if u_idx not in user_assigned_roles: user_assigned_roles[u_idx] = {}
+                        if u_idx not in user_assigned_roles: 
+                            user_assigned_roles[u_idx] = {}
                         user_assigned_roles[u_idx][t_idx] = role_name
 
-                    # 不足の記録
+                    # 不足の記録（穴埋め表示用）
                     current_step_shortage_keys = set()
                     slot_counts = {}
                     for pid in open_slots:
                         slot_counts[pid] = slot_counts.get(pid, 0) + 1
                     
                     for pid, count in slot_counts.items():
-                        p_name = position_names.get(pid, "役割")
                         for i in range(count):
                             key = (pid, i)
                             current_step_shortage_keys.add(key)
-                            
                             next_end_dt = datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)
-                            next_end_str = next_end_dt.time().strftime("%H:%M")
-
+                            
                             if key in active_shortages:
-                                active_shortages[key]['end_time'] = next_end_str
+                                active_shortages[key]['end_time'] = next_end_dt.time().strftime("%H:%M")
                             else:
+                                p_name = position_names.get(pid, "役割")
                                 neg_id = -1 * (int(pid) * 1000 + i)
                                 unique_name = f"🚨 {p_name}不足 ({i+1})"
                                 active_shortages[key] = {
-                                    "user_id": neg_id,
+                                    "user_id": neg_id, 
                                     "user_name": unique_name,
                                     "date": target_date_str,
                                     "start_time": t_time.strftime("%H:%M"),
-                                    "end_time": next_end_str,
+                                    "end_time": next_end_dt.time().strftime("%H:%M"), 
                                     "type": unique_name
                                 }
                     
                     # 途切れた不足を確定
-                    completed_keys = []
-                    for key in active_shortages:
-                        if key not in current_step_shortage_keys:
-                            shortage_list_day.append(active_shortages[key])
-                            completed_keys.append(key)
-                    for key in completed_keys:
-                        del active_shortages[key]
+                    completed_keys = [k for k in active_shortages if k not in current_step_shortage_keys]
+                    for k in completed_keys:
+                        shortage_list_day.append(active_shortages[k])
+                        del active_shortages[k]
 
-                # ループ後の不足残りを確定
-                for item in active_shortages.values():
+                # 最後まで続いた不足を追加
+                for item in active_shortages.values(): 
                     shortage_list_day.append(item)
                 
                 all_generated_shifts.extend(shortage_list_day)
 
-                # ユーザーのシフト結合
+                # ========================================================
+                # 9. 新規シフトの保存処理（ロック済みユーザーは除外）
+                # ========================================================
                 for u_idx, roles_map in user_assigned_roles.items():
                     user_id = user_ids[u_idx]
+                    
+                    if user_id in locked_user_ids_set:
+                        continue
+                        
                     current_block_start = None
                     current_role = None
+                    
                     for t_idx in range(num_intervals):
                         role_name = roles_map.get(t_idx)
                         t_time = time_intervals[t_idx]
+                        
                         if role_name:
                             if current_block_start is None:
+                                # 勤務開始
                                 current_block_start = t_time
                                 current_role = role_name
                             elif role_name != current_role:
-                                end_dt_calc = datetime.combine(base_date, t_time)
+                                # 役割変更（前のブロックを保存）
+                                end_dt = datetime.combine(base_date, t_time)
                                 all_generated_shifts.append({
-                                    "user_id": user_id, "date": target_date_str,
+                                    "user_id": user_id, 
+                                    "date": target_date_str,
                                     "start_time": current_block_start.strftime("%H:%M"),
-                                    "end_time": end_dt_calc.time().strftime("%H:%M"), "type": current_role
+                                    "end_time": end_dt.time().strftime("%H:%M"), 
+                                    "type": current_role
                                 })
                                 current_block_start = t_time
                                 current_role = role_name
                         else:
                             if current_block_start is not None:
-                                end_dt_calc = datetime.combine(base_date, time_intervals[t_idx])
+                                # 勤務終了
+                                end_dt = datetime.combine(base_date, time_intervals[t_idx])
                                 all_generated_shifts.append({
-                                    "user_id": user_id, "date": target_date_str,
+                                    "user_id": user_id, 
+                                    "date": target_date_str,
                                     "start_time": current_block_start.strftime("%H:%M"),
-                                    "end_time": end_dt_calc.time().strftime("%H:%M"), "type": current_role
+                                    "end_time": end_dt.time().strftime("%H:%M"), 
+                                    "type": current_role
                                 })
                                 current_block_start = None
                                 current_role = None
+                    
+                    # 最後まで勤務していた場合
                     if current_block_start is not None:
                         last_t = time_intervals[-1]
                         last_end_dt = datetime.combine(base_date, last_t) + timedelta(minutes=INTERVAL_MINUTES)
                         all_generated_shifts.append({
-                            "user_id": user_id, "date": target_date_str,
+                            "user_id": user_id, 
+                            "date": target_date_str,
                             "start_time": current_block_start.strftime("%H:%M"),
-                            "end_time": last_end_dt.time().strftime("%H:%M"), "type": current_role
+                            "end_time": last_end_dt.time().strftime("%H:%M"), 
+                            "type": current_role
                         })
 
-        # ---------------------------------------------------
-        # 5. 結果の保存と表示用データの取得
-        # ---------------------------------------------------
-        final_display_shifts = []
+        # ========================================================
+        # 10. DB保存と表示用データの取得
+        # ========================================================
         if all_generated_shifts:
             sql = "INSERT INTO shift_table (user_id, date, start_time, end_time, type) VALUES (%s, %s, %s, %s, %s)"
-            data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type']) for s in all_generated_shifts]
+            data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type']) 
+                    for s in all_generated_shifts]
             cursor.executemany(sql, data)
             conn.commit()
             
-            cursor.execute("""
-                SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type 
-                FROM shift_table s LEFT JOIN account a ON s.user_id = a.ID 
-                ORDER BY s.user_id, s.date, s.start_time
-            """)
-            raw_shifts = cursor.fetchall()
+        # 全シフトデータの再取得
+        cursor.execute("""
+            SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type, s.is_locked
+            FROM shift_table s 
+            LEFT JOIN account a ON s.user_id = a.ID 
+            ORDER BY s.user_id, s.date, s.start_time
+        """)
+        raw_shifts = cursor.fetchall()
+        
+        # ========================================================
+        # 11. 表示用データの整形（連続シフトの結合）
+        # ========================================================
+        final_display_shifts = []
+        if raw_shifts:
+            curr = raw_shifts[0]
+            curr['start_time'] = safe_to_time(curr['start_time']).strftime("%H:%M")
+            curr['end_time'] = safe_to_time(curr['end_time']).strftime("%H:%M")
+            curr['date'] = str(curr['date'])
+            curr['is_locked'] = curr.get('is_locked', 0)
             
-            if raw_shifts:
-                curr = raw_shifts[0]
-                curr['start_time'] = safe_to_time(curr['start_time']).strftime("%H:%M")
-                curr['end_time'] = safe_to_time(curr['end_time']).strftime("%H:%M")
-                curr['date'] = str(curr['date'])
+            if int(curr['user_id']) < 0: 
+                curr['user_name'] = curr['type']
+
+            for i in range(1, len(raw_shifts)):
+                nxt = raw_shifts[i]
+                nxt['start_time'] = safe_to_time(nxt['start_time']).strftime("%H:%M")
+                nxt['end_time'] = safe_to_time(nxt['end_time']).strftime("%H:%M")
+                nxt['date'] = str(nxt['date'])
+                nxt['is_locked'] = nxt.get('is_locked', 0)
                 
-                if int(curr['user_id']) < 0: curr['user_name'] = curr['type']
+                if int(nxt['user_id']) < 0: 
+                    nxt['user_name'] = nxt['type']
 
-                for i in range(1, len(raw_shifts)):
-                    nxt = raw_shifts[i]
-                    nxt['start_time'] = safe_to_time(nxt['start_time']).strftime("%H:%M")
-                    nxt['end_time'] = safe_to_time(nxt['end_time']).strftime("%H:%M")
-                    nxt['date'] = str(nxt['date'])
-                    
-                    if int(nxt['user_id']) < 0: nxt['user_name'] = nxt['type']
-
-                    if (curr['user_id'] == nxt['user_id'] and curr['date'] == nxt['date'] and 
-                        curr['type'] == nxt['type'] and curr['end_time'] == nxt['start_time']):
-                        curr['end_time'] = nxt['end_time']
-                    else:
-                        final_display_shifts.append(curr)
-                        curr = nxt
-                final_display_shifts.append(curr)
+                # 同一人物・同一日・同一役割・連続時間なら結合
+                if (curr['user_id'] == nxt['user_id'] and 
+                    curr['date'] == nxt['date'] and 
+                    curr['type'] == nxt['type'] and 
+                    curr['end_time'] == nxt['start_time']):
+                    curr['end_time'] = nxt['end_time']
+                else:
+                    final_display_shifts.append(curr)
+                    curr = nxt
+            
+            final_display_shifts.append(curr)
 
         conn.close()
-        return render_template("auto_calendar.html", settings=settings, shifts=final_display_shifts, message=f"{len(final_display_shifts)}件のシフトを作成しました")
+        
+        success_msg = f"✅ シフト作成完了: {len(final_display_shifts)}件のシフトを生成しました"
+        return render_template("auto_calendar.html", 
+                               settings=settings, 
+                               shifts=final_display_shifts, 
+                               message=success_msg)
 
     except Exception as e:
         conn.close()
         print(traceback.format_exc())
-        return render_template("auto_calendar.html", settings=settings if 'settings' in locals() else {}, shifts=[], message=f"エラー: {str(e)}")#-------------------------------------------------------------------------------------------------------------
+        error_settings = settings if 'settings' in locals() else {}
+        return render_template("auto_calendar.html", 
+                               settings=error_settings, 
+                               shifts=[], 
+                               message=f"❌ エラーが発生しました: {str(e)}")
+#------------------------------------------------------------------------------------------------------------------------------------------------------
+
+from flask import jsonify, request
+
+@makeshift_bp.route("/toggle_lock", methods=["POST"])
+def toggle_lock():
+    data = request.json
+    shift_user_id = data.get('user_id')
+    shift_date = data.get('date')
+    # 時間帯を一意に特定するために start_time も必要かもしれません
+    # 今回は簡易的に「その人のその日のシフト全体」をロックする例にします
     
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # まず現在の状態を確認
+        cursor.execute("""
+            SELECT is_locked FROM shift_table 
+            WHERE user_id = %s AND date = %s 
+            LIMIT 1
+        """, (shift_user_id, shift_date))
+        row = cursor.fetchone()
+        
+        if not row:
+            return jsonify({'status': 'error', 'message': 'シフトが見つかりません'}), 404
+            
+        # 状態を反転させる (0 -> 1, 1 -> 0)
+        new_status = 0 if row['is_locked'] else 1
+        
+        cursor.execute("""
+            UPDATE shift_table 
+            SET is_locked = %s 
+            WHERE user_id = %s AND date = %s
+        """, (new_status, shift_user_id, shift_date))
+        conn.commit()
+        
+        return jsonify({'status': 'success', 'new_state': new_status})
+        
+    except Exception as e:
+        print(e)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        conn.close()
 
 # ==========================================
 # 2. 設定画面の表示と基本設定の更新-----------------------------------------------------------------------------------------

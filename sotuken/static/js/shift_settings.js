@@ -195,3 +195,35 @@ document.addEventListener("DOMContentLoaded", function() {
         setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
     }
 });
+
+    // --- 既存のタブ切り替え関数などはそのまま ---
+    function switchTab(type) { /* ... */ }
+
+    // ★追加：テーマ切り替えロジック
+    function toggleTheme() {
+        const body = document.body;
+        const btn = document.getElementById('themeBtn');
+        
+        // クラスを付け外し
+        body.classList.toggle('light-mode');
+        
+        // 現在の状態を確認
+        const isLight = body.classList.contains('light-mode');
+        
+        // ボタンの文字を変える
+        btn.textContent = isLight ? "🌙 ダークモードへ" : "☀️ ライトモードへ";
+        
+        // 設定をブラウザに保存（次回アクセス用）
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    }
+
+    // ページ読み込み時に設定を復元
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('theme');
+        const btn = document.getElementById('themeBtn');
+        
+        if (savedTheme === 'light') {
+            document.body.classList.add('light-mode');
+            if(btn) btn.textContent = "🌙 ダークモードへ";
+        }
+    });
