@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
 </head>
 <body>
+  <div class="user-info">
+    <p>{{ store_id }}号店 {{ user_name }}さん</p>
+  </div>
   <h1 id="monthYear">希望スケジュール入力</h1>
   <!-- 🍔 ハンバーガーボタン -->
   <div class="hamburger" id="hamburger">
