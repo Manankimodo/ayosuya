@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
 </head>
 <body>
+  <div class="user-info">
+    <p>{{ store_id }}号店 {{ user_name }}さん</p>
+  </div>
   <h1 id="monthYear">希望スケジュール入力</h1>
   <!-- 🍔 ハンバーガーボタン -->
   <div class="hamburger" id="hamburger">
@@ -25,8 +28,8 @@
     <ul>
         <li><a href="{{ url_for('calendar.my_confirmed_shift') }}">確定シフトを確認</a></li>
         <li><a href="{{ url_for('login.register_line_id') }}">LINE ID 登録</a></li>
-        <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
         <li><a href="{{ url_for('chatbot.chat') }}">チャットボット</a></li>
+        <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
     </ul>
   </nav>
 
