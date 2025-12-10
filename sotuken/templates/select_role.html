@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/select_role.css') }}">
+    <title>ログイン方法を選択</title>
+</head>
+<body>
+    <div class="container">
+        <h1>ログイン方法を選択してください</h1>
+        <div class="user-name">{{ user_name }}さん</div>
+        <div class="message">
+            管理者として入る場合は「管理者」を、<br>
+            従業員として入る場合は「従業員」を選択してください。
+        </div>
+
+        <form method="POST" action="{{ url_for('login.confirm_role') }}">
+            <button type="submit" name="selected_role" value="manager" class="role-button manager-btn">
+                🏢 管理者として入る
+            </button>
+            <button type="submit" name="selected_role" value="staff" class="role-button staff-btn">
+                👔 従業員として入る
+            </button>
+        </form>
+    </div>
+</body>
+</html>
