@@ -280,9 +280,21 @@ document.addEventListener("DOMContentLoaded", function() {
             }
             
             // 役割に応じた色上書き (任意)
-            let barColor = userColorMap[s.user_id];
-            if (s.type === "キッチン") barColor = "#e57373"; // 赤
-            if (s.type === "ホール") barColor = "#64b5f6";   // 青
+            // ★★★ 色の設定エリア（希望の配色に変更） ★★★
+            let barColor = userColorMap[s.user_id] || "#bdbdbd"; // デフォルトはグレー
+
+            // 1. 不足は「赤」 (Red)
+            if (s.type && s.type.indexOf("不足") !== -1) {
+                barColor = "#ef5350"; // 警告の赤
+            } 
+            // 2. キッチンは「青」 (Blue)
+            else if (s.type && s.type.includes("キッチン")) {
+                barColor = "#42a5f5"; // さわやかな青
+            }
+            // 3. ホールは「緑」 (Green)
+            else if (s.type && s.type.includes("ホール")) {
+                barColor = "#66bb6a"; // 明るい緑
+            }
 
             return {
                 x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],

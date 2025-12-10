@@ -195,16 +195,20 @@
                   colorIndex++;
               }
               
-              let barColor = userColorMap[s.user_id];
+              // ★★★ 色の設定エリア（希望の配色に変更） ★★★
+              let barColor = userColorMap[s.user_id] || "#bdbdbd"; // デフォルトはグレー
 
+              // 1. 不足は「赤」 (Red)
               if (s.type && s.type.indexOf("不足") !== -1) {
-                  barColor = "#ff1744"; 
+                  barColor = "#ef5350"; // 警告の赤
               } 
+              // 2. キッチンは「青」 (Blue)
               else if (s.type && s.type.includes("キッチン")) {
-                  barColor = "#e57373";
+                  barColor = "#42a5f5"; // さわやかな青
               }
+              // 3. ホールは「緑」 (Green)
               else if (s.type && s.type.includes("ホール")) {
-                  barColor = "#64b5f6";
+                  barColor = "#66bb6a"; // 明るい緑
               }
 
               // ロックされている場合、色を少し暗くするか枠線を強調しても良いが
