@@ -88,7 +88,7 @@ def login():
             }
             session['user_id'] = staff.id
             session['role'] = staff.role
-            return redirect('/calendar')
+            return redirect(url_for("calendar.calendar"))
 
         # 3. ログイン失敗
         flash("ログインID または パスワードが間違っています", "danger")
@@ -129,7 +129,8 @@ def confirm_role():
     # セッションに正式に保存
     session['user'] = temp_user
     session['user_id'] = temp_user['id']
-    session['role'] = temp_user['role']
+    session['role'] = temp_user['role']  # 元のrole（manager）
+    session['selected_role'] = selected_role  # ★ 選択したロールを保存
     
     # 一時保存データを削除
     session.pop('temp_user', None)
@@ -140,7 +141,7 @@ def confirm_role():
         return redirect(url_for("login.manager_home"))
     elif selected_role == 'staff':
         flash(f"{temp_user['name']}さん、従業員としてログインしました", "success")
-        return redirect('/calendar')
+        return redirect(url_for("calendar.calendar"))
     else:
         flash("不正な選択です", "danger")
         return redirect(url_for("login.login"))

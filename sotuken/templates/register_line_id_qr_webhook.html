@@ -47,7 +47,7 @@
         <button type="button" id="start-btn" onclick="startRegistration()">
           登録開始
         </button>
-        <button type="button" class="btn-secondary" onclick="goHome()">
+        <button type="button" class="btn-secondary" onclick="skipRegistration()">
           キャンセル
         </button>
 
@@ -59,128 +59,24 @@
     </div>
 
     <div class="skip-link">
-      <a href="javascript:goHome()">後で登録する →</a>
+      <a href="#" onclick="skipRegistration(); return false;">後で登録する →</a>
     </div>
   </div>
 
+  <!-- ★ FlaskのURLを渡すためのスクリプト（HTML内に残す） -->
   <script>
-    let registrationInProgress = false;
-    let pollInterval = null;
-
-    async function startRegistration() {
-      if (registrationInProgress) return;
-
-      const startBtn = document.getElementById('start-btn');
-      const loadingDiv = document.getElementById('loading');
-      const messageAlert = document.getElementById('message-alert');
-
-      registrationInProgress = true;
-      startBtn.disabled = true;
-      loadingDiv.style.display = 'block';
-
-      try {
-        const response = await fetch('{{ url_for("line.start_line_id_registration") }}', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          showMessage('✅ 登録を開始しました。公式LINEにメッセージを送ってください。', 'info');
-          startPolling();
-        } else {
-          showMessage(data.message || 'エラーが発生しました', 'error');
-          startBtn.disabled = false;
-          registrationInProgress = false;
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        showMessage('通信エラーが発生しました', 'error');
-        startBtn.disabled = false;
-        registrationInProgress = false;
-      } finally {
-        loadingDiv.style.display = 'none';
-      }
-    }
-
-    function startPolling() {
-      const maxAttempts = 20;
-      let attempts = 0;
-
-      pollInterval = setInterval(() => {
-        attempts++;
-
-        if (attempts > maxAttempts) {
-          clearInterval(pollInterval);
-          showMessage('⏱️ 登録期限が切れました。もう一度開始ボタンをクリックしてください。', 'error');
-          registrationInProgress = false;
-          document.getElementById('start-btn').disabled = false;
-          return;
-        }
-
-        checkRegistrationStatus();
-      }, 30000);
-    }
-
-    async function checkRegistrationStatus() {
-      try {
-        const response = await fetch('{{ url_for("line.check_line_id_registration") }}', {
-          method: 'GET'
-        });
-
-        const data = await response.json();
-
-        if (data.registered) {
-          clearInterval(pollInterval);
-          updateStatusBox(true);
-          showMessage('✅ LINE ID の登録が完了しました！', 'success');
-          
-          setTimeout(() => {
-            goHome();
-          }, 2000);
-        }
-      } catch (error) {
-        console.error('Error checking status:', error);
-      }
-    }
-
-    function updateStatusBox(registered) {
-      const icon = document.getElementById('status-icon');
-      const text = document.getElementById('status-text');
-      const hint = document.getElementById('status-hint');
-
-      if (registered) {
-        icon.textContent = '✅';
-        text.textContent = '登録完了！';
-        text.classList.remove('waiting');
-        text.classList.add('registered');
-        hint.textContent = 'ホーム画面に遷移します...';
-      }
-    }
-
-    function showMessage(message, type) {
-      const messageAlert = document.getElementById('message-alert');
-      messageAlert.textContent = message;
-      messageAlert.className = `alert alert-${type}`;
-      messageAlert.style.display = 'block';
-    }
-
-    function goHome() {
-      if (pollInterval) clearInterval(pollInterval);
-      
-      const userRole = '{{ session.get("role", "") }}';
-      
-      if (userRole === 'manager') {
-        // 店長 → calendar2.html
-        window.location.href = '{{ url_for("login.manager_home") }}';
-      } else {
-        // 従業員 → calendar.html
-        window.location.href = '{{ url_for("calendar.calendar") }}';
-      }
-    }
+    // FlaskのURL_forで生成したURLをJavaScriptに渡す
+    window.LINE_CONFIG = {
+      startRegistrationUrl: "{{ url_for('line.start_line_id_registration') }}",
+      checkRegistrationUrl: "{{ url_for('line.check_line_id_registration') }}",
+      managerHomeUrl: "{{ url_for('login.manager_home') }}",
+      calendarUrl: "{{ url_for('calendar.calendar') }}",
+      selectedRole: "{{ session.get('selected_role', '') }}",
+      userRole: "{{ session.get('role', '') }}"
+    };
   </script>
+  
+  <!-- ★ 外部JSファイルを読み込む -->
+  <script src="{{ url_for('static', filename='js/register_line_id_qr_webhook.js') }}"></script>
 </body>
 </html>
