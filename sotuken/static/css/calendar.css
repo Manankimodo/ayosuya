@@ -41,20 +41,22 @@ body {
 /* タイトル (h1) - ロゴ風に強調 */
 h1 {
     font-size: 2.5rem;
-    margin: 30px 0 25px;
+    margin: 0;
+    padding: 20px 0;
     color: #E50914;
     letter-spacing: 3px;
     font-weight: 700;
     text-shadow: 0 0 10px rgba(229, 9, 20, 0.4);
+    position: sticky;
+    top: 48px; /* user-infoの高さ分下に配置 */
+    background: #141414;
+    z-index: 99;
+    border-bottom: 1px solid rgba(229, 9, 20, 0.2);
 }
 
 /* 月と年の表示を固定 */
 #monthYear {
-    position: sticky;
-    top: 60px; /* user-infoの下に配置 */
-    padding: 10px 0;
-    background: #141414;
-    z-index: 10;
+    /* h1に統合されたため個別のスタイルは不要 */
 }
 
 /* === 月切り替えボタン === */
@@ -521,13 +523,13 @@ h1 {
     
     h1 {
         font-size: 1.8rem; 
-        margin-top: 15px;
-        margin-bottom: 15px;
+        padding: 15px 0;
         letter-spacing: 2px;
+        top: 42px; /* スマホ用user-infoの高さに合わせる */
     }
 
     #monthYear {
-        top: 42px;
+        /* h1に統合 */
     }
 
     .month-switch {
