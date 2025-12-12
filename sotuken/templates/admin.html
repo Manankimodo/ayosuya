@@ -24,12 +24,13 @@
     </ul>
   </nav>
     <!-- ✅ ボタンコントロール部分 -->
-  <div id="controls">
-    <button id="make-shift-btn" onclick="location.href='/makeshift/auto_calendar'">
-      🗓️ シフト自動作成
-    </button>
-    <!-- <button id="back-btn" onclick="location.href='/calendar/admin'">👥 前のページへ戻る</button> -->
-  </div>
+    <div id="controls">
+      <form action="/makeshift/auto_calendar" method="get">
+        <button type="submit" id="make-shift-btn">
+          🗓️ シフト自動作成
+        </button>
+      </form>
+    </div>
 
   <div class="container">
     {% if results %}

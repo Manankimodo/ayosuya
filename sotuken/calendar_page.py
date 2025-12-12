@@ -53,6 +53,9 @@ def admin():
 # ==========================
 # 🔹 希望申請フォーム
 # ==========================
+# ==========================
+# 🔹 希望申請フォーム（完全修正版）
+# ==========================
 @calendar_bp.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
     # 1. ログイン確認
@@ -61,140 +64,148 @@ def sinsei(date):
 
     user_id = session["user_id"]
     
-    # ★追加: ユーザーの店舗IDを取得
-    store_id = get_user_store_id(user_id)
-    if not store_id:
-        flash("❌ 店舗情報が取得できませんでした。", "danger")
-        return redirect(url_for("calendar.calendar"))
-
-    # ======================================================
-    # ★修正: 設定と特別時間の取得（store_id条件を追加）
-    # ======================================================
+    # DB接続
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
-    # ★修正: 店舗ごとの基本設定を取得
-    cursor.execute(
-        "SELECT start_time, end_time, min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
-        (store_id,)
-    )
-    settings_row = cursor.fetchone()
-    
-    if settings_row:
-        min_hours = float(settings_row['min_hours_per_day']) if settings_row['min_hours_per_day'] is not None else 0
-        default_start = str(settings_row['start_time'])[:5] if settings_row['start_time'] else "09:00"
-        default_end = str(settings_row['end_time'])[:5] if settings_row['end_time'] else "22:00"
-    else:
-        min_hours = 0
-        default_start = "09:00"
-        default_end = "22:00"
-    
-    # ★修正: 店舗ごとの特別時間があるか確認
-    cursor.execute(
-        "SELECT start_time, end_time, reason FROM special_hours WHERE store_id = %s AND date = %s",
-        (store_id, date)
-    )
-    special = cursor.fetchone()
-    
-    if special:
-        # 特別時間を優先
-        start_limit = str(special['start_time'])[:5]
-        end_limit = str(special['end_time'])[:5]
-        notice = f"⚠️ {special.get('reason', 'この日')}のため、営業時間が変更されています"
-    else:
-        # 基本設定を使用
-        start_limit = default_start
-        end_limit = default_end
-        notice = None
-    
-    cursor.close()
-    conn.close()
 
-    # ======================================================
-    # 2. 保存処理 (POST)
-    # ======================================================
-    if request.method == "POST":
-        name = request.form.get("name")
-        work = request.form.get("work")
-        start_time = request.form.get("start_time")
-        end_time = request.form.get("end_time")
+    try:
+        # ---------------------------------------------------
+        # 1. ユーザーの店舗ID(store_id)を account テーブルから取得
+        # ---------------------------------------------------
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
 
-        # ★★★ バリデーション: 最低勤務時間チェック ★★★
-        if work == "1" and start_time and end_time and min_hours > 0:
-            from datetime import datetime
-            start_dt = datetime.strptime(start_time, "%H:%M")
-            end_dt = datetime.strptime(end_time, "%H:%M")
-            diff = (end_dt - start_dt).total_seconds() / 3600
-            
-            if diff < 0:  # 日付またぎ
-                diff += 24
-            
-            if diff < min_hours:
-                flash(f"❌ 希望時間が短すぎます。最低 {min_hours} 時間以上入力してください（現在: {diff} 時間）", "danger")
-                return render_template("sinsei.html", 
-                                     date=date, 
-                                     start_limit=start_limit,
-                                     end_limit=end_limit,
-                                     min_hours=min_hours,
-                                     notice=notice)
+        # 店舗IDがない場合はエラーなどの処理
+        if not store_id:
+            flash("店舗情報が取得できませんでした。", "danger")
+            # 念のためデフォルトで動作させるか、リダイレクトするか
+            # ここではリダイレクトします
+            return redirect(url_for("calendar.calendar"))
 
-        # 出勤不可なら時間はNone
-        if work == "0":
-            start_time = None
-            end_time = None
+        # ---------------------------------------------------
+        # 2. 時間フォーマット整形のヘルパー関数
+        # ---------------------------------------------------
+        def format_time_str(t_obj):
+            if t_obj is None: return None
+            s = str(t_obj).strip()
+            # "9:00:00" -> "09:00"
+            if ':' in s:
+                parts = s.split(':')
+                h = parts[0].zfill(2)
+                m = parts[1]
+                return f"{h}:{m}"
+            return s[:5]
+
+        # ---------------------------------------------------
+        # 3. 設定と特別時間の取得（store_id を条件にする）
+        # ---------------------------------------------------
+        
+        # A. 基本設定の取得
+        cursor.execute(
+            "SELECT start_time, end_time, min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
+            (store_id,)
+        )
+        settings_row = cursor.fetchone()
+        
+        if settings_row:
+            min_hours = float(settings_row['min_hours_per_day']) if settings_row['min_hours_per_day'] is not None else 0
+            default_start = format_time_str(settings_row['start_time']) or "09:00"
+            default_end = format_time_str(settings_row['end_time']) or "22:00"
         else:
-            if start_time and not start_time.endswith(":00"):
-                start_time += ":00"
-            if end_time and not end_time.endswith(":00"):
-                end_time += ":00"
+            min_hours = 0
+            default_start = "09:00"
+            default_end = "22:00"
+        
+        # B. 特別時間の取得
+        # ★ ここ重要: store_id と date の両方が一致するものを探す
+        cursor.execute(
+            "SELECT start_time, end_time, reason FROM special_hours WHERE store_id = %s AND date = %s",
+            (store_id, date)
+        )
+        special = cursor.fetchone()
 
-        # すでに同じ日付の申請があるか確認
-        check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
-        result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
-
-        if result > 0:
-            # 更新
-            update_sql = text("""
-                UPDATE calendar
-                SET work = :work, start_time = :start_time, end_time = :end_time
-                WHERE ID = :user_id AND date = :date
-            """)
-            db.session.execute(update_sql, {
-                "user_id": user_id,
-                "date": date,
-                "work": work,
-                "start_time": start_time,
-                "end_time": end_time
-            })
-            flash(f"{date} の希望を更新しました。", "info")
+        # デバッグ用：ターミナルに表示されます（確認用）
+        print(f"DEBUG: Date={date}, StoreID={store_id}, SpecialFound={special}")
+        
+        if special:
+            # 特別時間を優先
+            start_limit = format_time_str(special['start_time'])
+            end_limit = format_time_str(special['end_time'])
+            # 画面表示用のメッセージ
+            notice = f"⚠️ {special.get('reason', '特別営業')}のため、時間が変更されています ({start_limit}〜{end_limit})"
         else:
-            # 新規登録
-            insert_sql = text("""
-                INSERT INTO calendar (ID, date, work, start_time, end_time)
-                VALUES (:user_id, :date, :work, :start_time, :end_time)
-            """)
-            db.session.execute(insert_sql, {
-                "user_id": user_id,
-                "date": date,
-                "work": work,
-                "start_time": start_time,
-                "end_time": end_time
-            })
-            flash(f"{date} の希望を提出しました。", "success")
+            # 基本設定を使用
+            start_limit = default_start
+            end_limit = default_end
+            notice = None
 
-        db.session.commit()
+        # ---------------------------------------------------
+        # 4. 保存処理 (POST)
+        # ---------------------------------------------------
+        if request.method == "POST":
+            work = request.form.get("work")
+            start_time = request.form.get("start_time")
+            end_time = request.form.get("end_time")
+
+            # バリデーション: 最低勤務時間チェック
+            if work == "1" and start_time and end_time and min_hours > 0:
+                try:
+                    from datetime import datetime
+                    start_dt = datetime.strptime(start_time, "%H:%M")
+                    end_dt = datetime.strptime(end_time, "%H:%M")
+                    diff = (end_dt - start_dt).total_seconds() / 3600
+                    if diff < 0: diff += 24 # 日またぎ
+                    
+                    if diff < min_hours:
+                        flash(f"❌ 希望時間が短すぎます。最低 {min_hours} 時間以上入力してください", "danger")
+                        return render_template("sinsei.html", date=date, start_limit=start_limit, end_limit=end_limit, min_hours=min_hours, notice=notice)
+                except ValueError:
+                    pass
+
+            # データ整形
+            if work == "0":
+                start_time = None
+                end_time = None
+            else:
+                if start_time and len(start_time) == 5: start_time += ":00"
+                if end_time and len(end_time) == 5: end_time += ":00"
+
+            # 既存データの確認と保存
+            check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
+            result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
+
+            if result > 0:
+                update_sql = text("UPDATE calendar SET work = :work, start_time = :start_time, end_time = :end_time WHERE ID = :user_id AND date = :date")
+                db.session.execute(update_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
+                flash(f"{date} の希望を更新しました。", "info")
+            else:
+                insert_sql = text("INSERT INTO calendar (ID, date, work, start_time, end_time) VALUES (:user_id, :date, :work, :start_time, :end_time)")
+                db.session.execute(insert_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
+                flash(f"{date} の希望を提出しました。", "success")
+
+            db.session.commit()
+            return redirect(url_for("calendar.calendar"))
+
+        # ---------------------------------------------------
+        # 5. 画面表示 (GET)
+        # ---------------------------------------------------
+        return render_template("sinsei.html", 
+                             date=date, 
+                             start_limit=start_limit,
+                             end_limit=end_limit,
+                             min_hours=min_hours,
+                             notice=notice)
+                             
+    except Exception as e:
+        print(f"Sinsei Error: {e}")
+        import traceback
+        traceback.print_exc()
+        flash("システムエラーが発生しました", "danger")
         return redirect(url_for("calendar.calendar"))
-
-    # ======================================================
-    # GET: フォーム表示
-    # ======================================================
-    return render_template("sinsei.html", 
-                         date=date, 
-                         start_limit=start_limit,
-                         end_limit=end_limit,
-                         min_hours=min_hours,
-                         notice=notice)
-
+    finally:
+        if conn:
+            conn.close()
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================

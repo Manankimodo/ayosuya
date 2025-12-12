@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/manage_faq.css') }}">
     <script src="{{ url_for('static', filename='js/manage_faq.js') }}"></script>
-    <title>FAQ管理</title>
+    <title>チャットボット管理</title>
 </head>
 <body>
-    <h1>FAQ管理画面</h1>
+    <h1>チャットボット管理画面</h1>
     <!-- ▼ ハンバーガーメニュー -->
     <div class="hamburger" id="hamburger">
         <div class="bar"></div>
@@ -37,7 +37,7 @@
 
     <hr>
 
-    <h2>既存FAQ一覧</h2>
+    <h2>既存チャットボット一覧</h2>
     <table border="1" cellpadding="5">
         <tr><th>ID</th><th>質問</th><th>回答</th><th>操作</th></tr>
         {% for faq in faqs %}

@@ -3,15 +3,24 @@ from sentence_transformers import SentenceTransformer
 import ollama
 from extensions import db
 from sqlalchemy import text as sql_text
-
+ 
 chatbot_bp = Blueprint("chatbot", __name__, url_prefix="/chatbot")
-
+ 
 # --- AI設定 ---
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
-
 # --- 応答キャッシュ ---
 answer_cache = {}
-
+ 
+# ===========================
+# ヘルパー関数：ユーザー名を取得
+# ===========================
+def get_user_name():
+    """セッションからユーザー名（文字列）を取得"""
+    user_info = session.get("user", {})
+    if isinstance(user_info, dict):
+        return str(user_info.get("name", "guest"))
+    return "guest"
+ 
 # ===========================
 # ヘルパー関数：ユーザー名を取得
 # ===========================
@@ -32,7 +41,7 @@ def save_chat(user_name, role, content):
         {"u": user_name, "r": role, "t": content}
     )
     db.session.commit()
-
+ 
 def load_chat(user_name):
     user_name = str(user_name)
     rows = db.session.execute(
@@ -40,14 +49,12 @@ def load_chat(user_name):
         {"u": user_name}
     ).fetchall()
     return [{"role": r.role, "text": r.text} for r in rows]
-
 def get_all_faqs():
     """FAQテーブルから全てのQ&Aを取得"""
     rows = db.session.execute(
         sql_text("SELECT id, question, answer FROM faqs")
     ).fetchall()
     return [{"id": r.id, "question": r.question, "answer": r.answer} for r in rows]
-
 # ===========================
 # チャット画面
 # ===========================
@@ -55,26 +62,26 @@ def get_all_faqs():
 def chat():
     user_name = get_user_name()
     chat_history = load_chat(user_name)
-
+ 
     if request.method == "POST":
         user_question = request.form["question"]
-
+ 
         # キャッシュを確認
         if user_question in answer_cache:
             answer = answer_cache[user_question]
         else:
             answer = generate_answer(user_question)
             answer_cache[user_question] = answer
-
+ 
         # 履歴保存
         save_chat(user_name, "user", user_question)
         save_chat(user_name, "bot", answer)
-
+ 
         chat_history.append({"role": "user", "text": user_question})
         chat_history.append({"role": "bot", "text": answer})
-
+ 
     return render_template("index.html", chat_history=chat_history)
-
+ 
 # ===========================
 # 回答再生成（Ajax用）
 # ===========================
@@ -82,16 +89,16 @@ def chat():
 def regenerate():
     user_name = get_user_name()
     user_question = request.form["question"]
-
+ 
     # キャッシュを無視して再生成
     answer = generate_answer(user_question)
-
+ 
     # 保存
     save_chat(user_name, "bot", answer)
     answer_cache[user_question] = answer
-
+ 
     return jsonify({"answer": answer})
-
+ 
 # ===========================
 # 共通：回答生成関数（Ollama + MySQLのFAQ使用）
 # ===========================
@@ -102,7 +109,6 @@ def generate_answer(user_question):
         
         if not faqs:
             return "FAQがまだ登録されていません。"
-
         # 質問の埋め込みベクトルを作成
         query_emb = embedder.encode(user_question)
         
@@ -132,7 +138,7 @@ def generate_answer(user_question):
 以下はFAQです。ユーザーの質問に最も関連する回答を、FAQの内容を参考にして日本語で答えてください。
 
 {context}
-
+ 
 ユーザーの質問: {user_question}
 """
         # Ollama APIで回答生成
@@ -144,7 +150,6 @@ def generate_answer(user_question):
         import traceback
         traceback.print_exc()
         return "申し訳ございません。回答の生成中にエラーが発生しました。"
-
 # ===========================
 # 履歴削除
 # ===========================
@@ -155,3 +160,5 @@ def clear_history():
     db.session.commit()
     answer_cache.clear()
     return "", 204
+ 
+ 

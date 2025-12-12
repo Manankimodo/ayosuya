@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
   <script>
+    // サーバーからのデータをJS変数として受け取る
     window.flaskData = {
       shifts: JSON.parse('{{ shifts|tojson|safe }}') || [],
       settings: JSON.parse('{{ settings|tojson|safe }}') || {}
@@ -34,7 +35,63 @@
           });
       }
 
-      // 2. グラフ描画ロジック
+      // ========================================================
+      // 2. ロック切り替え関数（クリック時に発火）
+      // ========================================================
+      window.toggleLock = async function(userId, date, chartInstance) {
+          if (!userId || parseInt(userId) < 0) return; // 不足データはロック不可
+
+          try {
+              const response = await fetch('/makeshift/toggle_lock', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_id: userId, date: date })
+              });
+              const result = await response.json();
+              
+              if (result.status === 'success') {
+                  // 成功したら画面上のデータを書き換えて再描画
+                  const targetShift = window.flaskData.shifts.find(s => 
+                      s.user_id == userId && s.date == date
+                  );
+                  if (targetShift) {
+                      // メモリ上のデータを更新 (0 <-> 1)
+                      targetShift.is_locked = result.new_state;
+                      
+                      // グラフ再描画（🔒マークを反映させるため）
+                      chartInstance.update();
+                      
+                      // 簡単なトースト通知
+                      showToast(result.new_state === 1 ? "🔒 ロックしました" : "🔓 ロック解除しました");
+                  }
+              } else {
+                  alert('エラー: ' + result.message);
+              }
+          } catch (e) {
+              console.error(e);
+              alert('通信エラーが発生しました');
+          }
+      };
+
+      // トースト通知用の簡易関数
+      function showToast(msg) {
+          const toast = document.createElement("div");
+          toast.innerText = msg;
+          toast.style.position = "fixed";
+          toast.style.bottom = "20px";
+          toast.style.right = "20px";
+          toast.style.background = "rgba(0,0,0,0.8)";
+          toast.style.color = "#fff";
+          toast.style.padding = "10px 20px";
+          toast.style.borderRadius = "5px";
+          toast.style.zIndex = "9999";
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 2000);
+      }
+
+      // ========================================================
+      // 3. グラフ描画ロジック
+      // ========================================================
       const rawData = window.flaskData.shifts;
       const settings = window.flaskData.settings;
       const chartsDiv = document.getElementById("charts");
@@ -44,32 +101,34 @@
           return;
       }
 
-      // ① データをソート（修正版：スタッフ(正)を上、不足(負)を下に）
+      // ① データをソート（マック風：時間順 ＞ 短い順）
       rawData.sort((a, b) => {
         const idA = parseInt(a.user_id);
         const idB = parseInt(b.user_id);
 
-        // 1. 日付順
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        // 1. スタッフ(上) と 不足(下) を分ける
+        const isStaffA = idA > 0;
+        const isStaffB = idB > 0;
+        
+        if (isStaffA && !isStaffB) return -1; // Aがスタッフなら上
+        if (!isStaffA && isStaffB) return 1;  // Bがスタッフなら上
 
-        // 2. スタッフ(正) と 不足(負) の分離
-        // Aが正(スタッフ)で、Bが負(不足)なら、Aを先(-1)にする
-        if (idA > 0 && idB < 0) return -1;
-        // Aが負(不足)で、Bが正(スタッフ)なら、Bを先(1)にする
-        if (idA < 0 && idB > 0) return 1;
-
-        // 3. 同じカテゴリー内でのソート
-        if (idA > 0 && idB > 0) {
-            // スタッフ同士ならID順
-            return idA - idB; 
-        } else {
-            // 不足同士なら時間順、あるいは役割順
-            if (a.start_time !== b.start_time) return a.start_time.localeCompare(b.start_time);
-            return idB - idA; // ID順
+        // 2. 開始時間で並べる（朝番→夜番の大枠）
+        if (a.start_time !== b.start_time) {
+            return a.start_time.localeCompare(b.start_time);
         }
-    });
 
-      // ② 結合ロジック
+        // ▼▼▼【ここが追加ポイント】▼▼▼
+        // 3. 開始時間が同じなら、終了時間が「早い（＝勤務時間が短い）」順にする
+        if (a.end_time !== b.end_time) {
+            return a.end_time.localeCompare(b.end_time);
+        }
+
+        // 4. それでも全部同じならID順
+        return idA - idB; 
+      });
+
+      // ② 結合ロジック（ロック状態も考慮して結合）
       const mergedShifts = [];
       if (rawData.length > 0) {
           let current = { ...rawData[0] }; 
@@ -79,6 +138,8 @@
               if (current.user_id === next.user_id &&
                   current.date === next.date &&
                   current.type === next.type &&
+                  // ロック状態が違うなら結合しない（まずありえないが念のため）
+                  (current.is_locked || 0) === (next.is_locked || 0) && 
                   current.end_time === next.start_time) {
                   
                   current.end_time = next.end_time; 
@@ -108,18 +169,22 @@
       Object.entries(groupedByDate).forEach(([date, shifts], idx) => {
           const container = document.createElement("div");
           container.className = "chart-container";
-          
           container.style.marginBottom = "30px";
           container.style.padding = "20px";
           container.style.background = "#ffffff"; 
           container.style.borderRadius = "8px";
           container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
           
-          container.innerHTML = `<h3 style="color: #333333; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px;">📅 ${date} のシフト</h3><div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>`;
+          container.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom:10px;">
+                <h3 style="margin:0; color: #333;">📅 ${date} のシフト</h3>
+                <small style="color:#666;">※バーをクリックで固定(ロック)切替</small>
+            </div>
+            <div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>
+          `;
           chartsDiv.appendChild(container);
 
           const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
-          
           const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
 
           const chartDataPoints = shifts.map(s => {
@@ -130,29 +195,37 @@
                   colorIndex++;
               }
               
-              let barColor = userColorMap[s.user_id];
+              // ★★★ 色の設定エリア（希望の配色に変更） ★★★
+              let barColor = userColorMap[s.user_id] || "#bdbdbd"; // デフォルトはグレー
 
-              // ★★★ 色の設定エリア ★★★
-              // もしタイプに「不足」が含まれていたら、強制的に赤色にする
+              // 1. 不足は「赤」 (Red)
               if (s.type && s.type.indexOf("不足") !== -1) {
-                  barColor = "#ff1744"; // 警告の赤 (Red A400)
+                  barColor = "#ef5350"; // 警告の赤
               } 
+              // 2. キッチンは「青」 (Blue)
               else if (s.type && s.type.includes("キッチン")) {
-                  barColor = "#e57373"; // 通常のキッチン色
+                  barColor = "#42a5f5"; // さわやかな青
               }
+              // 3. ホールは「緑」 (Green)
               else if (s.type && s.type.includes("ホール")) {
-                  barColor = "#64b5f6"; // 通常のホール色
+                  barColor = "#66bb6a"; // 明るい緑
               }
+
+              // ロックされている場合、色を少し暗くするか枠線を強調しても良いが
+              // ここではアイコンで示すので色はそのままにする
 
               return {
                   x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
                   y: uName,
                   type: s.type,
+                  is_locked: s.is_locked, // ロック情報を持たせる
+                  original_user_id: s.user_id, // クリックイベント用
+                  date: s.date, // クリックイベント用
                   backgroundColor: barColor
               };
           });
 
-          new Chart(ctx, {
+          const myChart = new Chart(ctx, {
               type: "bar",
               data: {
                   datasets: [{
@@ -160,13 +233,29 @@
                       backgroundColor: chartDataPoints.map(d => d.backgroundColor),
                       barPercentage: 0.7, 
                       borderRadius: 4,
-                      borderSkipped: false
+                      borderSkipped: false,
+                      // ロックされている場合は枠線を太くする
+                      borderWidth: ctx => {
+                          const v = ctx.raw;
+                          return (v && v.is_locked) ? 3 : 0;
+                      },
+                      borderColor: '#333' // 黒い枠線
                   }]
               },
               options: {
                   indexAxis: "y",
                   responsive: true,
                   maintainAspectRatio: false,
+                  // ★★★ クリックイベントの設定 ★★★
+                  onClick: (e, elements) => {
+                      if (elements.length > 0) {
+                          const elementIndex = elements[0].index;
+                          const dataPoint = myChart.data.datasets[0].data[elementIndex];
+                          
+                          // ロック切り替え実行
+                          window.toggleLock(dataPoint.original_user_id, dataPoint.date, myChart);
+                      }
+                  },
                   scales: {
                       x: {
                           type: "time",
@@ -190,7 +279,8 @@
                                   const d = c.raw;
                                   const st = d.x[0].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
                                   const en = d.x[1].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                                  return `${d.type}: ${st}〜${en}`;
+                                  const lockStatus = d.is_locked ? "🔒固定中" : "🔓未固定";
+                                  return `${d.type}: ${st}〜${en} (${lockStatus})`;
                               }
                           }
                       }
@@ -206,21 +296,26 @@
                             meta.data.forEach((element, index) => {
                                 const d = dataset.data[index];
                                 
-                                // "work" 以外のときに文字を表示
-                                if (d.type && d.type !== 'work') {
-                                    // ★フォント設定（太く、少し大きく）
-                                    ctx.font = 'bold 14px "Helvetica Neue", Arial';
-                                    ctx.textAlign = 'center';
-                                    ctx.textBaseline = 'middle';
-                                    
-                                    // ★文字のフチ取り（黒い枠線）
+                                // フォント設定
+                                ctx.font = 'bold 14px "Helvetica Neue", Arial';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                
+                                // 文字列の作成（役割 + 鍵マーク）
+                                let labelText = d.type !== 'work' ? d.type : "";
+                                if (d.is_locked) {
+                                    labelText = "🔒 " + labelText;
+                                }
+
+                                if (labelText) {
+                                    // 文字のフチ取り
                                     ctx.lineWidth = 3; 
-                                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; // 濃い黒
-                                    ctx.strokeText(d.type, element.x, element.y);
+                                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; 
+                                    ctx.strokeText(labelText, element.x, element.y);
                                     
-                                    // ★文字の中身（白）
+                                    // 文字の中身
                                     ctx.fillStyle = '#ffffff'; 
-                                    ctx.fillText(d.type, element.x, element.y);
+                                    ctx.fillText(labelText, element.x, element.y);
                                 }
                             });
                         }
@@ -269,7 +364,7 @@
   <div id="charts"></div> 
  
   <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 50px;">
-    <a href="{{ url_for('makeshift.auto_calendar') }}" class="btn secondary">♻️ 再編集（再生成）</a>
+    <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再編集（再生成）</a>
     <button onclick="openHelpModal()" class="btn danger">🚨 ヘルプ募集</button>
   </div>
 
@@ -286,7 +381,7 @@
         </div>
     </div>
   </div>
-  
+
   <script>
     function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
     function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
@@ -303,42 +398,31 @@
 
         const btn = document.querySelector('#helpModal .btn.danger');
         const originalText = btn.innerText;
-
         btn.disabled = true;
         btn.innerText = '配信中...';
 
         try {
-            // line.py の機能を使うように修正済み
             const response = await fetch("{{ url_for('line.create_help_request') }}", {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    date: helpDate,
-                    start_time: helpStart,
-                    end_time: helpEnd
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: helpDate, start_time: helpStart, end_time: helpEnd })
             });
-
-            closeHelpModal(); 
-
             const result = await response.json();
 
+            closeHelpModal(); 
             if (response.ok) {
                 alert(`🎉 募集を配信しました！ (${result.target_count} 名に通知)`);
             } else {
                 alert(`❌ 配信失敗: ${result.error || '不明なエラー'}`);
             }
-
         } catch (error) {
             console.error('API Error:', error);
-            alert('通信中にエラーが発生しました。サーバーを確認してください。');
+            alert('通信中にエラーが発生しました。');
         } finally {
             btn.disabled = false;
             btn.innerText = originalText;
         }
     }
-</script>
+  </script>
 </body>
 </html>
