@@ -11,27 +11,12 @@
     <p>{{ store_id }}号店 {{ user_name }}さん</p>
   </div>
   <h1 id="monthYear">希望スケジュール入力</h1>
-  <!-- 🍔 ハンバーガーボタン -->
-  <div class="hamburger" id="hamburger">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
 
   <!-- 月切り替え -->
   <div class="month-switch">
     <button id="prevMonth">← 前の月</button>
     <button id="nextMonth">次の月 →</button>
   </div>
-  <!-- メニュー -->
-  <nav class="menu" id="menu">
-    <ul>
-        <li><a href="{{ url_for('calendar.my_confirmed_shift') }}">確定シフトを確認</a></li>
-        <li><a href="{{ url_for('login.register_line_id') }}">LINE ID 登録</a></li>
-        <li><a href="{{ url_for('chatbot.chat') }}">チャットボット</a></li>
-        <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
-    </ul>
-  </nav>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -64,8 +49,52 @@
     {{ sent_dates | tojson | safe }}
   </script>
 
+  <!-- ボトムナビゲーション（追加） -->
+  <nav class="bottom-nav">
+    <a href="#" class="nav-item active" id="nav-calendar">
+      <div class="nav-icon icon-calendar"></div>
+      <span class="nav-label">カレンダー</span>
+    </a>
+    
+    <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item">
+      <div class="nav-icon icon-check"></div>
+      <span class="nav-label">確定シフト</span>
+    </a>
+    
+    <a href="{{ url_for('chatbot.chat') }}" class="nav-item">
+      <div class="nav-icon icon-chat"></div>
+      <span class="nav-label">チャット</span>
+    </a>
+    
+    <a href="{{ url_for('login.register_line_id') }}" class="nav-item">
+      <div class="nav-icon icon-line"></div>
+      <span class="nav-label">LINE登録</span>
+    </a>
+    
+    <a href="#" class="nav-item" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">
+      <div class="nav-icon icon-logout"></div>
+      <span class="nav-label">ログアウト</span>
+    </a>
+  </nav>
+
   <!-- ✅ calendar.js はこの下で読み込む -->
   <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+
+  <!-- ボトムナビゲーションのアクティブ状態切り替え（オプション） -->
+  <script>
+    // 現在のページに応じてアクティブ状態を切り替え
+    document.addEventListener('DOMContentLoaded', function() {
+      const currentPath = window.location.pathname;
+      const navItems = document.querySelectorAll('.nav-item');
+      
+      navItems.forEach(item => {
+        if (item.getAttribute('href') === currentPath) {
+          navItems.forEach(nav => nav.classList.remove('active'));
+          item.classList.add('active');
+        }
+      });
+    });
+  </script>
 
 </body>
 </html>

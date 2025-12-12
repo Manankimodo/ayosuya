@@ -1,3 +1,5 @@
+// MovieShift カレンダー JavaScript (ボトムナビゲーション対応版)
+
 document.addEventListener("DOMContentLoaded", function() {
   const calendarBody = document.getElementById("calendar-body");
   const monthYear = document.getElementById("monthYear");
@@ -6,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
   let currentDate = new Date();
 
-
+  // カレンダーレンダリング関数
   function renderCalendar() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -18,10 +20,12 @@ document.addEventListener("DOMContentLoaded", function() {
     calendarBody.innerHTML = "";
     let row = document.createElement("tr");
 
+    // 月初めの空白セル
     for (let i = 0; i < firstDay.getDay(); i++) {
       row.appendChild(document.createElement("td"));
     }
 
+    // 日付セルの生成
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const cell = document.createElement("td");
       
@@ -37,36 +41,22 @@ document.addEventListener("DOMContentLoaded", function() {
       const shiftContent = document.createElement("div");
       shiftContent.classList.add("shift-content");
 
-
       // ✅ チェックマーク表示（送信済みの日付なら）
       if (sentDates.includes(dateStr)) {
         const check = document.createElement("span");
-        check.classList.add("event-indicator"); // CSSのスタイルを適用
-        check.textContent = "✔"; // "✅"から"✔"に変更。CSSでは"✔"を想定
+        check.classList.add("event-indicator");
+        check.textContent = "✔";
         
         shiftContent.appendChild(check);
-        cell.classList.add('has-shift'); // 提出済みセルの背景を強調
+        cell.classList.add('has-shift');
       }
 
-
-      // 3. 時間入力フィールド (.time-input-container) を作成 (常に追加)
-      //    ※ 提出済みかどうかに関わらず、クリックでモーダル等が開くことを想定し、
-      //       ここではCSS構造のみ作成します。
+      // 3. 時間入力フィールドコンテナを作成
       const timeInputContainer = document.createElement("div");
       timeInputContainer.classList.add("time-input-container");
       
-      // 仮の入力フィールド (実際の入力はsinsei.htmlで行う前提)
-      // ここで input 要素を生成して追加すれば、カレンダー画面で入力可能になります。
-      // 例: const input = document.createElement("input");
-      //     input.type = "text";
-      //     timeInputContainer.appendChild(input); 
-
-      // シフト内容コンテナにチェックと入力コンテナを追加
       shiftContent.appendChild(timeInputContainer);
-
-      // 最終的にセルに shift-content を追加
       cell.appendChild(shiftContent);
-
 
       // ✅ 日付クリックで sinsei.html に遷移
       cell.addEventListener("click", () => {
@@ -75,6 +65,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       row.appendChild(cell);
 
+      // 週の終わりで改行
       if ((firstDay.getDay() + day) % 7 === 0) {
         calendarBody.appendChild(row);
         row = document.createElement("tr");
@@ -83,10 +74,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
     calendarBody.appendChild(row);
   }
-  
-  // (以降のイベントリスナー、ハンバーガーメニュー、ログアウト処理はそのまま)
-  // ...
 
+  // 月切り替えイベント
   prevMonthBtn.addEventListener("click", () => {
     currentDate.setMonth(currentDate.getMonth() - 1);
     renderCalendar();
@@ -97,56 +86,71 @@ document.addEventListener("DOMContentLoaded", function() {
     renderCalendar();
   });
 
-  // ✅ 通常起動時はカレンダー表示（ログイン後に checkAdminAfterLogin(true) を呼ぶ）
+  // 初回カレンダー表示
   renderCalendar();
 
-  // --- Flask側テンプレートなどで埋め込み可能 ---
-  // <script>
-  //   checkAdminAfterLogin({{ login_success|tojson }});
-  // </script>
+  // === 📱 ボトムナビゲーション アクティブ状態管理 ===
+  const navItems = document.querySelectorAll('.nav-item');
+  const currentPath = window.location.pathname;
 
- 
-
-  // 🍔 ハンバーガーメニュー開閉処理
-  const hamburger = document.getElementById("hamburger");
-  const menu = document.getElementById("menu");
-
-  hamburger.addEventListener("click", () => {
-    hamburger.classList.toggle("active");
-    menu.classList.toggle("open");
-  });
-
-});
-
-
-// データベースから提出済み日付を取得する処理はそのまま維持
-const sentDates = JSON.parse(document.getElementById("sentDatesData").textContent);
-
-// === 🍔 ハンバーガーメニュー動作 (初期化時に一度だけ登録) ===
-const hamburger = document.getElementById('hamburger');
-const menu = document.getElementById('menu');
-
-if (hamburger && menu) {
-    hamburger.addEventListener('click', () => {
-        // メニューとアイコンの状態を切り替える
-        hamburger.classList.toggle('active');
-        menu.classList.toggle('active');
+  if (navItems.length > 0) {
+    // 現在のページに対応するナビアイテムをアクティブ化
+    navItems.forEach(item => {
+      const href = item.getAttribute('href');
+      
+      // パスが完全一致、または部分一致（サブページ対応）
+      if (href === currentPath || currentPath.startsWith(href)) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
     });
-}
-const logoutLink = document.getElementById("logout-link");
 
-if (logoutLink) {
-    // ログアウトURLをdata属性から取得 (HTML側に data-logout-url="{{ url_for('login.logout') }}" が必要)
+    // ナビアイテムクリック時のフィードバック
+    navItems.forEach(item => {
+      item.addEventListener('click', function(e) {
+        // タップ時の視覚フィードバック（スケールアニメーション）
+        this.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          this.style.transform = '';
+        }, 150);
+      });
+    });
+  }
+
+  // === 🚪 ログアウト処理 ===
+  const logoutLink = document.getElementById("logout-link");
+
+  if (logoutLink) {
     const logoutUrl = logoutLink.getAttribute('data-logout-url');
     
     logoutLink.addEventListener("click", function (e) {
-        e.preventDefault(); 
-        const confirmed = confirm("ログアウトしますか？");
-        if (confirmed) {
-            // 取得したURLを使用
-            if (logoutUrl) {
-                window.location.href = logoutUrl;
-            }
-        }
+      e.preventDefault(); 
+      const confirmed = confirm("ログアウトしますか？");
+      if (confirmed && logoutUrl) {
+        window.location.href = logoutUrl;
+      }
     });
+  }
+
+});
+
+// === 📊 データベースから提出済み日付を取得 ===
+const sentDatesElement = document.getElementById("sentDatesData");
+const sentDates = sentDatesElement ? JSON.parse(sentDatesElement.textContent) : [];
+
+// === 🎯 ページ固有のアクティブ状態設定（オプション） ===
+// 特定のページでナビゲーションアイテムを強制的にアクティブ化したい場合
+function setActiveNavItem(pageName) {
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    const label = item.querySelector('.nav-label');
+    if (label && label.textContent === pageName) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
 }
+
+// 使用例: setActiveNavItem('カレンダー'); を他のページで呼び出せます

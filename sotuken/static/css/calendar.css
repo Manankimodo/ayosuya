@@ -1,7 +1,8 @@
 /*
- * Netflix風カレンダーCSS (最終統合版)
- * - PCでのテーブル崩れ修正済み
- * - チェックマークを日付の下に配置する修正を再統合済み
+ * MovieShift Netflix風カレンダーCSS + スマホアプリ風ボトムナビ統合版
+ * - Netflix風デザインを維持
+ * - スマホアプリ風下部ナビゲーション追加
+ * - レスポンシブ対応強化
  */
 
 /* 全体設定 */
@@ -11,16 +12,37 @@ body {
     color: #ffffff;
     margin: 0;
     padding: 0;
+    padding-bottom: 85px; /* ★ボトムナビ分の余白を追加 */
     text-align: center;
     min-height: 100vh;
     overflow-x: hidden;
+}
+
+/* ユーザー情報ヘッダー */
+.user-info {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #E50914 0%, #B8070F 100%);
+    color: white;
+    padding: 12px 20px;
+    box-shadow: 0 2px 10px rgba(229, 9, 20, 0.5);
+    text-align: right;
+    border-bottom: 2px solid rgba(229, 9, 20, 0.3);
+}
+
+.user-info p {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
 }
 
 /* タイトル (h1) - ロゴ風に強調 */
 h1 {
     font-size: 2.5rem;
     margin: 30px 0 25px;
-    color: #E50914; /* ネトフリレッド */
+    color: #E50914;
     letter-spacing: 3px;
     font-weight: 700;
     text-shadow: 0 0 10px rgba(229, 9, 20, 0.4);
@@ -29,7 +51,7 @@ h1 {
 /* 月と年の表示を固定 */
 #monthYear {
     position: sticky;
-    top: 0;
+    top: 60px; /* user-infoの下に配置 */
     padding: 10px 0;
     background: #141414;
     z-index: 10;
@@ -59,6 +81,10 @@ h1 {
 .month-switch button:hover {
     background-color: #B8070F;
     transform: translateY(-2px);
+}
+
+.month-switch button:active {
+    transform: scale(0.98);
 }
 
 /* === カレンダー本体 === */
@@ -109,7 +135,7 @@ h1 {
     height: 100px; 
     padding: 5px; 
     vertical-align: top;
-    position: relative; /* ★修正: 相対位置を維持 */
+    position: relative;
     text-align: left; 
     font-size: 1rem;
     overflow: hidden;
@@ -121,7 +147,7 @@ h1 {
     box-shadow: inset 0 0 0 2px #E50914; 
 }
 
-/* 今日の日付を強調 - ネトフリレッドの背景 */
+/* 今日の日付を強調 */
 .calendar td.today {
     background-color: #E50914;
     color: white;
@@ -147,7 +173,7 @@ h1 {
     box-shadow: none;
 }
 
-/* 1. 日付番号 (day-number) のスタイリング */
+/* 日付番号のスタイリング */
 .day-number {
     display: block;
     font-size: 1.2rem;
@@ -158,27 +184,21 @@ h1 {
     padding-bottom: 0; 
 }
 
-/* inactiveな日付の番号は目立たなくする */
 .calendar td.inactive .day-number {
     color: #666;
     font-weight: 400;
 }
 
-/* 2. シフト内容コンテナ (チェックマークと時間入力) */
-/* ★修正: position: relativeで日付番号の直下から開始し、レイアウト崩れを防ぐ */
+/* シフト内容コンテナ */
 .shift-content {
     display: block; 
     width: 100%;
     pointer-events: none; 
     box-sizing: border-box;
-    
-    /* 日付番号の高さ分、上から押し下げる */
-    /* .day-numberの高さ(1.2rem)とpadding(5px*2 + 8px*2)を考慮 */
     position: relative; 
-    top: 0; /* ★修正: top: 0; は不要 */
 }
 
-/* 3. 希望提出済み（チェックマーク）のスタイリング */
+/* 希望提出済み（チェックマーク） */
 .event-indicator {
     color: #E50914; 
     font-size: 2rem;
@@ -187,18 +207,18 @@ h1 {
     margin-bottom: 5px;
     text-shadow: 0 0 8px rgba(229, 9, 20, 0.7); 
     display: block; 
-    margin-top: 5px; /* ★修正: 日付番号との間隔を空ける */
-    padding-left: 8px; /* 日付番号と揃えるための左余白 */
+    margin-top: 5px;
+    padding-left: 8px;
 }
 
-/* 4. 時間入力コンテナとフィールドのスタイリング */
+/* 時間入力コンテナとフィールド */
 .time-input-container {
     display: block; 
     width: 100%;
     padding: 0 5px 5px 0; 
     box-sizing: border-box;
     pointer-events: all; 
-    padding-left: 8px; /* ★追加: 日付番号と揃えるための左余白 */
+    padding-left: 8px;
 }
 
 .time-input-container input {
@@ -221,13 +241,36 @@ h1 {
     box-shadow: 0 0 5px rgba(229, 9, 20, 0.6);
 }
 
-/* 5. 提出済みセル全体の強調 (has-shift) */
+/* 提出済みセル全体の強調 */
 .calendar td.has-shift {
     background-color: #1A1A1A; 
     border: 1px solid rgba(229, 9, 20, 0.5);
     box-shadow: inset 0 0 8px rgba(229, 9, 20, 0.4); 
 }
 
+/* フラッシュメッセージ */
+.flash-messages {
+    margin: 0 20px 16px;
+}
+
+.flash {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    background: rgba(229, 9, 20, 0.1);
+    border-left: 4px solid #E50914;
+}
+
+.flash.success {
+    background: rgba(76, 175, 80, 0.1);
+    border-left-color: #4caf50;
+}
+
+.flash.error {
+    background: rgba(229, 9, 20, 0.2);
+    border-left-color: #E50914;
+}
 
 /* ================================================= */
 /* ▼ ハンバーガーメニュー */
@@ -236,39 +279,42 @@ h1 {
     width: 35px;
     height: 30px;
     position: fixed;
-    top: 25px;
-    left: 25px;
+    top: 15px;
+    left: 20px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
-/* ★修正済: 赤線表示 */
 .bar, .hamburger span {
     display: block; 
     height: 4px;
     width: 100%;
-    background-color: #E50914; 
-    margin: 6px 0;
+    background-color: #fff;
+    margin: 0;
     border-radius: 2px;
     transition: all 0.3s ease;
     box-shadow: 0 0 8px rgba(229, 9, 20, 0.8); 
 }
 
-/* アニメーションも .bar と .hamburger span の両方に対応 */
 .hamburger.active .bar:nth-child(1),
 .hamburger.active span:nth-child(1) {
-    transform: translateY(10px) rotate(45deg);
+    transform: rotate(45deg) translate(8px, 8px);
 }
+
 .hamburger.active .bar:nth-child(2),
 .hamburger.active span:nth-child(2) {
     opacity: 0;
 }
+
 .hamburger.active .bar:nth-child(3),
 .hamburger.active span:nth-child(3) {
-    transform: translateY(-10px) rotate(-45deg);
+    transform: rotate(-45deg) translate(7px, -7px);
 }
 
-/* ▼ メニュー本体 (サイドバー) */
+/* メニュー本体 (サイドバー) */
 .menu {
     position: fixed;
     top: 0;
@@ -278,12 +324,12 @@ h1 {
     background-color: rgba(0, 0, 0, 0.95); 
     box-shadow: 2px 0 15px rgba(0, 0, 0, 0.9);
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 999;
-    padding-top: 100px;
+    z-index: 1000;
+    padding-top: 80px;
     text-align: left;
 }
 
-.menu.open {
+.menu.open, .menu.active {
     left: 0;
 }
 
@@ -294,7 +340,7 @@ h1 {
 }
 
 .menu li {
-    padding: 15px 30px;
+    padding: 0;
     border-bottom: 1px solid #333;
 }
 
@@ -305,23 +351,101 @@ h1 {
 .menu a {
     text-decoration: none;
     color: #fff;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     display: block;
-    transition: color 0.3s ease;
+    padding: 18px 30px;
+    transition: all 0.3s ease;
     font-weight: 500;
 }
 
-.menu a:hover {
+.menu a:hover, .menu a:active {
     color: #E50914; 
+    background: rgba(229, 9, 20, 0.1);
     font-weight: 600;
 }
 
+/* ================================================= */
+/* ★ボトムナビゲーション（追加） */
+/* ================================================= */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border-top: 2px solid rgba(229, 9, 20, 0.3);
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(229, 9, 20, 0.3);
+    z-index: 999;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 8px;
+    color: #999;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-width: 60px;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+}
+
+.nav-item:active {
+    transform: scale(0.95);
+}
+
+.nav-item.active {
+    color: #E50914;
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: #E50914;
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 0 10px rgba(229, 9, 20, 0.6);
+}
+
+.nav-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 0 5px rgba(229, 9, 20, 0.3));
+}
+
+.nav-item.active .nav-icon {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(229, 9, 20, 0.8));
+}
+
+.nav-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* アイコン定義 */
+.icon-calendar::before { content: "📅"; }
+.icon-check::before { content: "✅"; }
+.icon-chat::before { content: "💬"; }
+.icon-line::before { content: "💚"; }
+.icon-logout::before { content: "🚪"; }
 
 /* ================================================= */
-/* ✅ モーダル - ポップアップコンテンツ風 */
+/* ✅ モーダル */
 /* ================================================= */
-
-/* === モーダル全体の背景 === */
 #shift-modal {
     display: none; 
     position: fixed;
@@ -335,7 +459,6 @@ h1 {
     z-index: 2000; 
 }
 
-/* === モーダルの内容ボックス === */
 #shift-modal > div {
     background: #000; 
     border: 2px solid #E50914; 
@@ -348,7 +471,6 @@ h1 {
     animation: fadeIn 0.3s ease-out; 
 }
 
-/* === 閉じるボタン === */
 #modal-close {
     color: #fff;
     font-size: 30px;
@@ -363,7 +485,6 @@ h1 {
     color: #E50914; 
 }
 
-/* === モーダル内のテキスト === */
 #modal-text {
     color: #fff;
     font-size: 17px;
@@ -371,7 +492,6 @@ h1 {
     white-space: pre-wrap;
 }
 
-/* モーダル表示時のアニメーション */
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -384,178 +504,131 @@ h1 {
 }
 
 /* ================================================= */
-/* ▼ スマホ対応（Max-width: 600px） - レイアウト修正済み */
+/* ▼ スマホ対応（Max-width: 600px） */
 /* ================================================= */
 @media (max-width: 600px) {
+    body {
+        padding-bottom: 75px; /* スマホ用にボトムナビの余白調整 */
+    }
+
+    .user-info {
+        padding: 10px 15px;
+    }
+
+    .user-info p {
+        font-size: 12px;
+    }
     
-    /* === 1. タイトルと全般的な余白の調整 === */
     h1 {
-        font-size: 2rem; 
-        margin-top: 20px;
-        margin-bottom: 20px;
+        font-size: 1.8rem; 
+        margin-top: 15px;
+        margin-bottom: 15px;
         letter-spacing: 2px;
     }
 
-    /* === 2. 月切り替えボタンの調整 === */
-    .month-switch {
-        margin-bottom: 20px;
-    }
-    .month-switch button {
-        font-size: 1rem;
-        padding: 8px 15px; 
-        margin: 0 5px;
+    #monthYear {
+        top: 42px;
     }
 
-    /* === 3. カレンダー本体の調整 === */
+    .month-switch {
+        margin-bottom: 20px;
+        gap: 8px;
+    }
+
+    .month-switch button {
+        font-size: 0.95rem;
+        padding: 10px 18px; 
+        margin: 0;
+    }
+
     .calendar {
         border-spacing: 1px; 
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.7);
     }
     
-    /* 曜日ヘッダー */
     .calendar th {
         padding: 10px 0;
         font-size: 0.8rem;
     }
 
-    /* === 4. カレンダーセル内部の調整 === */
     .calendar td {
-        height: 70px; /* セル高を低く */
+        height: 70px;
         padding: 2px;
     }
 
-    /* 日付番号を縮小 */
     .day-number {
         font-size: 1rem;
         padding: 3px 5px; 
     }
 
-    /* シフト内容コンテナ（スマホでは中央寄せに再調整） */
     .shift-content {
         display: flex; 
         flex-direction: column;
-        align-items: center; /* 中央寄せ */
+        align-items: center;
         padding-left: 0; 
     }
     
-    /* チェックマークを縮小 */
     .event-indicator {
         font-size: 1.5rem;
         margin-bottom: 3px;
-        text-shadow: 0 0 5px rgba(229, 9, 20, 0.7);
-        display: block;
         padding-left: 0; 
     }
 
-    /* 時間入力フィールドを縮小 */
     .time-input-container {
-        align-items: center; /* 中央寄せ */
+        align-items: center;
         padding: 0;
     }
+
     .time-input-container input {
         width: 80%; 
         max-width: 80px;
         padding: 3px 5px;
         font-size: 0.8rem;
         margin-top: 3px;
-        text-align: center; /* 中央寄せに戻す */
+        text-align: center;
     }
 
-    /* === 5. ハンバーガーメニューの位置調整 === */
     .hamburger {
-        top: 15px;
+        top: 10px;
         left: 15px;
+        width: 30px;
+        height: 24px;
     }
 
-    /* === 6. フラッシュメッセージの調整 === */
+    .bar, .hamburger span {
+        height: 3px;
+    }
+
     .flash-messages {
         width: 90%;
         margin: 10px auto;
-        position: relative; 
+    }
+
+    /* ボトムナビのスマホ調整 */
+    .bottom-nav {
+        padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+    }
+
+    .nav-icon {
+        font-size: 22px;
+    }
+
+    .nav-label {
+        font-size: 10px;
     }
 }
 
-/* HTMLに合わせたハンバーガーメニューのスタイル */
-.menu-icon {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    font-size: 30px;
-    color: #E50914;
-    cursor: pointer;
-    z-index: 1000;
+/* タブレット対応 */
+@media (min-width: 601px) and (max-width: 1024px) {
+    .calendar {
+        max-width: 700px;
+    }
 }
 
-.side-menu {
-    position: fixed;
-    top: 0;
-    left: -300px;
-    width: 250px;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.95);
-    transition: left 0.3s ease;
-    z-index: 999;
-    padding: 60px 20px 20px;
-}
-
-.side-menu.active {
-    left: 0;
-}
-
-.close-btn {
-    position: absolute;
-    top: 10px;
-    right: 20px;
-    font-size: 30px;
-    color: #fff;
-    cursor: pointer;
-}
-
-.side-menu h3 {
-    color: #E50914;
-    margin-bottom: 20px;
-}
-
-.side-menu a {
-    display: block;
-    color: #fff;
-    text-decoration: none;
-    padding: 15px 10px;
-    border-bottom: 1px solid #333;
-    transition: color 0.3s;
-}
-
-.side-menu a:hover {
-    color: #E50914;
-}
-
-.overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: none;
-    z-index: 998;
-}
-
-.overlay.active {
-    display: block;
-}
-
-.user-info {
-  width: 23.333%;
-  margin-left: auto;
-  padding: 8px 15px;
-  font-size: 13px;
-  color: #555;
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  text-align: right;
-}
-
-.user-info p {
-  margin: 0;  /* pタグのデフォルトマージンを削除 */
+/* PC対応 */
+@media (min-width: 1025px) {
+    body {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
 }
