@@ -8,7 +8,7 @@
   
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
+ 
   <script>
     // サーバーからのデータをJS変数として受け取る
     window.flaskData = {
@@ -16,7 +16,7 @@
       settings: JSON.parse('{{ settings|tojson|safe }}') || {}
     };
   </script>
-
+ 
   <script>
     document.addEventListener("DOMContentLoaded", function() {
       // 1. ハンバーガーメニュー制御
@@ -34,13 +34,13 @@
               });
           });
       }
-
+ 
       // ========================================================
       // 2. ロック切り替え関数（クリック時に発火）
       // ========================================================
       window.toggleLock = async function(userId, date, chartInstance) {
           if (!userId || parseInt(userId) < 0) return; // 不足データはロック不可
-
+ 
           try {
               const response = await fetch('/makeshift/toggle_lock', {
                   method: 'POST',
@@ -51,7 +51,7 @@
               
               if (result.status === 'success') {
                   // 成功したら画面上のデータを書き換えて再描画
-                  const targetShift = window.flaskData.shifts.find(s => 
+                  const targetShift = window.flaskData.shifts.find(s =>
                       s.user_id == userId && s.date == date
                   );
                   if (targetShift) {
@@ -72,7 +72,7 @@
               alert('通信エラーが発生しました');
           }
       };
-
+ 
       // トースト通知用の簡易関数
       function showToast(msg) {
           const toast = document.createElement("div");
@@ -88,7 +88,7 @@
           document.body.appendChild(toast);
           setTimeout(() => toast.remove(), 2000);
       }
-
+ 
       // ========================================================
       // 3. グラフ描画ロジック
       // ========================================================
@@ -100,38 +100,38 @@
           if(chartsDiv) chartsDiv.innerHTML = '<p style="text-align:center; padding:20px;">シフトデータがありません。</p>';
           return;
       }
-
+ 
       // ① データをソート（マック風：時間順 ＞ 短い順）
       rawData.sort((a, b) => {
         const idA = parseInt(a.user_id);
         const idB = parseInt(b.user_id);
-
+ 
         // 1. スタッフ(上) と 不足(下) を分ける
         const isStaffA = idA > 0;
         const isStaffB = idB > 0;
         
         if (isStaffA && !isStaffB) return -1; // Aがスタッフなら上
         if (!isStaffA && isStaffB) return 1;  // Bがスタッフなら上
-
+ 
         // 2. 開始時間で並べる（朝番→夜番の大枠）
         if (a.start_time !== b.start_time) {
             return a.start_time.localeCompare(b.start_time);
         }
-
+ 
         // ▼▼▼【ここが追加ポイント】▼▼▼
         // 3. 開始時間が同じなら、終了時間が「早い（＝勤務時間が短い）」順にする
         if (a.end_time !== b.end_time) {
             return a.end_time.localeCompare(b.end_time);
         }
-
+ 
         // 4. それでも全部同じならID順
-        return idA - idB; 
+        return idA - idB;
       });
-
+ 
       // ② 結合ロジック（ロック状態も考慮して結合）
       const mergedShifts = [];
       if (rawData.length > 0) {
-          let current = { ...rawData[0] }; 
+          let current = { ...rawData[0] };
           for (let i = 1; i < rawData.length; i++) {
               const next = rawData[i];
               
@@ -139,18 +139,18 @@
                   current.date === next.date &&
                   current.type === next.type &&
                   // ロック状態が違うなら結合しない（まずありえないが念のため）
-                  (current.is_locked || 0) === (next.is_locked || 0) && 
+                  (current.is_locked || 0) === (next.is_locked || 0) &&
                   current.end_time === next.start_time) {
                   
-                  current.end_time = next.end_time; 
+                  current.end_time = next.end_time;
               } else {
-                  mergedShifts.push(current); 
+                  mergedShifts.push(current);
                   current = { ...next };      
               }
           }
-          mergedShifts.push(current); 
+          mergedShifts.push(current);
       }
-
+ 
       // ③ グラフ設定
       const minTime = settings.start_time ? new Date(`1970-01-01T${settings.start_time}:00`) : new Date("1970-01-01T08:00:00");
       const maxTime = settings.end_time ? new Date(`1970-01-01T${settings.end_time}:00`) : new Date("1970-01-01T23:00:00");
@@ -160,18 +160,18 @@
           if (!groupedByDate[s.date]) groupedByDate[s.date] = [];
           groupedByDate[s.date].push(s);
       });
-
+ 
       const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
       const userColorMap = {};
       let colorIndex = 0;
-
+ 
       // ④ 日付ごとにグラフを描画
       Object.entries(groupedByDate).forEach(([date, shifts], idx) => {
           const container = document.createElement("div");
           container.className = "chart-container";
           container.style.marginBottom = "30px";
           container.style.padding = "20px";
-          container.style.background = "#ffffff"; 
+          container.style.background = "#ffffff";
           container.style.borderRadius = "8px";
           container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
           
@@ -183,10 +183,10 @@
             <div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>
           `;
           chartsDiv.appendChild(container);
-
+ 
           const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
           const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
-
+ 
           const chartDataPoints = shifts.map(s => {
               const uName = s.user_name || `ID:${s.user_id}`;
               
@@ -197,11 +197,11 @@
               
               // ★★★ 色の設定エリア（希望の配色に変更） ★★★
               let barColor = userColorMap[s.user_id] || "#bdbdbd"; // デフォルトはグレー
-
+ 
               // 1. 不足は「赤」 (Red)
               if (s.type && s.type.indexOf("不足") !== -1) {
                   barColor = "#ef5350"; // 警告の赤
-              } 
+              }
               // 2. キッチンは「青」 (Blue)
               else if (s.type && s.type.includes("キッチン")) {
                   barColor = "#42a5f5"; // さわやかな青
@@ -210,10 +210,10 @@
               else if (s.type && s.type.includes("ホール")) {
                   barColor = "#66bb6a"; // 明るい緑
               }
-
+ 
               // ロックされている場合、色を少し暗くするか枠線を強調しても良いが
               // ここではアイコンで示すので色はそのままにする
-
+ 
               return {
                   x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
                   y: uName,
@@ -224,14 +224,14 @@
                   backgroundColor: barColor
               };
           });
-
+ 
           const myChart = new Chart(ctx, {
               type: "bar",
               data: {
                   datasets: [{
                       data: chartDataPoints,
                       backgroundColor: chartDataPoints.map(d => d.backgroundColor),
-                      barPercentage: 0.7, 
+                      barPercentage: 0.7,
                       borderRadius: 4,
                       borderSkipped: false,
                       // ロックされている場合は枠線を太くする
@@ -262,13 +262,13 @@
                           time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
                           min: minTime, max: maxTime,
                           grid: { color: "#f0f0f0" },
-                          ticks: { color: "#333" } 
+                          ticks: { color: "#333" }
                       },
-                      y: { 
-                          type: 'category', 
+                      y: {
+                          type: 'category',
                           labels: yLabels,
                           grid: { display: false },
-                          ticks: { color: "#333", font: { weight: 'bold' } } 
+                          ticks: { color: "#333", font: { weight: 'bold' } }
                       }
                   },
                   plugins: {
@@ -306,15 +306,15 @@
                                 if (d.is_locked) {
                                     labelText = "🔒 " + labelText;
                                 }
-
+ 
                                 if (labelText) {
                                     // 文字のフチ取り
-                                    ctx.lineWidth = 3; 
-                                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; 
+                                    ctx.lineWidth = 3;
+                                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
                                     ctx.strokeText(labelText, element.x, element.y);
                                     
                                     // 文字の中身
-                                    ctx.fillStyle = '#ffffff'; 
+                                    ctx.fillStyle = '#ffffff';
                                     ctx.fillText(labelText, element.x, element.y);
                                 }
                             });
@@ -328,13 +328,13 @@
   </script>
 </head>
 <body>
-
+ 
   <div class="menu-btn" id="menuBtn">
     <span></span>
     <span></span>
     <span></span>
   </div>
-
+ 
   <nav class="side-menu" id="sideMenu">
     <ul>
         <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
@@ -343,7 +343,7 @@
         <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
     </ul>
   </nav>
-
+ 
   <header>自動作成シフトカレンダー</header>
  
   {% if settings %}
@@ -361,13 +361,13 @@
     <p class="message">{{ message }}</p>
   {% endif %}
  
-  <div id="charts"></div> 
+  <div id="charts"></div>
  
   <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 50px;">
     <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再編集（再生成）</a>
     <button onclick="openHelpModal()" class="btn danger">🚨 ヘルプ募集</button>
   </div>
-
+ 
   <div id="helpModal" class="modal-overlay">
     <div class="modal-content">
         <h3 style="margin-top:0; color:#d32f2f;">🚨 ヘルプ急募配信</h3>
@@ -381,7 +381,7 @@
         </div>
     </div>
   </div>
-
+ 
   <script>
     function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
     function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
@@ -395,12 +395,12 @@
             alert('日付と時間をすべて入力してください。');
             return;
         }
-
+ 
         const btn = document.querySelector('#helpModal .btn.danger');
         const originalText = btn.innerText;
         btn.disabled = true;
         btn.innerText = '配信中...';
-
+ 
         try {
             const response = await fetch("{{ url_for('line.create_help_request') }}", {
                 method: 'POST',
@@ -408,8 +408,8 @@
                 body: JSON.stringify({ date: helpDate, start_time: helpStart, end_time: helpEnd })
             });
             const result = await response.json();
-
-            closeHelpModal(); 
+ 
+            closeHelpModal();
             if (response.ok) {
                 alert(`🎉 募集を配信しました！ (${result.target_count} 名に通知)`);
             } else {
@@ -426,3 +426,4 @@
   </script>
 </body>
 </html>
+ 
