@@ -9,19 +9,8 @@
 </head>
 <body>
     <header class="top-bar">
-        <div class="hamburger" id="hamburger">
-            <span></span><span></span><span></span>
-        </div>
         <h1>アルバイト教育支援チャットボット</h1>
     </header>
-
-    <nav class="menu" id="menu">
-        <ul>
-            <li><a href="{{ url_for('calendar.calendar') }}">希望シフト入力へ戻る</a></li>
-            <li><a href="{{ url_for('calendar.my_confirmed_shift') }}">確定シフトを確認</a></li>
-            <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>
-        </ul>
-    </nav>
 
     <div class="chat-container" id="chat-container">
         {% if chat_history %}
@@ -44,5 +33,33 @@
         <button type="submit">送信</button>
         <button type="button" id="clear-btn">履歴を消す</button>
     </form>
+
+    <!-- ボトムナビゲーション -->
+    <nav class="bottom-nav">
+        <a href="{{ url_for('calendar.calendar') }}" class="nav-item">
+            <div class="nav-icon icon-calendar"></div>
+            <span class="nav-label">カレンダー</span>
+        </a>
+        
+        <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item">
+            <div class="nav-icon icon-check"></div>
+            <span class="nav-label">確定シフト</span>
+        </a>
+        
+        <a href="{{ url_for('chatbot.chat') }}" class="nav-item active">
+            <div class="nav-icon icon-chat"></div>
+            <span class="nav-label">チャット</span>
+        </a>
+        
+        <a href="{{ url_for('login.register_line_id') }}" class="nav-item">
+            <div class="nav-icon icon-line"></div>
+            <span class="nav-label">LINE登録</span>
+        </a>
+        
+        <a href="#" class="nav-item" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">
+            <div class="nav-icon icon-logout"></div>
+            <span class="nav-label">ログアウト</span>
+        </a>
+    </nav>
 </body>
 </html>

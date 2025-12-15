@@ -1,19 +1,7 @@
-// index.js (修正後の内容)
+// チャットボット JavaScript (既存機能 + ボトムナビゲーション対応版)
 
 document.addEventListener("DOMContentLoaded", function() {
     
-    // 🍔 メニュー開閉
-    const hamburger = document.getElementById('hamburger');
-    const menu = document.getElementById('menu');
-    
-    // 要素が存在することを確認してからリスナーを設定
-    if (hamburger && menu) {
-        hamburger.addEventListener('click', () => {
-            hamburger.classList.toggle('active');
-            menu.classList.toggle('active');
-        });
-    }
-
     // 💬 チャット送信処理（非同期送信）
     const chatForm = document.getElementById("chat-form");
     if (chatForm) {
@@ -64,14 +52,11 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-
     // 🔄 再生成ボタン機能（イベント委譲を使用）
-    // このイベントリスナーはDOMContentLoaded内にあるため、要素の存在を気にしなくて良い
     document.addEventListener("click", async (e) => {
         if (e.target.classList.contains("regen-btn")) {
             const btn = e.target;
             const question = btn.dataset.question;
-            // メッセージ内容全体を更新するため、ここではclosest(".message")で親要素を取得
             const botMessage = btn.closest(".message"); 
 
             btn.disabled = true;
@@ -85,46 +70,109 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
 
                 const data = await res.json();
-                
-                // 新しいメッセージテキストと再生成ボタンを含むHTMLを作成
-                // Flask側から新しいメッセージHTML全体を返してもらう方が確実だが、
-                // JSONで答えだけが返る前提でDOMを更新
                 const newText = data.answer;
                 
-                // botMessageのコンテンツを更新し、再生成ボタンを再配置
                 const regenBtnHtml = `<button class="regen-btn" data-question="${question}">🔄再生成</button>`;
                 botMessage.innerHTML = `${newText} ${regenBtnHtml}`;
 
             } catch {
                 alert("再生成に失敗しました。");
-                // 失敗した場合もボタンのテキストを元に戻す
                 const originalText = btn.dataset.question; 
                 botMessage.innerHTML = `${botMessage.childNodes[0].textContent} <button class="regen-btn" data-question="${originalText}">🔄再生成</button>`;
             } 
-            // 注意: `finally`ブロックは、上記の`try`ブロックのDOM操作によってボタン要素自体が置き換えられてしまうため、ここでは使用せず、`try/catch`内で処理を完了させます。
         }
     });
 
+    // === 📱 ボトムナビゲーション アクティブ状態管理 ===
+    const navItems = document.querySelectorAll('.nav-item');
+    const currentPath = window.location.pathname;
+
+    if (navItems.length > 0) {
+        // 現在のページに対応するナビアイテムをアクティブ化
+        navItems.forEach(item => {
+            const href = item.getAttribute('href');
+            
+            // パスが完全一致、または部分一致（サブページ対応）
+            if (href && (href === currentPath || currentPath.startsWith(href))) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        // ナビアイテムクリック時のフィードバック
+        navItems.forEach(item => {
+            item.addEventListener('click', function(e) {
+                // ログアウトリンクの場合は特別処理（下記で実装）
+                if (this.id === 'logout-link') {
+                    return;
+                }
+                
+                // タップ時の視覚フィードバック
+                this.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            });
+        });
+    }
+
+    // === 🚪 ログアウト処理 ===
+    const logoutLink = document.getElementById("logout-link");
+    if (logoutLink) {
+        logoutLink.addEventListener("click", function (e) {
+            e.preventDefault(); 
+            
+            const logoutUrl = this.getAttribute('data-logout-url');
+            
+            if (!logoutUrl) {
+                console.error("ログアウトURLが見つかりません。");
+                return;
+            }
+            
+            const confirmed = confirm("ログアウトしますか？");
+            if (confirmed) {
+                window.location.href = logoutUrl;
+            }
+        });
+    }
+
+    // Enterキーで送信（Shift+Enterで改行）
+    const questionInput = document.getElementById('question');
+    if (questionInput) {
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.submit();
+            }
+        });
+    }
+
+    // 自動スクロール機能
+    function scrollToBottom() {
+        const chatContainer = document.getElementById('chat-container');
+        if (chatContainer) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    }
+
+    // ページ読み込み時に最下部へスクロール
+    scrollToBottom();
+
+    // メッセージが追加されたら自動スクロール（MutationObserver使用）
+    const chatContainer = document.getElementById('chat-container');
+    if (chatContainer) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.addedNodes.length > 0) {
+                    scrollToBottom();
+                }
+            });
+        });
+
+        observer.observe(chatContainer, {
+            childList: true,
+            subtree: true
+        });
+    }
 });
-
-// === ログアウト確認アラート (既存のコードを維持) ===
-const logoutLink = document.getElementById("logout-link");
-if (logoutLink) {
-    logoutLink.addEventListener("click", function (e) {
-        e.preventDefault(); 
-        
-        // data属性からログアウトURLを取得
-        const logoutUrl = this.getAttribute('data-logout-url');
-        
-        if (!logoutUrl) {
-            console.error("ログアウトURLが見つかりません。");
-            return;
-        }
-        
-        const confirmed = confirm("ログアウトしますか？");
-        if (confirmed) {
-            // 取得したURLを使用
-            window.location.href = logoutUrl;
-        }
-    });
-}
