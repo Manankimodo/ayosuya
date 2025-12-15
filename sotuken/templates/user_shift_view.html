@@ -7,10 +7,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/user_shift_view.css') }}">
 </head>
 <body>
-    <div class="header">
-        <h2>{{ user_name }}さんのシフト一覧</h2>
-        <p>ユーザーID: {{ user_id }}</p>
-    </div>
+    <header class="top-bar">
+        <div class="user-info-header">
+            <h1>{{ user_name }}さんのシフト</h1>
+            <p class="user-id-display">ID: {{ user_id }}</p>
+        </div>
+    </header>
     
     <div class="week-controls">
         <button id="prevWeek">← 前の週</button>
@@ -21,19 +23,35 @@
     <div id="shift-container">
         <p class="loading">シフトデータを読み込み中...</p>
     </div>
-    <div class="hamburger" id="hamburger">
-        <span></span>
-        <span></span>
-        <span></span>
-    </div>
 
-    <nav class="menu" id="menu">
-        <ul>
-            <li><a href="{{ url_for('calendar.calendar') }}">希望シフト入力へ戻る</a></li>
-            <li><a href="{{ url_for('chatbot.chat') }}">チャットボット</a></li>
-            <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li>        
-        </ul>
+    <!-- ボトムナビゲーション -->
+    <nav class="bottom-nav">
+        <a href="{{ url_for('calendar.calendar') }}" class="nav-item">
+            <div class="nav-icon icon-calendar"></div>
+            <span class="nav-label">カレンダー</span>
+        </a>
+        
+        <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item active">
+            <div class="nav-icon icon-check"></div>
+            <span class="nav-label">確定シフト</span>
+        </a>
+        
+        <a href="{{ url_for('chatbot.chat') }}" class="nav-item">
+            <div class="nav-icon icon-chat"></div>
+            <span class="nav-label">チャット</span>
+        </a>
+        
+        <a href="{{ url_for('login.register_line_id') }}" class="nav-item">
+            <div class="nav-icon icon-line"></div>
+            <span class="nav-label">LINE登録</span>
+        </a>
+        
+        <a href="#" class="nav-item" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">
+            <div class="nav-icon icon-logout"></div>
+            <span class="nav-label">ログアウト</span>
+        </a>
     </nav>
+
     <script src="{{ url_for('static', filename='js/user_shift_view.js') }}"></script>
 </body>
 </html>

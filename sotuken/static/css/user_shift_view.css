@@ -1,135 +1,99 @@
 /*
- * Netflix風 従業員シフト確認画面 CSS (最終統合版)
+ * Netflix風 確定シフト確認画面 + ボトムナビゲーション統合版
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&display=swap');
 
 :root {
-    --bg-dark: #141414;        /* メイン背景色 */
-    --card-dark: #000000;      /* カード背景色（黒） */
-    --item-dark: #1c1c1c;      /* シフトアイテム背景色 */
-    --text-light: #ffffff;     /* 主な文字色 */
-    --muted-text: #888888;     /* 補助テキスト色 */
-    --accent: #E50914;        /* Netflix赤 */
-    --accent-dark: #B20710;   /* 濃い赤 */
-    --highlight: #28a745;     /* 自分のシフト強調色（緑） */
-    --border-color: #333333;   /* 境界線の色 */
+    --bg-dark: #141414;
+    --card-dark: #000000;
+    --item-dark: #1c1c1c;
+    --text-light: #ffffff;
+    --muted-text: #888888;
+    --accent: #E50914;
+    --accent-dark: #B20710;
+    --highlight: #28a745;
+    --border-color: #333333;
 }
 
-/* --- レイアウトの基本 --- */
+/* === 全体設定 === */
 body {
     font-family: 'Noto Sans JP', sans-serif;
     margin: 0;
-    padding: 0; /* body paddingは削除し、containerで制御 */
+    padding: 0;
+    padding-bottom: 85px; /* ボトムナビ分の余白 */
     background-color: var(--bg-dark);
     color: var(--text-light);
     min-height: 100vh;
 }
-.header {
-    text-align: center;
-    margin-top: 40px; 
-    margin-bottom: 30px;
-}
-.shift-container {
-    max-width: 750px;
-    margin: 20px auto;
-    padding: 20px;
-}
-.header h1 {
-    font-size: 2em;
-    color: var(--text-light);
-    letter-spacing: 1px;
-    font-weight: 700;
-}
 
-/* --- ハンバーガーメニューのスタイル --- */
-.hamburger {
-    position: fixed;
-    top: 20px; /* 位置を少し調整 */
-    left: 20px; /* 位置を少し調整 */
-    width: 35px;
-    height: 30px;
-    cursor: pointer;
-    z-index: 101; 
-}
-.hamburger span {
-    display: block;
-    position: absolute;
-    height: 4px; /* 厚く */
-    width: 100%;
-    background: var(--accent); 
-    border-radius: 3px;
-    transition: all .3s ease;
-    box-shadow: 0 0 5px rgba(229, 9, 20, 0.5);
-}
-.hamburger span:nth-child(1) { top: 0; }
-.hamburger span:nth-child(2) { top: 10px; }
-.hamburger span:nth-child(3) { top: 20px; }
-
-/* ハンバーガーメニューのアニメーション */
-.hamburger.active span:nth-child(1) { 
-    transform: translateY(10px) rotate(45deg); 
-}
-.hamburger.active span:nth-child(2) { opacity: 0; }
-.hamburger.active span:nth-child(3) { 
-    transform: translateY(-10px) rotate(-45deg); 
-}
-
-/* メニュー本体 (サイドバー) */
-.menu {
-    position: fixed;
+/* === トップバー（固定ヘッダー） === */
+.top-bar {
+    position: sticky;
     top: 0;
-    left: -250px; 
-    width: 250px;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.95);
-    box-shadow: 2px 0 15px rgba(0,0,0,0.8);
-    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 100;
-    padding-top: 80px; 
-}
-.menu.active { left: 0; }
-.menu ul { list-style: none; padding: 0; margin: 0; }
-.menu li a { 
-    display: block; 
-    padding: 15px 25px; 
-    text-decoration: none; 
-    color: var(--text-light); 
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s, color 0.2s;
-    font-weight: 500;
-}
-.menu li a:hover {
-    background-color: #1a1a1a;
-    color: var(--accent);
+    background: linear-gradient(135deg, #E50914 0%, #B8070F 100%);
+    color: white;
+    padding: 16px 20px;
+    box-shadow: 0 2px 10px rgba(229, 9, 20, 0.5);
+    border-bottom: 2px solid rgba(229, 9, 20, 0.3);
 }
 
-/* --- 週切り替えコントロール --- */
+.user-info-header h1 {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.user-id-display {
+    margin: 5px 0 0 0;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+/* === 週切り替えコントロール === */
 .week-controls {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 20px 0;
+    margin: 20px 20px;
     padding: 15px;
     background-color: var(--card-dark);
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
+
 .week-controls button {
     padding: 10px 18px;
     border: none;
     background-color: var(--accent);
     color: var(--text-light);
-    border-radius: 50px; /* カプセル型 */
+    border-radius: 50px;
     cursor: pointer;
     font-weight: 600;
-    transition: background-color 0.2s, transform 0.2s;
+    transition: all 0.2s ease;
+    font-size: 0.9em;
 }
+
 .week-controls button:hover {
     background-color: var(--accent-dark);
     transform: scale(1.05);
 }
+
+.week-controls button:active {
+    transform: scale(0.98);
+}
+
+.week-controls button:disabled {
+    background-color: #444;
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .week-controls h3 { 
     margin: 0; 
     font-size: 1.1em; 
@@ -137,18 +101,60 @@ body {
     font-weight: 500;
 }
 
-/* --- シフトリスト --- */
-.shift-list { list-style: none; padding: 0; }
+/* === シフトコンテナ === */
+.shift-container, #shift-container {
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 0 20px 20px;
+}
+
+.loading {
+    text-align: center;
+    color: var(--muted-text);
+    padding: 40px 20px;
+    font-size: 1.1em;
+}
+
+.error {
+    text-align: center;
+    color: #dc3545;
+    padding: 40px 20px;
+    font-size: 1.1em;
+}
+
+/* === シフトリスト === */
+.shift-list { 
+    list-style: none; 
+    padding: 0;
+    margin: 0;
+}
+
+/* 日付ヘッダー */
+.shift-date-header {
+    margin: 25px 0 10px 0;
+}
+
+.shift-date-header h3 { 
+    margin: 0;
+    color: var(--accent); 
+    font-size: 1.3em; 
+    border-bottom: 2px solid var(--border-color); 
+    padding-bottom: 8px; 
+    font-weight: 700;
+}
+
+/* シフトアイテム */
 .shift-item { 
     background-color: var(--item-dark); 
     border-radius: 10px; 
     box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
-    margin-bottom: 15px; 
-    padding: 18px; 
-    border-left: 5px solid var(--muted-text); /* 通常のシフト色 */
-    transition: box-shadow 0.3s, transform 0.3s;
+    margin-bottom: 12px; 
+    padding: 16px; 
+    border-left: 5px solid var(--muted-text);
+    transition: all 0.3s ease;
     text-align: left;
 }
+
 .shift-item:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 15px rgba(229, 9, 20, 0.3);
@@ -157,47 +163,182 @@ body {
 /* 自分のシフトを強調 */
 .shift-item.current-user-shift {
     border-left-color: var(--highlight); 
-    background-color: #0d1e11; /* 濃い緑がかったダーク背景 */
-    box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
+    background: linear-gradient(135deg, #0d1e11 0%, #1a3320 100%);
+    box-shadow: 0 4px 10px rgba(40, 167, 69, 0.4);
 }
 
-.shift-date-header h3 { 
-    margin: 25px 0 10px 0; 
-    color: var(--accent); 
-    font-size: 1.4em; 
-    border-bottom: 1px solid var(--border-color); 
-    padding-bottom: 5px; 
-    font-weight: 700;
+.shift-item.current-user-shift:hover {
+    box-shadow: 0 6px 15px rgba(40, 167, 69, 0.6);
 }
+
 .shift-details p {
     margin: 5px 0;
     color: var(--text-light);
+    font-size: 0.95em;
 }
 
-/* --- レスポンシブ対応 --- */
+.shift-item p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.shift-item strong {
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+/* 区切り線 */
+hr {
+    margin: 20px 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+/* === ボトムナビゲーション === */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border-top: 2px solid rgba(229, 9, 20, 0.3);
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(229, 9, 20, 0.3);
+    z-index: 999;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 8px;
+    color: #999;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-width: 60px;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+}
+
+.nav-item:active {
+    transform: scale(0.95);
+}
+
+.nav-item.active {
+    color: #E50914;
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: #E50914;
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 0 10px rgba(229, 9, 20, 0.6);
+}
+
+.nav-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 0 5px rgba(229, 9, 20, 0.3));
+}
+
+.nav-item.active .nav-icon {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(229, 9, 20, 0.8));
+}
+
+.nav-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* アイコン定義 */
+.icon-calendar::before { content: "📅"; }
+.icon-check::before { content: "✅"; }
+.icon-chat::before { content: "💬"; }
+.icon-line::before { content: "💚"; }
+.icon-logout::before { content: "🚪"; }
+
+/* === スマホ対応 === */
 @media (max-width: 600px) {
-    .shift-container {
-        padding: 10px;
+    body {
+        padding-bottom: 75px;
+    }
+
+    .top-bar {
+        padding: 12px 16px;
+    }
+
+    .user-info-header h1 {
+        font-size: 1.2em;
+    }
+
+    .user-id-display {
+        font-size: 0.8em;
+    }
+
+    .shift-container, #shift-container {
+        padding: 0 15px 15px;
     }
     
     .week-controls {
-        padding: 10px;
+        margin: 15px 15px;
+        padding: 12px;
+        flex-wrap: wrap;
+        gap: 10px;
     }
     
     .week-controls button {
-        padding: 8px 12px;
-        font-size: 0.9em;
+        padding: 8px 14px;
+        font-size: 0.85em;
     }
     
     .week-controls h3 {
-        font-size: 0.9em;
+        font-size: 0.95em;
+        width: 100%;
+        text-align: center;
+        order: -1;
     }
 
     .shift-item {
-        padding: 15px;
+        padding: 14px;
     }
     
     .shift-date-header h3 {
-        font-size: 1.2em;
+        font-size: 1.1em;
+    }
+
+    .nav-icon {
+        font-size: 22px;
+    }
+
+    .nav-label {
+        font-size: 10px;
+    }
+}
+
+/* === タブレット・PC対応 === */
+@media (min-width: 601px) {
+    body {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .week-controls {
+        max-width: 750px;
+        margin-left: auto;
+        margin-right: auto;
     }
 }

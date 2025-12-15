@@ -1,19 +1,20 @@
 /*
- * Netflix風 ダークチャット UI 統合 CSS (最終完全版)
- * - ハンバーガーメニューの重なりとアニメーションを修正済み
- * - モバイルフレンドリーなレイアウトを維持
+ * Netflix風 ダークチャット UI + ボトムナビゲーション統合版
+ * - 既存のチャット機能を維持
+ * - ハンバーガーメニュー削除
+ * - スマホアプリ風ボトムナビ追加
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&display=swap');
 
 :root {
-    --bg-dark: #141414;      /* メイン背景色（非常に濃いダークグレー） */
-    --card-dark: #000000;    /* タイトル/入力エリア背景色 */
-    --text-light: #ffffff;   /* 主な文字色 */
-    --accent: #E50914;      /* Netflix赤 */
-    --border-color: #333333; /* 境界線の色 */
-    --user-bubble: #333333;  /* ユーザー吹き出し（ダークグレー） */
-    --bot-bubble: #1c1c1c;   /* ボット吹き出し（より濃いダークグレー） */
+    --bg-dark: #141414;
+    --card-dark: #000000;
+    --text-light: #ffffff;
+    --accent: #E50914;
+    --border-color: #333333;
+    --user-bubble: #333333;
+    --bot-bubble: #1c1c1c;
 }
 
 /* === 全体設定 === */
@@ -29,49 +30,32 @@ body {
     overflow: hidden; 
 }
 
-/* === タイトルバー === */
-h1 {
-    background-color: var(--card-dark);
-    color: var(--accent); 
-    text-align: center;
-    padding: 18px 0;
-    font-size: 1.4em;
-    margin: 0;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.7);
-    font-weight: 700;
-    z-index: 10;
-    
-    /* ★修正: メニューが収まるよう左側に十分な余白を設定 */
-    padding-left: 80px; 
-}
-
-/* ======== ★ 新しいトップバー（固定ヘッダー） ======== */
+/* === トップバー（固定ヘッダー） === */
 .top-bar {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 70px;
-
+    height: 60px;
     display: flex;
     align-items: center;
-
-    background-color: var(--card-dark);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.7);
-
-    z-index: 1200;
+    justify-content: center;
+    background: linear-gradient(135deg, #E50914 0%, #B8070F 100%);
+    box-shadow: 0 2px 10px rgba(229, 9, 20, 0.5);
+    z-index: 100;
+    border-bottom: 2px solid rgba(229, 9, 20, 0.3);
 }
 
-/* タイトル h1 をヘッダー内専用に調整 */
 .top-bar h1 {
-    flex: 1;
-    text-align: center;
     margin: 0;
+    padding: 0;
     font-size: 1.3em;
-    color: var(--accent);
-    padding: 0 20px;
+    color: var(--text-light);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
-
 
 /* === 💬 チャットエリア === */
 .chat-container {
@@ -82,10 +66,8 @@ h1 {
     flex-direction: column;
     background-color: #0c0c0c; 
     scroll-behavior: smooth;
-    
-    /* ★修正: ヘッダーとフッターに隠れないよう、パディングを調整 */
-    padding-top: 90px; /* ヘッダー分の余白 */
-    padding-bottom: 90px; /* フォーム分の余白 */
+    padding-top: 80px; /* ヘッダー分の余白 */
+    padding-bottom: 170px; /* フォーム + ボトムナビ分の余白 */
 }
 
 /* 吹き出し全体 */
@@ -119,40 +101,52 @@ h1 {
     border-left: 4px solid var(--border-color);
 }
 
+/* 🔄 再生成ボタン */
+.regen-btn {
+    background-color: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    margin-top: 10px;
+    display: block;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
 
-/* === ✏️ 入力フォーム (画面下固定に変更) === */
-form {
+.regen-btn:hover {
+    background-color: rgba(229, 9, 20, 0.1);
+    color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.regen-btn:active {
+    transform: scale(0.98);
+}
+
+/* === ✏️ 入力フォーム (画面下固定) === */
+form, #chat-form {
     position: fixed; 
-    bottom: 0;
+    bottom: 70px; /* ボトムナビの上に配置 */
     left: 0;
-    
     width: 100%; 
-    
-    /* ★最終調整: 左右のパディングをさらにタイトに調整 (10px/10px) */
-    padding: 10px 10px; /* 上下10px、左右10px */
+    padding: 12px 12px; 
     background: var(--card-dark);
     border-top: 1px solid #1c1c1c;
     box-shadow: 0 -4px 20px rgba(0,0,0,0.5); 
-    
-    max-width: none; 
-    transform: none; 
-
     display: flex;
     align-items: center;
     gap: 8px; 
     z-index: 50;
-    
-    /* iPhoneのセーフエリア対応 */
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-bottom: max(12px, env(safe-area-inset-bottom) + 12px);
 }
 
-input[type="text"] {
+input[type="text"], #question {
     flex: 1;
     min-width: 0; 
-    
-    /* ★最終修正: 入力欄の最大幅を 55% に制限し、ボタン側に大きなスペースを確保 */
     max-width: 55%; 
-    
     padding: 12px 15px;
     background-color: #1c1c1c;
     border: 1px solid #444;
@@ -161,26 +155,28 @@ input[type="text"] {
     outline: none;
     color: var(--text-light);
     transition: all 0.3s;
-    margin-right: 0; 
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus, #question:focus {
     border-color: var(--accent);
     box-shadow: 0 0 5px var(--accent);
 }
 
-/* ボタンの調整 (固定フォームに合うように微調整) */
+input::placeholder {
+    color: #666;
+}
+
+/* ボタン共通スタイル */
 button {
     background-color: var(--accent);
     color: var(--text-light);
     border: none;
-    /* ★最終調整: 左右のパディングを維持 (6px) */
-    padding: 10px 6px; 
+    padding: 10px 16px; 
     border-radius: 20px;
     cursor: pointer;
-    font-size: 0.85em; 
+    font-size: 0.9em; 
     font-weight: 600;
-    transition: background-color 0.3s, transform 0.3s;
+    transition: all 0.2s ease;
     white-space: nowrap; 
 }
 
@@ -189,120 +185,95 @@ button:hover {
     transform: translateY(-1px);
 }
 
+button:active {
+    transform: scale(0.98);
+}
+
 #clear-btn {
     background-color: var(--border-color);
+    padding: 10px 14px;
 }
+
 #clear-btn:hover {
     background-color: #444;
 }
 
-/* 🔄 再生成ボタン */
-.regen-btn {
-    background-color: transparent;
-    color: var(--accent);
-    border: 1px solid var(--accent);
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 0.85em;
-    margin-top: 10px;
-    display: block;
-    margin-left: auto;
-    transition: background-color 0.2s;
-}
-.regen-btn:hover {
-    background-color: rgba(229, 9, 20, 0.1);
-    color: var(--accent);
-    transform: none;
-}
-
-
-/* ==================================== */
-/* --- 🍔 ハンバーガーメニュー (修正統合版) --- */
-/* ==================================== */
-
-.hamburger {
+/* === 📱 ボトムナビゲーション === */
+.bottom-nav {
     position: fixed;
-    top: 25px; 
-    left: 25px; 
-    width: 35px; 
-    height: 30px; 
-    cursor: pointer;
-    z-index: 1500;
-}
-
-/* ハンバーガーの位置調整（ヘッダー内前提） */
-.hamburger {
-    position: relative; 
-    left: 20px;
-    top: 0;
-    z-index: 2000;
-}
-
-
-
-.hamburger span {
-    display: block;
-    height: 4px; 
-    width: 100%;
-    background-color: var(--text-light); 
-    border-radius: 2px;
-    transition: all 0.3s ease;
-    margin-bottom: 6px; 
-}
-
-/* ★追加: 最後の線にはマージンを適用しない */
-.hamburger span:last-child {
-    margin-bottom: 0;
-}
-
-/* ✨ アニメーション (X字への変化) */
-.hamburger.active span:nth-child(1) {
-    transform: rotate(45deg) translate(5px, 9px); 
-}
-.hamburger.active span:nth-child(2) {
-    opacity: 0;
-}
-.hamburger.active span:nth-child(3) {
-    transform: rotate(-45deg) translate(5px, -9px); 
-}
-
-/* メニュー本体 */
-.menu {
-    position: fixed;
-    top: 0;
-    left: -250px; 
-    width: 250px;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.98);
-    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.8);
-    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 1000;
-    padding-top: 100px; 
-    text-align: left;
-}
-.menu.active {
+    bottom: 0;
     left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border-top: 2px solid rgba(229, 9, 20, 0.3);
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(229, 9, 20, 0.3);
+    z-index: 999;
 }
 
-/* メニューリスト */
-.menu ul {
-    list-style: none; 
-    padding: 0;
-    margin: 0;
-}
-.menu a {
-    color: var(--text-light);
-    display: block;
-    padding: 15px 30px;
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 8px;
+    color: #999;
     text-decoration: none;
-    font-size: 1.1em;
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.3s, color 0.3s;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-width: 60px;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
 }
-.menu a:hover {
-    background-color: #1c1c1c;
-    color: var(--accent);
+
+.nav-item:active {
+    transform: scale(0.95);
 }
+
+.nav-item.active {
+    color: #E50914;
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: #E50914;
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 0 10px rgba(229, 9, 20, 0.6);
+}
+
+.nav-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 0 5px rgba(229, 9, 20, 0.3));
+}
+
+.nav-item.active .nav-icon {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(229, 9, 20, 0.8));
+}
+
+.nav-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* アイコン定義 */
+.icon-calendar::before { content: "📅"; }
+.icon-check::before { content: "✅"; }
+.icon-chat::before { content: "💬"; }
+.icon-line::before { content: "💚"; }
+.icon-logout::before { content: "🚪"; }
 
 /* 💫 フェードインアニメーション */
 @keyframes fadeIn {
@@ -310,27 +281,86 @@ button:hover {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* スクロールバーのスタイリング */
+.chat-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover {
+    background: #E50914;
+}
+
 /* スマホ対応 */
 @media (max-width: 600px) {
+    .top-bar h1 {
+        font-size: 1.1em;
+    }
+
     .message {
-        max-width: 90%;
+        max-width: 85%;
+        padding: 10px 14px;
+        font-size: 14px;
     }
-    input[type="text"] {
-        padding: 10px 15px;
+
+    form, #chat-form {
+        padding: 10px 10px;
+        gap: 6px;
+        bottom: 65px;
     }
-    form button {
-        /* ★最終調整: スマホでのボタンのパディングを維持 */
-        padding: 8px 6px; 
-        font-size: 0.9em;
+
+    input[type="text"], #question {
+        padding: 10px 14px;
+        font-size: 15px;
+        max-width: 50%;
     }
-    h1 {
-        font-size: 1.2em;
-        /* ★修正: スマホではパディングを少し減らす */
-        padding-left: 70px; 
+
+    button {
+        padding: 8px 12px; 
+        font-size: 0.85em;
     }
-    
-    .hamburger {
-        top: 15px;
+
+    #clear-btn {
+        padding: 8px 10px;
+        font-size: 0.8em;
+    }
+
+    .chat-container {
+        padding-top: 70px;
+        padding-bottom: 155px;
+    }
+
+    .nav-icon {
+        font-size: 22px;
+    }
+
+    .nav-label {
+        font-size: 10px;
+    }
+}
+
+/* タブレット・PC対応 */
+@media (min-width: 601px) {
+    body {
+        max-width: 800px;
+        margin: 0 auto;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .top-bar,
+    form, #chat-form,
+    .bottom-nav {
+        max-width: 800px;
+        left: 50%;
+        transform: translateX(-50%);
     }
 }
 
