@@ -1,78 +1,133 @@
+// ==========================================
+// グローバル関数（HTMLから直接呼ばれる）
+// ==========================================
 
+// タブ切り替え関数
+function switchTab(type) {
+    // エリアの表示・非表示
+    const weekdayArea = document.getElementById('area-weekday');
+    const holidayArea = document.getElementById('area-holiday');
+    
+    if (weekdayArea && holidayArea) {
+        weekdayArea.style.display = (type === 'weekday') ? 'block' : 'none';
+        holidayArea.style.display = (type === 'holiday') ? 'block' : 'none';
+    }
+
+    // 説明文の切り替え
+    const descWeekday = document.getElementById('desc-weekday');
+    const descHoliday = document.getElementById('desc-holiday');
+    
+    if (descWeekday && descHoliday) {
+        descWeekday.style.display = (type === 'weekday') ? 'inline' : 'none';
+        descHoliday.style.display = (type === 'holiday') ? 'inline' : 'none';
+    }
+
+    // ボタンのアクティブ状態切り替え
+    const btnW = document.getElementById('btn-weekday');
+    const btnH = document.getElementById('btn-holiday');
+    
+    if (btnW && btnH) {
+        if (type === 'weekday') {
+            btnW.classList.add('active');
+            btnH.classList.remove('active');
+        } else {
+            btnH.classList.add('active');
+            btnW.classList.remove('active');
+        }
+    }
+
+    // タブの状態を保存
+    sessionStorage.setItem('activeTab', type);
+}
+
+// テーマ切り替え関数
+function toggleTheme() {
+    const body = document.body;
+    const btn = document.getElementById('themeBtn');
+    
+    // クラスを付け外し
+    body.classList.toggle('light-mode');
+    
+    // 現在の状態を確認
+    const isLight = body.classList.contains('light-mode');
+    
+    // ボタンの文字を変える
+    if (btn) {
+        btn.textContent = isLight ? "🌙 ダークモードへ" : "☀️ ライトモードへ";
+    }
+    
+    // 設定をブラウザに保存（次回アクセス用）
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+
+// ==========================================
+// DOMContentLoaded - ページ読み込み時の処理
+// ==========================================
 document.addEventListener("DOMContentLoaded", function() {
     
+    console.log("✅ ページ読み込み完了");
+    
     // ==========================================
-    // 1. ハンバーガーメニューの処理 (修正済み)
+    // 1. ハンバーガーメニューの処理
     // ==========================================
-    // あなたのHTMLのID (menuBtn, sideMenu) に合わせました
     const menuBtn = document.getElementById('menuBtn');
     const sideMenu = document.getElementById('sideMenu');
+    const closeBtn = document.getElementById('closeBtn');
 
     if (menuBtn && sideMenu) {
+        // メニューを開く
         menuBtn.addEventListener('click', function() {
             sideMenu.classList.toggle('active');
+            console.log("🍔 メニュー開閉");
         });
+        
+        // 閉じるボタン
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                sideMenu.classList.remove('active');
+                console.log("❌ メニュー閉じる");
+            });
+        }
+        
         console.log("✅ ハンバーガーメニューを初期化しました");
     } else {
         console.error("❌ メニュー要素が見つかりません (ID: menuBtn, sideMenu)");
     }
 
     // ==========================================
-    // 2. タブ切り替え処理 (平日/休日)
+    // 2. テーマ復元
     // ==========================================
-    // もしタブ機能があるなら、ここも動くようにしておきます
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const weekdayArea = document.getElementById('area-weekday');
-    const holidayArea = document.getElementById('area-holiday');
-
-    if (tabBtns.length > 0 && weekdayArea && holidayArea) {
-        tabBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                // すべてのタブからactiveを外す
-                tabBtns.forEach(b => b.classList.remove('active'));
-                // クリックされたタブにactiveをつける
-                this.classList.add('active');
-
-                const type = this.getAttribute('data-type') || (this.textContent.includes('土日') ? 'holiday' : 'weekday');
-
-                if (type === 'weekday') {
-                    weekdayArea.style.display = 'block';
-                    holidayArea.style.display = 'none';
-                    this.style.background = '#3f51b5'; // 青
-                    this.style.color = 'white';
-                    // もう片方のボタンの色を戻す
-                    tabBtns.forEach(b => {
-                        if(b !== this) { b.style.background = '#e0e0e0'; b.style.color = '#666'; }
-                    });
-                } else {
-                    weekdayArea.style.display = 'none';
-                    holidayArea.style.display = 'block';
-                    this.style.background = '#f44336'; // 赤
-                    this.style.color = 'white';
-                    // もう片方のボタンの色を戻す
-                    tabBtns.forEach(b => {
-                        if(b !== this) { b.style.background = '#e0e0e0'; b.style.color = '#666'; }
-                    });
-                }
-            });
-        });
+    const savedTheme = localStorage.getItem('theme');
+    const themeBtn = document.getElementById('themeBtn');
+    
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-mode');
+        if (themeBtn) themeBtn.textContent = "🌙 ダークモードへ";
+        console.log("🌞 ライトモードで起動");
+    } else {
+        console.log("🌙 ダークモードで起動");
     }
 
     // ==========================================
-    // 3. 特別時間フォームの処理 (保存機能)
+    // 3. タブ状態の復元
+    // ==========================================
+    const savedTab = sessionStorage.getItem('activeTab');
+    if (savedTab) {
+        switchTab(savedTab);
+        console.log(`✅ タブ復元: ${savedTab}`);
+    }
+
+    // ==========================================
+    // 4. 特別時間フォームの処理 (保存機能)
     // ==========================================
     const specialHoursForm = document.getElementById('special-hours-add-form') || 
                              document.querySelector('form[action*="add_special_hours"]');
     
     if (specialHoursForm) {
-        // イベントリスナー重複防止のためクローン
-        const newForm = specialHoursForm.cloneNode(true);
-        specialHoursForm.parentNode.replaceChild(newForm, specialHoursForm);
-        
         console.log('✅ 特別時間フォームを初期化しました');
 
         // 送信イベント
-        newForm.addEventListener('submit', async function(e) {
+        specialHoursForm.addEventListener('submit', async function(e) {
             e.preventDefault(); // リロード阻止
             e.stopPropagation();
 
@@ -83,6 +138,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 end_time: formData.get('end_time'),
                 reason: formData.get('reason') || ''
             };
+
+            console.log('📤 特別時間を送信:', data);
 
             try {
                 const response = await fetch(this.action, {
@@ -96,6 +153,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('✅ 保存成功:', result);
                     
                     // テーブル更新処理
                     const tbody = document.querySelector('#special-hours-table tbody');
@@ -127,26 +185,29 @@ document.addEventListener("DOMContentLoaded", function() {
                     showSuccessMessage(this, '✓ 追加しました');
 
                 } else {
+                    console.error('❌ サーバーエラー:', response.status);
                     alert('エラーが発生しました');
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('❌ 通信エラー:', error);
                 alert('通信エラーが発生しました');
             }
         });
     }
 
     // ==========================================
-    // 4. 削除機能
+    // 5. 削除機能
     // ==========================================
     function attachDeleteListener(form) {
-        if(!form) return;
+        if (!form) return;
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
             if (!confirm('削除しますか？')) return;
 
             const formData = new FormData(this);
             const data = { date: formData.get('date') };
+
+            console.log('🗑️ 削除リクエスト:', data);
 
             try {
                 const response = await fetch(this.action, {
@@ -159,6 +220,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
 
                 if (response.ok) {
+                    console.log('✅ 削除成功');
                     const row = this.closest('tr');
                     row.remove();
                     const tbody = document.querySelector('#special-hours-table tbody');
@@ -168,10 +230,12 @@ document.addEventListener("DOMContentLoaded", function() {
                         tbody.appendChild(emptyRow);
                     }
                 } else {
+                    console.error('❌ 削除失敗:', response.status);
                     alert('削除に失敗しました');
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('❌ エラー:', error);
+                alert('通信エラーが発生しました');
             }
         });
     }
@@ -194,36 +258,6 @@ document.addEventListener("DOMContentLoaded", function() {
         msgEl.style.display = 'inline';
         setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
     }
+
+    console.log("✅ すべての機能を初期化完了");
 });
-
-    // --- 既存のタブ切り替え関数などはそのまま ---
-    function switchTab(type) { /* ... */ }
-
-    // ★追加：テーマ切り替えロジック
-    function toggleTheme() {
-        const body = document.body;
-        const btn = document.getElementById('themeBtn');
-        
-        // クラスを付け外し
-        body.classList.toggle('light-mode');
-        
-        // 現在の状態を確認
-        const isLight = body.classList.contains('light-mode');
-        
-        // ボタンの文字を変える
-        btn.textContent = isLight ? "🌙 ダークモードへ" : "☀️ ライトモードへ";
-        
-        // 設定をブラウザに保存（次回アクセス用）
-        localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    }
-
-    // ページ読み込み時に設定を復元
-    document.addEventListener('DOMContentLoaded', () => {
-        const savedTheme = localStorage.getItem('theme');
-        const btn = document.getElementById('themeBtn');
-        
-        if (savedTheme === 'light') {
-            document.body.classList.add('light-mode');
-            if(btn) btn.textContent = "🌙 ダークモードへ";
-        }
-    });
