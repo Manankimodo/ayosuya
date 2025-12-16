@@ -101,7 +101,7 @@
           return;
       }
  
-      // ① データをソート（マック風：時間順 ＞ 短い順）
+      // ① データをソート（時間順 ＞ 短い順）
       rawData.sort((a, b) => {
         const idA = parseInt(a.user_id);
         const idB = parseInt(b.user_id);
@@ -110,25 +110,24 @@
         const isStaffA = idA > 0;
         const isStaffB = idB > 0;
         
-        if (isStaffA && !isStaffB) return -1; // Aがスタッフなら上
-        if (!isStaffA && isStaffB) return 1;  // Bがスタッフなら上
+        if (isStaffA && !isStaffB) return -1;
+        if (!isStaffA && isStaffB) return 1;
  
-        // 2. 開始時間で並べる（朝番→夜番の大枠）
+        // 2. 開始時間で並べる
         if (a.start_time !== b.start_time) {
             return a.start_time.localeCompare(b.start_time);
         }
  
-        // ▼▼▼【ここが追加ポイント】▼▼▼
-        // 3. 開始時間が同じなら、終了時間が「早い（＝勤務時間が短い）」順にする
+        // 3. 開始時間が同じなら、終了時間が早い（短い）順
         if (a.end_time !== b.end_time) {
             return a.end_time.localeCompare(b.end_time);
         }
  
-        // 4. それでも全部同じならID順
+        // 4. それでも同じならID順
         return idA - idB;
       });
  
-      // ② 結合ロジック（ロック状態も考慮して結合）
+      // ② 結合ロジック（ロック状態も考慮）
       const mergedShifts = [];
       if (rawData.length > 0) {
           let current = { ...rawData[0] };
@@ -138,7 +137,6 @@
               if (current.user_id === next.user_id &&
                   current.date === next.date &&
                   current.type === next.type &&
-                  // ロック状態が違うなら結合しない（まずありえないが念のため）
                   (current.is_locked || 0) === (next.is_locked || 0) &&
                   current.end_time === next.start_time) {
                   
@@ -195,32 +193,24 @@
                   colorIndex++;
               }
               
-              // ★★★ 色の設定エリア（希望の配色に変更） ★★★
-              let barColor = userColorMap[s.user_id] || "#bdbdbd"; // デフォルトはグレー
+              // 色の設定
+              let barColor = userColorMap[s.user_id] || "#bdbdbd";
  
-              // 1. 不足は「赤」 (Red)
               if (s.type && s.type.indexOf("不足") !== -1) {
-                  barColor = "#ef5350"; // 警告の赤
+                  barColor = "#ef5350"; // 不足は赤
+              } else if (s.type && s.type.includes("キッチン")) {
+                  barColor = "#42a5f5"; // キッチンは青
+              } else if (s.type && s.type.includes("ホール")) {
+                  barColor = "#66bb6a"; // ホールは緑
               }
-              // 2. キッチンは「青」 (Blue)
-              else if (s.type && s.type.includes("キッチン")) {
-                  barColor = "#42a5f5"; // さわやかな青
-              }
-              // 3. ホールは「緑」 (Green)
-              else if (s.type && s.type.includes("ホール")) {
-                  barColor = "#66bb6a"; // 明るい緑
-              }
- 
-              // ロックされている場合、色を少し暗くするか枠線を強調しても良いが
-              // ここではアイコンで示すので色はそのままにする
  
               return {
                   x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
                   y: uName,
                   type: s.type,
-                  is_locked: s.is_locked, // ロック情報を持たせる
-                  original_user_id: s.user_id, // クリックイベント用
-                  date: s.date, // クリックイベント用
+                  is_locked: s.is_locked,
+                  original_user_id: s.user_id,
+                  date: s.date,
                   backgroundColor: barColor
               };
           });
@@ -234,25 +224,21 @@
                       barPercentage: 0.7,
                       borderRadius: 4,
                       borderSkipped: false,
-                      // ロックされている場合は枠線を太くする
                       borderWidth: ctx => {
                           const v = ctx.raw;
                           return (v && v.is_locked) ? 3 : 0;
                       },
-                      borderColor: '#333' // 黒い枠線
+                      borderColor: '#333'
                   }]
               },
               options: {
                   indexAxis: "y",
                   responsive: true,
                   maintainAspectRatio: false,
-                  // ★★★ クリックイベントの設定 ★★★
                   onClick: (e, elements) => {
                       if (elements.length > 0) {
                           const elementIndex = elements[0].index;
                           const dataPoint = myChart.data.datasets[0].data[elementIndex];
-                          
-                          // ロック切り替え実行
                           window.toggleLock(dataPoint.original_user_id, dataPoint.date, myChart);
                       }
                   },
@@ -296,24 +282,20 @@
                             meta.data.forEach((element, index) => {
                                 const d = dataset.data[index];
                                 
-                                // フォント設定
                                 ctx.font = 'bold 14px "Helvetica Neue", Arial';
                                 ctx.textAlign = 'center';
                                 ctx.textBaseline = 'middle';
                                 
-                                // 文字列の作成（役割 + 鍵マーク）
                                 let labelText = d.type !== 'work' ? d.type : "";
                                 if (d.is_locked) {
                                     labelText = "🔒 " + labelText;
                                 }
  
                                 if (labelText) {
-                                    // 文字のフチ取り
                                     ctx.lineWidth = 3;
                                     ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
                                     ctx.strokeText(labelText, element.x, element.y);
                                     
-                                    // 文字の中身
                                     ctx.fillStyle = '#ffffff';
                                     ctx.fillText(labelText, element.x, element.y);
                                 }
@@ -360,8 +342,10 @@
  
   <div id="charts"></div>
  
-  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 50px;">
-    <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再編集（再生成）</a>
+  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成（穴埋め）</a>
+    <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか？\n次回作成時に削除されます。')">🔓 全保護解除</a>
+    <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか？')">🔄 全リセット</a>
     <button onclick="openHelpModal()" class="btn danger">🚨 ヘルプ募集</button>
   </div>
  
@@ -423,4 +407,3 @@
   </script>
 </body>
 </html>
- 
