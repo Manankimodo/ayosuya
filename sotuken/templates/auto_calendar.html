@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>自動作成シフトカレンダー</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/auto_calendar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
+  
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
  
@@ -310,18 +310,21 @@
   </script>
 </head>
 <body>
-     <!-- ハンバーガーメニュー -->
-    <div class="menu-icon" id="menuIcon">☰</div>
-      <!-- サイドメニュー -->
-    <div class="side-menu" id="sideMenu">
-        <div class="close-btn" id="closeBtn">×</div>
-        <h3>メニュー</h3>
-        <a href="/shift/manage">❓チャットボット管理画面</a>
-        <a href="/insert/">👥 従業員登録</a>
-        <a href="/makeshift/admin">📝 シフト作成</a>
-        <a href="/makeshift/settings">⚙️ 設定</a>
-        <a href="/login/logout">🚪 ログアウト</a>
-    </div>
+ 
+  <div class="menu-btn" id="menuBtn">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+ 
+  <nav class="side-menu" id="sideMenu">
+    <ul>
+        <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
+        <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
+        <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
+        <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
+    </ul>
+  </nav>
  
   <header>自動作成シフトカレンダー</header>
  
