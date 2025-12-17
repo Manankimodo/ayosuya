@@ -4,25 +4,22 @@
   <meta charset="UTF-8">
   <title>管理シフト画面</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
   <script src="{{ url_for('static', filename='js/admin.js') }}" defer></script>
 </head>
 <body>
   <header>希望シフト一覧</header>
-    <!-- ▼ ハンバーガーメニュー -->
-  <div class="menu-btn" id="menuBtn">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
- 
-  <nav class="side-menu" id="sideMenu">
-    <ul>
-      <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
-      <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
-      <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
-      <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
-    </ul>
-  </nav>
+    <div class="menu-icon" id="menuIcon">☰</div>
+    
+    <!-- サイドメニュー -->
+    <div class="side-menu" id="sideMenu">
+        <div class="close-btn" id="closeBtn">×</div>
+        <h3>メニュー</h3>
+        <a href="/shift/manage">❓チャットボット管理画面</a>
+        <a href="/insert/">👥 従業員登録</a>
+        <a href="/makeshift/settings">⚙️ 設定</a>
+        <a href="/login/logout">🚪 ログアウト</a>
+    </div>
     <!-- ✅ ボタンコントロール部分 -->
     <div id="controls">
       <form action="/makeshift/auto_calendar" method="get">

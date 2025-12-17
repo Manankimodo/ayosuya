@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>自動作成シフトカレンダー</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/auto_calendar.css') }}">
-  
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
  
@@ -20,23 +20,32 @@
   <script>
     document.addEventListener("DOMContentLoaded", function() {
       // 1. ハンバーガーメニュー制御
-      const menuBtn = document.getElementById('menuBtn');
+      const menuIcon = document.getElementById('menuIcon');
       const sideMenu = document.getElementById('sideMenu');
-      if (menuBtn && sideMenu) {
-          menuBtn.addEventListener('click', function() {
-              menuBtn.classList.toggle('active');
-              sideMenu.classList.toggle('active');
+      const closeBtn = document.getElementById('closeBtn');
+      
+      if (menuIcon && sideMenu) {
+          menuIcon.addEventListener('click', function() {
+              sideMenu.classList.add('active');
           });
+      }
+      
+      if (closeBtn && sideMenu) {
+          closeBtn.addEventListener('click', function() {
+              sideMenu.classList.remove('active');
+          });
+      }
+      
+      if (sideMenu) {
           sideMenu.querySelectorAll('a').forEach(link => {
               link.addEventListener('click', function() {
-                  menuBtn.classList.remove('active');
                   sideMenu.classList.remove('active');
               });
           });
       }
  
       // ========================================================
-      // 2. ロック切り替え関数（クリック時に発火）
+      // 2. ロック切り替え関数(クリック時に発火)
       // ========================================================
       window.toggleLock = async function(userId, date, chartInstance) {
           if (!userId || parseInt(userId) < 0) return; // 不足データはロック不可
@@ -58,7 +67,7 @@
                       // メモリ上のデータを更新 (0 <-> 1)
                       targetShift.is_locked = result.new_state;
                       
-                      // グラフ再描画（🔒マークを反映させるため）
+                      // グラフ再描画(🔒マークを反映させるため)
                       chartInstance.update();
                       
                       // 簡単なトースト通知
@@ -101,7 +110,7 @@
           return;
       }
  
-      // ① データをソート（時間順 ＞ 短い順）
+      // ① データをソート(時間順 ＞ 短い順)
       rawData.sort((a, b) => {
         const idA = parseInt(a.user_id);
         const idB = parseInt(b.user_id);
@@ -118,7 +127,7 @@
             return a.start_time.localeCompare(b.start_time);
         }
  
-        // 3. 開始時間が同じなら、終了時間が早い（短い）順
+        // 3. 開始時間が同じなら、終了時間が早い(短い)順
         if (a.end_time !== b.end_time) {
             return a.end_time.localeCompare(b.end_time);
         }
@@ -127,7 +136,7 @@
         return idA - idB;
       });
  
-      // ② 結合ロジック（ロック状態も考慮）
+      // ② 結合ロジック(ロック状態も考慮)
       const mergedShifts = [];
       if (rawData.length > 0) {
           let current = { ...rawData[0] };
@@ -310,22 +319,19 @@
   </script>
 </head>
 <body>
- 
-  <div class="menu-btn" id="menuBtn">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
- 
-  <nav class="side-menu" id="sideMenu">
-    <ul>
-        <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
-        <li><a href="{{ url_for('shift.manage_faq') }}">履歴</a></li>
-        <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
-        <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
-    </ul>
-  </nav>
- 
+      <!-- ハンバーガーメニュー -->
+    <div class="menu-icon" id="menuIcon">☰</div>
+    
+    <!-- サイドメニュー -->
+    <div class="side-menu" id="sideMenu">
+        <div class="close-btn" id="closeBtn">×</div>
+        <h3>メニュー</h3>
+        <a href="/login/manager/home">📅 ホーム</a>
+        <a href="/shift/manage">❓チャットボット管理画面</a>
+        <a href="/insert/">👥 従業員登録</a>
+        <a href="/makeshift/settings">⚙️ 設定</a>
+        <a href="/login/logout">🚪 ログアウト</a>
+    </div>
   <header>自動作成シフトカレンダー</header>
  
   {% if settings %}
@@ -346,9 +352,9 @@
   <div id="charts"></div>
  
   <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-    <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成（穴埋め）</a>
-    <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか？\n次回作成時に削除されます。')">🔓 全保護解除</a>
-    <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか？')">🔄 全リセット</a>
+    <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成(穴埋め)</a>
+    <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか?\n次回作成時に削除されます。')">🔓 全保護解除</a>
+    <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか?')">🔄 全リセット</a>
     <button onclick="openHelpModal()" class="btn danger">🚨 ヘルプ募集</button>
   </div>
  
@@ -395,7 +401,7 @@
  
             closeHelpModal();
             if (response.ok) {
-                alert(`🎉 募集を配信しました！ (${result.target_count} 名に通知)`);
+                alert(`🎉 募集を配信しました! (${result.target_count} 名に通知)`);
             } else {
                 alert(`❌ 配信失敗: ${result.error || '不明なエラー'}`);
             }
