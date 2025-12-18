@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, redirect, url_for, session, request, flash
+from flask import Blueprint, render_template, redirect, url_for, session, request, flash, jsonify
 from sqlalchemy import text
 from extensions import db
 import mysql.connector
+from datetime import datetime # 日付比較用に必要
 
 calendar_bp = Blueprint("calendar", __name__, url_prefix="/calendar")
 
@@ -14,19 +15,12 @@ def get_db_connection():
         database="ayosuya"
     )
 
-# ★追加: ユーザーのstore_idを取得する関数
+# ユーザーのstore_idを取得する関数
 def get_user_store_id(user_id):
     """ユーザーのstore_idを取得"""
     sql = text("SELECT store_id FROM account WHERE ID = :user_id")
     result = db.session.execute(sql, {"user_id": user_id}).fetchone()
     return result[0] if result else None
-
-# ★追加: makeshift.pyで使用するためのヘルパー関数
-def get_user_store_id_raw(user_id, cursor):
-    """mysql.connectorのカーソルを使ってstore_idを取得"""
-    cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
-    result = cursor.fetchone()
-    return result['store_id'] if result else None
 
 # ==========================
 # 🔹 カレンダー画面
@@ -51,10 +45,7 @@ def admin():
     return render_template("calendar2.html")
 
 # ==========================
-# 🔹 希望申請フォーム
-# ==========================
-# ==========================
-# 🔹 希望申請フォーム（完全修正版）
+# 🔹 希望申請フォーム（修正版）
 # ==========================
 @calendar_bp.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
@@ -70,18 +61,64 @@ def sinsei(date):
 
     try:
         # ---------------------------------------------------
-        # 1. ユーザーの店舗ID(store_id)を account テーブルから取得
+        # 1. ユーザーの店舗ID(store_id)を取得
         # ---------------------------------------------------
         cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
         user_data = cursor.fetchone()
         store_id = user_data["store_id"] if user_data else None
 
-        # 店舗IDがない場合はエラーなどの処理
         if not store_id:
             flash("店舗情報が取得できませんでした。", "danger")
-            # 念のためデフォルトで動作させるか、リダイレクトするか
-            # ここではリダイレクトします
             return redirect(url_for("calendar.calendar"))
+
+        # ---------------------------------------------------
+        # ★ 追加: ロック状態と締め切り設定の確認
+        # ---------------------------------------------------
+        target_month = date[:7] # "2025-01" の形式を取得
+        
+        # shift_config から設定を取得
+        cursor.execute(
+            "SELECT * FROM shift_config WHERE store_id = %s AND target_month = %s",
+            (store_id, target_month)
+        )
+        config = cursor.fetchone()
+        
+        is_locked = False
+        is_late = False
+        
+        if config:
+            # ロック状態
+            if config['is_locked']:
+                is_locked = True
+            
+            # 締め切り判定 (現在日が締め切り日を過ぎているか)
+            if config['deadline_date']:
+                today_date = datetime.now().date()
+                # config['deadline_date'] が date型か確認して比較
+                deadline = config['deadline_date']
+                if isinstance(deadline, str):
+                    deadline = datetime.strptime(deadline, '%Y-%m-%d').date()
+                
+                if today_date > deadline:
+                    is_late = True
+
+        # ---------------------------------------------------
+        # ★ 追加: 既存のシフト希望データを取得 (初期値表示用)
+        # ---------------------------------------------------
+        cursor.execute(
+            "SELECT * FROM calendar WHERE ID = %s AND date = %s",
+            (user_id, date)
+        )
+        current_data = cursor.fetchone()
+        
+        # 時間の秒を削る処理 (09:00:00 -> 09:00)
+        if current_data:
+            if current_data['start_time']:
+                current_data['start_time'] = str(current_data['start_time'])[:5]
+            if current_data['end_time']:
+                current_data['end_time'] = str(current_data['end_time'])[:5]
+            # typeカラムがない場合のために補完(workの値を使用)
+            current_data['type'] = str(current_data['work'])
 
         # ---------------------------------------------------
         # 2. 時間フォーマット整形のヘルパー関数
@@ -89,7 +126,6 @@ def sinsei(date):
         def format_time_str(t_obj):
             if t_obj is None: return None
             s = str(t_obj).strip()
-            # "9:00:00" -> "09:00"
             if ':' in s:
                 parts = s.split(':')
                 h = parts[0].zfill(2)
@@ -98,10 +134,8 @@ def sinsei(date):
             return s[:5]
 
         # ---------------------------------------------------
-        # 3. 設定と特別時間の取得（store_id を条件にする）
+        # 3. 店舗設定時間の取得
         # ---------------------------------------------------
-        
-        # A. 基本設定の取得
         cursor.execute(
             "SELECT start_time, end_time, min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
             (store_id,)
@@ -117,25 +151,18 @@ def sinsei(date):
             default_start = "09:00"
             default_end = "22:00"
         
-        # B. 特別時間の取得
-        # ★ ここ重要: store_id と date の両方が一致するものを探す
+        # 特別時間の取得
         cursor.execute(
             "SELECT start_time, end_time, reason FROM special_hours WHERE store_id = %s AND date = %s",
             (store_id, date)
         )
         special = cursor.fetchone()
 
-        # デバッグ用：ターミナルに表示されます（確認用）
-        print(f"DEBUG: Date={date}, StoreID={store_id}, SpecialFound={special}")
-        
         if special:
-            # 特別時間を優先
             start_limit = format_time_str(special['start_time'])
             end_limit = format_time_str(special['end_time'])
-            # 画面表示用のメッセージ
-            notice = f"⚠️ {special.get('reason', '特別営業')}のため、時間が変更されています ({start_limit}〜{end_limit})"
+            notice = f"⚠️ {special.get('reason', '特別営業')} ({start_limit}〜{end_limit})"
         else:
-            # 基本設定を使用
             start_limit = default_start
             end_limit = default_end
             notice = None
@@ -144,6 +171,11 @@ def sinsei(date):
         # 4. 保存処理 (POST)
         # ---------------------------------------------------
         if request.method == "POST":
+            # ★ 修正：期限外 + 確定済み のみブロック
+            if is_locked and is_late:
+                flash("⛔ 期限を過ぎており、シフトが確定しているため、変更できません。", "danger")
+                return redirect(url_for("calendar.calendar"))
+
             work = request.form.get("work")
             start_time = request.form.get("start_time")
             end_time = request.form.get("end_time")
@@ -151,15 +183,14 @@ def sinsei(date):
             # バリデーション: 最低勤務時間チェック
             if work == "1" and start_time and end_time and min_hours > 0:
                 try:
-                    from datetime import datetime
                     start_dt = datetime.strptime(start_time, "%H:%M")
                     end_dt = datetime.strptime(end_time, "%H:%M")
                     diff = (end_dt - start_dt).total_seconds() / 3600
-                    if diff < 0: diff += 24 # 日またぎ
+                    if diff < 0: diff += 24
                     
                     if diff < min_hours:
                         flash(f"❌ 希望時間が短すぎます。最低 {min_hours} 時間以上入力してください", "danger")
-                        return render_template("sinsei.html", date=date, start_limit=start_limit, end_limit=end_limit, min_hours=min_hours, notice=notice)
+                        return render_template("sinsei.html", date=date, start_limit=start_limit, end_limit=end_limit, min_hours=min_hours, notice=notice, is_locked=is_locked, is_late=is_late, current_data=current_data)
                 except ValueError:
                     pass
 
@@ -178,25 +209,40 @@ def sinsei(date):
             if result > 0:
                 update_sql = text("UPDATE calendar SET work = :work, start_time = :start_time, end_time = :end_time WHERE ID = :user_id AND date = :date")
                 db.session.execute(update_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
-                flash(f"{date} の希望を更新しました。", "info")
+                msg = f"{date} の希望を更新しました。"
             else:
                 insert_sql = text("INSERT INTO calendar (ID, date, work, start_time, end_time) VALUES (:user_id, :date, :work, :start_time, :end_time)")
                 db.session.execute(insert_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
-                flash(f"{date} の希望を提出しました。", "success")
+                msg = f"{date} の希望を提出しました。"
 
             db.session.commit()
+            
+            # ★メッセージ調整
+            if is_locked and not is_late:
+                # 期限内 + 確定済み
+                flash(f"⚠️ シフトは確定済みですが、期限内のため {msg}", "warning")
+            elif is_late and not is_locked:
+                # 期限外 + 未確定
+                flash(f"⚠️ 期限を過ぎていますが、{msg}", "warning")
+            else:
+                # 通常（期限内 + 未確定）
+                flash(msg, "success")
+                
             return redirect(url_for("calendar.calendar"))
-
         # ---------------------------------------------------
         # 5. 画面表示 (GET)
         # ---------------------------------------------------
+        # ★ is_locked, is_late, current_data をテンプレートに渡す
         return render_template("sinsei.html", 
-                             date=date, 
-                             start_limit=start_limit,
-                             end_limit=end_limit,
-                             min_hours=min_hours,
-                             notice=notice)
-                             
+                            date=date, 
+                            start_limit=start_limit,
+                            end_limit=end_limit,
+                            min_hours=min_hours,
+                            notice=notice,
+                            is_locked=is_locked,
+                            is_late=is_late,
+                            current_data=current_data)
+                            
     except Exception as e:
         print(f"Sinsei Error: {e}")
         import traceback
@@ -204,29 +250,25 @@ def sinsei(date):
         flash("システムエラーが発生しました", "danger")
         return redirect(url_for("calendar.calendar"))
     finally:
-        if conn:
+        if conn and conn.is_connected():
+            cursor.close()
             conn.close()
+
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================
 @calendar_bp.route("/my_confirmed_shift")
 def my_confirmed_shift():
-    """
-    セッションからIDを取得し、makeshiftブループリントの確認画面へ遷移させる。
-    """
     if "user_id" not in session:
         return redirect(url_for("login.login"))
-        
     user_id = session["user_id"]
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
-
 
 # ==========================
 # 🔹 店長のヘルプ希望申請
 # ==========================
 @calendar_bp.route("/manager_help_request")
 def manager_help_request():
-    """店長用: ヘルプ希望申請カレンダー表示"""
     if "user_id" not in session:
         return redirect(url_for("login.login"))
 
@@ -238,7 +280,6 @@ def manager_help_request():
 
     return render_template("manager_help_request.html", sent_dates=sent_dates or [])
 
-
 @calendar_bp.route("/manager_help_sinsei/<date>", methods=["GET", "POST"])
 def manager_help_sinsei(date):
     """店長用: ヘルプ希望申請フォーム"""
@@ -246,16 +287,11 @@ def manager_help_sinsei(date):
         return redirect(url_for("login.login"))
 
     user_id = session["user_id"]
-    
-    # ★追加: ユーザーの店舗IDを取得
     store_id = get_user_store_id(user_id)
     if not store_id:
         flash("❌ 店舗情報が取得できませんでした。", "danger")
         return redirect(url_for("calendar.manager_help_request"))
 
-    # ======================================================
-    # ★修正: 店舗ごとの設定 (min_hours) を取得
-    # ======================================================
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
@@ -268,66 +304,82 @@ def manager_help_sinsei(date):
         min_hours = float(settings_row['min_hours_per_day'])
     else:
         min_hours = 0
-        
     cursor.close()
     conn.close()
 
-    # ======================================================
-    # 保存処理 (POST)
-    # ======================================================
     if request.method == "POST":
         work = request.form.get("work")
         start_time = request.form.get("start_time")
         end_time = request.form.get("end_time")
 
-        # ヘルプ不可なら時間はNone
         if work == "0":
             start_time = None
             end_time = None
         else:
-            if start_time and not start_time.endswith(":00"):
-                start_time += ":00"
-            if end_time and not end_time.endswith(":00"):
-                end_time += ":00"
+            if start_time and not start_time.endswith(":00"): start_time += ":00"
+            if end_time and not end_time.endswith(":00"): end_time += ":00"
 
-        # すでに同じ日付の申請があるか確認
         check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
         result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
 
         if result > 0:
-            # 更新
-            update_sql = text("""
-                UPDATE calendar
-                SET work = :work, start_time = :start_time, end_time = :end_time
-                WHERE ID = :user_id AND date = :date
-            """)
-            db.session.execute(update_sql, {
-                "user_id": user_id,
-                "date": date,
-                "work": work,
-                "start_time": start_time,
-                "end_time": end_time
-            })
+            update_sql = text("UPDATE calendar SET work = :work, start_time = :start_time, end_time = :end_time WHERE ID = :user_id AND date = :date")
+            db.session.execute(update_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
             flash(f"{date} のヘルプ希望を更新しました。", "info")
         else:
-            # 新規登録
-            insert_sql = text("""
-                INSERT INTO calendar (ID, date, work, start_time, end_time)
-                VALUES (:user_id, :date, :work, :start_time, :end_time)
-            """)
-            db.session.execute(insert_sql, {
-                "user_id": user_id,
-                "date": date,
-                "work": work,
-                "start_time": start_time,
-                "end_time": end_time
-            })
+            insert_sql = text("INSERT INTO calendar (ID, date, work, start_time, end_time) VALUES (:user_id, :date, :work, :start_time, :end_time)")
+            db.session.execute(insert_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
             flash(f"{date} のヘルプ希望を提出しました。", "success")
 
         db.session.commit()
         return redirect(url_for("calendar.manager_help_request"))
 
-    # ======================================================
-    # GET: フォーム表示
-    # ======================================================
     return render_template("manager_help_sinsei.html", date=date, min_hours=min_hours)
+
+
+@calendar_bp.route('/update_shift', methods=['POST'])
+def update_shift():
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "ログインしてください"}), 401
+
+    user_store_id = session.get('store_id')
+    if not user_store_id:
+        user_store_id = get_user_store_id(session["user_id"])
+        
+    target_date_str = request.form.get('date')
+    if not target_date_str:
+        return jsonify({"status": "error", "message": "日付が必要です"}), 400
+        
+    target_month = target_date_str[:7]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # ロック判定と期限判定
+    sql = """
+        SELECT * FROM shift_config 
+        WHERE target_month = %s AND store_id = %s
+    """
+    cursor.execute(sql, (target_month, user_store_id))
+    config = cursor.fetchone()
+    
+    cursor.close()
+    conn.close()
+
+    # ★修正：期限外 + 確定済み のみブロック
+    if config and config['is_locked']:
+        # 期限チェック
+        if config['deadline_date']:
+            today_date = datetime.now().date()
+            deadline = config['deadline_date']
+            if isinstance(deadline, str):
+                deadline = datetime.strptime(deadline, '%Y-%m-%d').date()
+            
+            if today_date > deadline:
+                # 期限外 + 確定済み → ブロック
+                return jsonify({"status": "error", "message": "期限を過ぎており、確定済みのため変更できません"}), 403
+            else:
+                # 期限内 + 確定済み → 警告付きで許可
+                return jsonify({"status": "warning", "message": "確定済みですが期限内のため変更可能です"}), 200
+    
+    return jsonify({"status": "success", "message": "保存可能です"})

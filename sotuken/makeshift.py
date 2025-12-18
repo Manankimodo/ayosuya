@@ -923,6 +923,26 @@ def toggle_lock():
         return jsonify({'status': 'error', 'message': str(e)}), 500
     finally:
         conn.close()
+#------------------------------------------------------------------------------------------------------------------------------------------------------
+@makeshift_bp.route('/lock_schedule', methods=['POST'])
+def lock_schedule():
+    # セッションから管理者の店舗IDを取得
+    store_id = session.get('store_id') 
+    month = request.form.get('month')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # ★ store_id も含めて保存する
+    sql = """
+        INSERT INTO shift_config (store_id, target_month, deadline_date, is_locked)
+        VALUES (%s, %s, CURDATE(), TRUE)
+        ON DUPLICATE KEY UPDATE is_locked = TRUE
+    """
+    cursor.execute(sql, (store_id, month)) # ここで store_id を渡す
+    conn.commit()
+    
+    return redirect(url_for('makeshift_bp.show_admin_shift'))
 
 # ==========================================
 # 2. 設定画面の表示と基本設定の更新-----------------------------------------------------------------------------------------

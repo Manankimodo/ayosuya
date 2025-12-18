@@ -356,6 +356,11 @@
     <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか?\n次回作成時に削除されます。')">🔓 全保護解除</a>
     <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか?')">🔄 全リセット</a>
     <button onclick="openHelpModal()" class="btn danger">🚨 ヘルプ募集</button>
+    <form action="{{ url_for('makeshift.lock_schedule') }}" method="POST"></form>
+        <input type="hidden" name="month" value="2025-01"> <button type="submit" onclick="return confirm('シフトを確定しますか？ユーザーは修正できなくなります。')">
+            🔒 シフトを確定して募集を締め切る
+        </button>
+    </form>
   </div>
  
   <div id="helpModal" class="modal-overlay">
@@ -371,6 +376,7 @@
         </div>
     </div>
   </div>
+
  
   <script>
     function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
