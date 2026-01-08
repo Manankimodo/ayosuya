@@ -4,27 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/manage_faq.css') }}">
-    <script src="{{ url_for('static', filename='js/manage_faq.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
+    <script src="{{ url_for('static', filename='js/manage_faq.js') }}" defer></script>    
     <title>チャットボット管理</title>
 </head>
 <body>
     <h1>チャットボット管理画面</h1>
     <!-- ▼ ハンバーガーメニュー -->
-    <div class="hamburger" id="hamburger">
-        <div class="bar"></div>
-        <div class="bar"></div>
-        <div class="bar"></div>
+        <!-- ハンバーガーメニュー -->
+    <div class="menu-icon" id="menuIcon">☰</div>
+    
+    <!-- サイドメニュー -->
+    <div class="side-menu" id="sideMenu">
+        <div class="close-btn" id="closeBtn">×</div>
+        <h3>メニュー</h3>
+        <a href="/login/manager/home">📅 ホーム</a>
+        <a href="/insert/">👥 従業員登録</a>
+        <a href="/makeshift/admin">📝 シフト作成</a>
+        <a href="/makeshift/settings">⚙️ 設定</a>
+        <a href="/login/logout">🚪 ログアウト</a>
     </div>
-        <!-- ▼ メニュー本体 -->
-    <nav class="menu" id="menu">
-        <ul>
-            <!-- <li><a href="#" id="logout-link" data-logout-url="{{ url_for('login.logout') }}">ログアウト</a></li> -->
-            <li><a href="{{ url_for('calendar.admin') }}">希望一覧</a></li>
-            <li><a href="{{ url_for('insert.insert') }}">従業員登録</a></li>
-            <li><a href="{{ url_for('makeshift.settings') }}">設定</a></li>
-            <li><a href="{{ url_for('makeshift.generate_shift') }}">シフト作成</a></li>
-        </ul>
-    </nav>
+    
+    <!-- オーバーレイ -->
+    <div class="overlay" id="overlay"></div>
 
     <h2>新規登録</h2>
     <form action="{{ url_for('shift.add_faq') }}" method="POST">
