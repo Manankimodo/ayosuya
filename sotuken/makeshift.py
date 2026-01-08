@@ -795,23 +795,26 @@ def auto_calendar():
         # DB保存と自動保護処理
         # ========================================================
         if all_generated_shifts:
+            # ここは is_locked = 0 で保存しているのでOK
             sql = "INSERT INTO shift_table (user_id, date, start_time, end_time, type, is_locked) VALUES (%s, %s, %s, %s, %s, %s)"
             data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type'], 0) 
                     for s in all_generated_shifts]
             cursor.executemany(sql, data)
             conn.commit()
             
+            # ▼▼▼ このブロックを削除またはコメントアウトしてください ▼▼▼
             # ★自動保護：不足があった日付のシフトをロック★
-            if dates_with_shortage:
-                shortage_placeholders = ','.join(['%s'] * len(dates_with_shortage))
-                cursor.execute(f"""
-                    UPDATE shift_table 
-                    SET is_locked = 1 
-                    WHERE date IN ({shortage_placeholders})
-                    AND CAST(user_id AS SIGNED) > 0
-                    AND is_locked = 0
-                """, tuple(dates_with_shortage))
-                conn.commit()
+            # if dates_with_shortage:
+            #     shortage_placeholders = ','.join(['%s'] * len(dates_with_shortage))
+            #     cursor.execute(f"""
+            #         UPDATE shift_table 
+            #         SET is_locked = 1 
+            #         WHERE date IN ({shortage_placeholders})
+            #         AND CAST(user_id AS SIGNED) > 0
+            #         AND is_locked = 0
+            #     """, tuple(dates_with_shortage))
+            #     conn.commit()
+            # ▲▲▲ 削除ここまで ▲▲▲
             
         cursor.execute("""
             SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type, s.is_locked
