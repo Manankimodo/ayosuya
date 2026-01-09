@@ -998,6 +998,8 @@ def settings():
             min_hours_per_day = request.form.get("min_hours_per_day", 0)
             max_people_per_shift = request.form.get("max_people_per_shift", 30)
             auto_mode = request.form.get("auto_mode", "balance")
+            # ★追加
+            deadline_day = request.form.get("deadline_day", 20) 
 
             cursor.execute("SELECT ID FROM shift_settings WHERE store_id = %s LIMIT 1", (store_id,))
             existing_id = cursor.fetchone()
@@ -1007,19 +1009,19 @@ def settings():
                     UPDATE shift_settings
                     SET start_time=%s, end_time=%s, break_minutes=%s, interval_minutes=%s,
                         max_hours_per_day=%s, min_hours_per_day=%s, max_people_per_shift=%s,
-                        auto_mode=%s, updated_at=NOW()
+                        auto_mode=%s, deadline_day=%s, updated_at=NOW()
                     WHERE ID = %s AND store_id = %s
                 """, (start_time, end_time, break_minutes, interval_minutes,
-                      max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, 
-                      existing_id["ID"], store_id))
+                      max_hours_per_day, min_hours_per_day, max_people_per_shift, 
+                      auto_mode, deadline_day, existing_id["ID"], store_id))
             else:
                 cursor.execute("""
                     INSERT INTO shift_settings 
                     (store_id, start_time, end_time, break_minutes, interval_minutes, 
-                     max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                     max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, deadline_day, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 """, (store_id, start_time, end_time, break_minutes, interval_minutes,
-                      max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode))
+                      max_hours_per_day, min_hours_per_day, max_people_per_shift, auto_mode, deadline_day))
             conn.commit()
             flash("✅ 基本設定を保存しました", "success")
             return redirect(url_for("makeshift.settings"))
