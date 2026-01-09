@@ -125,46 +125,104 @@ def find_free_times(registered_times):
 # === 管理者画面 ===
 @makeshift_bp.route("/admin")
 def show_admin_shift():
+    if "user_id" not in session:
+        return redirect(url_for("login.login"))
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # calendarテーブルから希望シフトを取得
-    cursor.execute("SELECT ID, date, start_time, end_time FROM calendar ORDER BY date, start_time")
-    rows = cursor.fetchall()
-    
-    # shift_tableから確定シフトを取得 (表示用)
-    cursor.execute("SELECT user_id, date, start_time, end_time, type FROM shift_table ORDER BY date, start_time")
-    confirmed_shifts = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    if not rows:
-        return render_template("admin.html", results=[], confirmed_shifts=[])
-
-    days = sorted(set(r["date"].strftime("%Y-%m-%d") for r in rows))
-    results = []
-    for d in days:
-        registered = [
-            (format_time(r["start_time"]), format_time(r["end_time"]))
-            for r in rows
-            if r["date"].strftime("%Y-%m-%d") == d and r["start_time"] and r["end_time"]
-        ]
-        free_slots = find_free_times(registered)
-        results.append({"date": d, "registered": registered, "free_slots": free_slots})
-
-    # 確定シフトのフォーマット
-    formatted_confirmed = []
-    for shift in confirmed_shifts:
-        formatted_confirmed.append({
-            "date": shift["date"].strftime("%Y-%m-%d"),
-            "user_id": shift["user_id"],
-            "start_time": format_time(shift["start_time"]),
-            "end_time": format_time(shift["end_time"]),
-            "type": shift["type"]
-        })
+    try:
+        user_id = session["user_id"]
         
-    return render_template("admin.html", results=results, confirmed_shifts=formatted_confirmed)
+        # 1. ユーザーの店舗IDを取得
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            return "店舗情報が見つかりません", 404
+        store_id = user_row["store_id"]
+
+        # 2. 翌月・締め切り・公開状況の計算
+        today = datetime.now()
+        # 確実に「来月」の情報を出すための計算
+        next_month_date = (today.replace(day=28) + timedelta(days=5))
+        next_month_val = next_month_date.month
+        next_month_year = next_month_date.year
+        target_month_str = next_month_date.strftime("%Y-%m")
+
+        # 締め切り日を取得
+        cursor.execute("SELECT deadline_day FROM shift_settings WHERE store_id = %s", (store_id,))
+        setting = cursor.fetchone()
+        deadline_day = setting['deadline_day'] if setting else 20
+
+        # 公開ステータスを取得
+        cursor.execute("SELECT is_published FROM shift_publish_status WHERE store_id = %s AND target_month = %s", 
+                       (store_id, target_month_str))
+        publish_data = cursor.fetchone()
+        is_published = publish_data['is_published'] if publish_data else 0
+
+        # 3. 翌月分の希望シフト(calendar)を取得
+        cursor.execute("""
+            SELECT c.ID, c.date, c.start_time, c.end_time 
+            FROM calendar c
+            JOIN account a ON c.ID = a.ID
+            WHERE a.store_id = %s AND MONTH(c.date) = %s AND YEAR(c.date) = %s
+            ORDER BY c.date, c.start_time
+        """, (store_id, next_month_val, next_month_year))
+        rows = cursor.fetchall()
+        
+        # 4. 確定済みシフト(shift_table)を取得
+        cursor.execute("""
+            SELECT s.user_id, s.date, s.start_time, s.end_time, s.type 
+            FROM shift_table s
+            JOIN account a ON s.user_id = a.ID
+            WHERE a.store_id = %s AND MONTH(s.date) = %s AND YEAR(s.date) = %s
+            ORDER BY s.date, s.start_time
+        """, (store_id, next_month_val, next_month_year))
+        confirmed_shifts_raw = cursor.fetchall()
+
+        # 5. 希望シフトの集計 (results の作成)
+        if not rows:
+            results = []
+        else:
+            days = sorted(set(r["date"].strftime("%Y-%m-%d") for r in rows))
+            results = []
+            for d in days:
+                registered = [
+                    (format_time(r["start_time"]), format_time(r["end_time"]))
+                    for r in rows
+                    if r["date"].strftime("%Y-%m-%d") == d and r["start_time"] and r["end_time"]
+                ]
+                # 空き時間の計算
+                free_slots = find_free_times(registered)
+                results.append({"date": d, "registered": registered, "free_slots": free_slots})
+
+        # 6. 確定シフトのフォーマット
+        formatted_confirmed = []
+        for shift in confirmed_shifts_raw:
+            formatted_confirmed.append({
+                "date": shift["date"].strftime("%Y-%m-%d"),
+                "user_id": shift["user_id"],
+                "start_time": format_time(shift["start_time"]),
+                "end_time": format_time(shift["end_time"]),
+                "type": shift["type"]
+            })
+
+        return render_template("admin.html", 
+                               results=results, 
+                               confirmed_shifts=formatted_confirmed,
+                               next_month=next_month_val,
+                               deadline_day=deadline_day,
+                               is_published=is_published,
+                               is_application_open=(today.day <= deadline_day))
+                               
+    except Exception as e:
+        print(f"Admin View Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return "システムエラーが発生しました", 500
+    finally:
+        cursor.close()
+        conn.close()
 #---------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1628,3 +1686,44 @@ def delete_special_hours():
     finally:
         conn.close()
 #---------------------------------------------------------------------------------------------------------------------------------
+# ==========================================
+# 📢 シフト公開・非公開切り替えAPI
+# ==========================================
+@makeshift_bp.route("/api/publish_status", methods=["POST"])
+def toggle_publish_status():
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "ログインが必要です"}), 401
+    
+    data = request.json
+    target_month = data.get("month")   # 例: "2026-02"
+    status = data.get("status")        # 1: 公開, 0: 非公開
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # ログインユーザーの店舗IDを取得
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (session["user_id"],))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            return jsonify({"success": False, "message": "店舗情報が見つかりません"}), 400
+
+        # 公開状態を保存（ON DUPLICATE KEY で、あれば更新、なければ挿入）
+        cursor.execute("""
+            INSERT INTO shift_publish_status (store_id, target_month, is_published)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE is_published = VALUES(is_published)
+        """, (store_id, target_month, status))
+        
+        conn.commit()
+        msg = "公開しました" if status == 1 else "非公開にしました"
+        return jsonify({"success": True, "message": f"{target_month}のシフトを{msg}"})
+        
+    except Exception as e:
+        print(f"Publish Error: {e}")
+        return jsonify({"success": False, "message": "更新に失敗しました"}), 500
+    finally:
+        cursor.close()
+        conn.close()

@@ -9,51 +9,82 @@
 </head>
 <body>
   <header>希望シフト一覧</header>
-    <div class="menu-icon" id="menuIcon">☰</div>
-    
-    <!-- サイドメニュー -->
-    <div class="side-menu" id="sideMenu">
-        <div class="close-btn" id="closeBtn">×</div>
-        <h3>メニュー</h3>
-        <a href="/login/manager/home">📅 ホーム</a>
-        <a href="/shift/manage">❓チャットボット管理画面</a>
-        <a href="/insert/">👥 従業員登録</a>
-        <a href="/makeshift/settings">⚙️ 設定</a>
-        <a href="/login/logout">🚪 ログアウト</a>
-    </div>
-    <!-- ✅ ボタンコントロール部分 -->
-    <div id="controls">
-      <form action="/makeshift/auto_calendar" method="get">
-        <button type="submit" id="make-shift-btn">
-          🗓️ シフト自動作成
-        </button>
-      </form>
-    </div>
- 
+  
+  <div class="menu-icon" id="menuIcon">☰</div>
+  
+  <div class="side-menu" id="sideMenu">
+      <div class="close-btn" id="closeBtn">×</div>
+      <h3>メニュー</h3>
+      <a href="/login/manager/home">📅 ホーム</a>
+      <a href="/shift/manage">❓チャットボット管理画面</a>
+      <a href="/insert/">👥 従業員登録</a>
+      <a href="/makeshift/settings">⚙️ 設定</a>
+      <a href="/login/logout">🚪 ログアウト</a>
+  </div>
+
+  <div class="dashboard-container" style="margin: 20px; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+      <h2 style="margin-top:0; border-bottom:2px solid #eee; padding-bottom:10px; font-size: 1.4em;">📢 {{ next_month }}月分の管理状況</h2>
+      
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+          <div class="stat-card" style="flex: 1; min-width: 250px; padding: 15px; border-left: 5px solid #2196F3; background: #e3f2fd; border-radius: 4px;">
+              <span style="font-size: 0.9em; color: #666;">従業員からの希望申請</span><br>
+              <strong style="font-size: 1.2em;">毎月 {{ deadline_day }} 日 締め切り</strong>
+              <p style="margin: 5px 0 0; font-size: 0.9em;">
+                  {% if is_application_open %}
+                      <span style="color: #2e7d32; font-weight: bold;">● 現在、申請受付中です</span>
+                  {% else %}
+                      <span style="color: #d32f2f; font-weight: bold;">● 申請受付は終了しました</span>
+                  {% endif %}
+              </p>
+          </div>
+
+          <div class="stat-card" style="flex: 1; min-width: 250px; padding: 15px; border-left: 5px solid #4caf50; background: #e8f5e9; border-radius: 4px;">
+              <span style="font-size: 0.9em; color: #666;">従業員への公開状況</span><br>
+              <strong style="font-size: 1.2em;">
+                  {% if is_published %}
+                      <span style="color: #2e7d32;">✅ 公開済み（閲覧可能）</span>
+                  {% else %}
+                      <span style="color: #ed6c02;">📝 下書き（現在は非公開）</span>
+                  {% endif %}
+              </strong>
+              <p style="margin: 5px 0 0; font-size: 0.85em; color: #666;">※作成後の画面で公開ボタンを押せます。</p>
+          </div>
+      </div>
+  </div>
+
+  <div id="controls" style="text-align: center; margin: 30px 0;">
+    <form action="/makeshift/auto_calendar" method="get">
+      <button type="submit" id="make-shift-btn" style="padding: 15px 40px; font-size: 1.2em; cursor: pointer; background: #333; color: white; border: none; border-radius: 30px; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+        🗓️ {{ next_month }}月分のシフトを自動作成する
+      </button>
+    </form>
+  </div>
+
   <div class="container">
+    <h2 style="padding-left: 20px;">📅 {{ next_month }}月分の希望申請データ（日別）</h2>
     {% if results %}
       {% for item in results %}
         <div class="day-card">
           <h2>{{ item.date }}</h2>
           <div class="time-section">
             <div class="time-list">
-              <h3>登録済み時間</h3>
+              <h3>登録済み希望</h3>
               <ul>
                 {% for t in item.registered %}
                   {% if t[0] and t[1] %}
-                    <li>{{ t[0] }}〜{{ t[1] }}</li>
+                    <li>{{ t[0] }} 〜 {{ t[1] }}</li>
                   {% else %}
-                    <li class="no-work">出勤できない</li>
+                    <li class="no-work">出勤不可</li>
                   {% endif %}
                 {% endfor %}
               </ul>
             </div>
  
             <div class="time-list">
-              <h3>空き時間</h3>
+              <h3>不足（空き）時間</h3>
               <ul>
                 {% for f in item.free_slots %}
-                  <li>{{ f[0] }}〜{{ f[1] }}</li>
+                  <li>{{ f[0] }} 〜 {{ f[1] }}</li>
                 {% endfor %}
               </ul>
             </div>
@@ -61,10 +92,8 @@
         </div>
       {% endfor %}
     {% else %}
-      <p>データがありません。</p>
+      <p style="text-align: center; padding: 50px; color: #666;">{{ next_month }}月分の希望データはまだありません。</p>
     {% endif %}
   </div>
 </body>
 </html>
- 
- 

@@ -43,13 +43,43 @@
               });
           });
       }
- 
+
       // ========================================================
-      // 2. ロック切り替え関数(クリック時に発火)
+      // 2. 公開・非公開切り替え関数（新規追加）
+      // ========================================================
+      window.publishShift = async function(month, status) {
+          const action = status === 1 ? "公開" : "非公開";
+          if (!confirm(`${month} 分のシフトを ${action} にしてもよろしいですか？`)) return;
+
+          try {
+              const response = await fetch("/makeshift/api/publish_status", {
+                  method: 'POST',
+                  headers: { 
+                      'Content-Type': 'application/json',
+                      'X-Requested-With': 'XMLHttpRequest'
+                  },
+                  body: JSON.stringify({ month: month, status: status })
+              });
+              const result = await response.json();
+
+              if (result.success) {
+                  alert(`✅ ${result.message}`);
+                  location.reload(); // 状態を反映させるためにリロード
+              } else {
+                  alert(`❌ エラー: ${result.message}`);
+              }
+          } catch (error) {
+              console.error('API Error:', error);
+              alert('通信中にエラーが発生しました。');
+          }
+      };
+
+      // ========================================================
+      // 3. ロック切り替え関数(クリック時に発火)
       // ========================================================
       window.toggleLock = async function(userId, date, chartInstance) {
           if (!userId || parseInt(userId) < 0) return; // 不足データはロック不可
- 
+
           try {
               const response = await fetch('/makeshift/toggle_lock', {
                   method: 'POST',
@@ -59,18 +89,12 @@
               const result = await response.json();
               
               if (result.status === 'success') {
-                  // 成功したら画面上のデータを書き換えて再描画
                   const targetShift = window.flaskData.shifts.find(s =>
                       s.user_id == userId && s.date == date
                   );
                   if (targetShift) {
-                      // メモリ上のデータを更新 (0 <-> 1)
                       targetShift.is_locked = result.new_state;
-                      
-                      // グラフ再描画(🔒マークを反映させるため)
                       chartInstance.update();
-                      
-                      // 簡単なトースト通知
                       showToast(result.new_state === 1 ? "🔒 ロックしました" : "🔓 ロック解除しました");
                   }
               } else {
@@ -81,8 +105,7 @@
               alert('通信エラーが発生しました');
           }
       };
- 
-      // トースト通知用の簡易関数
+
       function showToast(msg) {
           const toast = document.createElement("div");
           toast.innerText = msg;
@@ -97,9 +120,9 @@
           document.body.appendChild(toast);
           setTimeout(() => toast.remove(), 2000);
       }
- 
+
       // ========================================================
-      // 3. グラフ描画ロジック
+      // 4. グラフ描画ロジック
       // ========================================================
       const rawData = window.flaskData.shifts;
       const settings = window.flaskData.settings;
@@ -109,46 +132,30 @@
           if(chartsDiv) chartsDiv.innerHTML = '<p style="text-align:center; padding:20px;">シフトデータがありません。</p>';
           return;
       }
- 
-      // ① データをソート(時間順 ＞ 短い順)
+
       rawData.sort((a, b) => {
         const idA = parseInt(a.user_id);
         const idB = parseInt(b.user_id);
- 
-        // 1. スタッフ(上) と 不足(下) を分ける
         const isStaffA = idA > 0;
         const isStaffB = idB > 0;
         
         if (isStaffA && !isStaffB) return -1;
         if (!isStaffA && isStaffB) return 1;
- 
-        // 2. 開始時間で並べる
-        if (a.start_time !== b.start_time) {
-            return a.start_time.localeCompare(b.start_time);
-        }
- 
-        // 3. 開始時間が同じなら、終了時間が早い(短い)順
-        if (a.end_time !== b.end_time) {
-            return a.end_time.localeCompare(b.end_time);
-        }
- 
-        // 4. それでも同じならID順
+        if (a.start_time !== b.start_time) return a.start_time.localeCompare(b.start_time);
+        if (a.end_time !== b.end_time) return a.end_time.localeCompare(b.end_time);
         return idA - idB;
       });
- 
-      // ② 結合ロジック(ロック状態も考慮)
+
       const mergedShifts = [];
       if (rawData.length > 0) {
           let current = { ...rawData[0] };
           for (let i = 1; i < rawData.length; i++) {
               const next = rawData[i];
-              
               if (current.user_id === next.user_id &&
                   current.date === next.date &&
                   current.type === next.type &&
                   (current.is_locked || 0) === (next.is_locked || 0) &&
                   current.end_time === next.start_time) {
-                  
                   current.end_time = next.end_time;
               } else {
                   mergedShifts.push(current);
@@ -157,8 +164,7 @@
           }
           mergedShifts.push(current);
       }
- 
-      // ③ グラフ設定
+
       const minTime = settings.start_time ? new Date(`1970-01-01T${settings.start_time}:00`) : new Date("1970-01-01T08:00:00");
       const maxTime = settings.end_time ? new Date(`1970-01-01T${settings.end_time}:00`) : new Date("1970-01-01T23:00:00");
       
@@ -167,20 +173,15 @@
           if (!groupedByDate[s.date]) groupedByDate[s.date] = [];
           groupedByDate[s.date].push(s);
       });
- 
+
       const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
       const userColorMap = {};
       let colorIndex = 0;
- 
-      // ④ 日付ごとにグラフを描画
+
       Object.entries(groupedByDate).forEach(([date, shifts], idx) => {
           const container = document.createElement("div");
           container.className = "chart-container";
-          container.style.marginBottom = "30px";
-          container.style.padding = "20px";
-          container.style.background = "#ffffff";
-          container.style.borderRadius = "8px";
-          container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+          container.style.cssText = "margin-bottom:30px; padding:20px; background:#ffffff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);";
           
           container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom:10px;">
@@ -190,29 +191,22 @@
             <div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>
           `;
           chartsDiv.appendChild(container);
- 
+
           const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
           const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
- 
+
           const chartDataPoints = shifts.map(s => {
               const uName = s.user_name || `ID:${s.user_id}`;
-              
               if (!userColorMap[s.user_id]) {
                   userColorMap[s.user_id] = baseColors[colorIndex % baseColors.length];
                   colorIndex++;
               }
               
-              // 色の設定
               let barColor = userColorMap[s.user_id] || "#bdbdbd";
- 
-              if (s.type && s.type.indexOf("不足") !== -1) {
-                  barColor = "#ef5350"; // 不足は赤
-              } else if (s.type && s.type.includes("キッチン")) {
-                  barColor = "#42a5f5"; // キッチンは青
-              } else if (s.type && s.type.includes("ホール")) {
-                  barColor = "#66bb6a"; // ホールは緑
-              }
- 
+              if (s.type && s.type.indexOf("不足") !== -1) barColor = "#ef5350";
+              else if (s.type && s.type.includes("キッチン")) barColor = "#42a5f5";
+              else if (s.type && s.type.includes("ホール")) barColor = "#66bb6a";
+
               return {
                   x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
                   y: uName,
@@ -223,8 +217,8 @@
                   backgroundColor: barColor
               };
           });
- 
-          const myChart = new Chart(ctx, {
+
+          new Chart(ctx, {
               type: "bar",
               data: {
                   datasets: [{
@@ -233,10 +227,7 @@
                       barPercentage: 0.7,
                       borderRadius: 4,
                       borderSkipped: false,
-                      borderWidth: ctx => {
-                          const v = ctx.raw;
-                          return (v && v.is_locked) ? 3 : 0;
-                      },
+                      borderWidth: ctx => (ctx.raw && ctx.raw.is_locked) ? 3 : 0,
                       borderColor: '#333'
                   }]
               },
@@ -247,8 +238,8 @@
                   onClick: (e, elements) => {
                       if (elements.length > 0) {
                           const elementIndex = elements[0].index;
-                          const dataPoint = myChart.data.datasets[0].data[elementIndex];
-                          window.toggleLock(dataPoint.original_user_id, dataPoint.date, myChart);
+                          const dataPoint = chart.data.datasets[0].data[elementIndex];
+                          window.toggleLock(dataPoint.original_user_id, dataPoint.date, chart);
                       }
                   },
                   scales: {
@@ -274,8 +265,7 @@
                                   const d = c.raw;
                                   const st = d.x[0].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
                                   const en = d.x[1].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                                  const lockStatus = d.is_locked ? "🔒固定中" : "🔓未固定";
-                                  return `${d.type}: ${st}〜${en} (${lockStatus})`;
+                                  return `${d.type}: ${st}〜${en} (${d.is_locked ? "🔒固定中" : "🔓未固定"})`;
                               }
                           }
                       }
@@ -287,32 +277,25 @@
                     const { ctx } = chart;
                     chart.data.datasets.forEach((dataset, i) => {
                         const meta = chart.getDatasetMeta(i);
-                        if (!meta.hidden) {
-                            meta.data.forEach((element, index) => {
-                                const d = dataset.data[index];
-                                
-                                ctx.font = 'bold 14px "Helvetica Neue", Arial';
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                
-                                let labelText = d.type !== 'work' ? d.type : "";
-                                if (d.is_locked) {
-                                    labelText = "🔒 " + labelText;
-                                }
- 
-                                if (labelText) {
-                                    ctx.lineWidth = 3;
-                                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-                                    ctx.strokeText(labelText, element.x, element.y);
-                                    
-                                    ctx.fillStyle = '#ffffff';
-                                    ctx.fillText(labelText, element.x, element.y);
-                                }
-                            });
-                        }
+                        meta.data.forEach((element, index) => {
+                            const d = dataset.data[index];
+                            ctx.font = 'bold 14px "Helvetica Neue", Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            let labelText = (d.type !== 'work') ? d.type : "";
+                            if (d.is_locked) labelText = "🔒 " + labelText;
+
+                            if (labelText) {
+                                ctx.lineWidth = 3;
+                                ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                                ctx.strokeText(labelText, element.x, element.y);
+                                ctx.fillStyle = '#ffffff';
+                                ctx.fillText(labelText, element.x, element.y);
+                            }
+                        });
                     });
                 }
-            }]
+              }]
           });
       });
     });
@@ -350,7 +333,21 @@
   {% endif %}
  
   <div id="charts"></div>
- 
+  {% if shifts and shifts[0] %}
+    {% set target_month = shifts[0].date[:7] %} <div class="settings-box" style="border-left: 5px solid #28a745; background: #e9f7ef; margin-top: 20px;">
+      <h3 style="color: #28a745;">📢 シフトの公開設定 (対象月: {{ target_month }})</h3>
+      <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+        ※自動作成された内容を確認し、問題なければ「公開」ボタンを押してください。<br>
+        公開すると、従業員が自分のスマホからシフトを確認できるようになります。
+      </p>
+      <div style="display: flex; gap: 10px;">
+        <button onclick="publishShift('{{ target_month }}', 1)" class="btn" style="background: #28a745; color: white; flex: 1;">🚀 シフトを公開する</button>
+        <button onclick="publishShift('{{ target_month }}', 0)" class="btn secondary" style="flex: 1;">🔒 非公開に戻す</button>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
   <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
     <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成(穴埋め)</a>
     <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか?\n次回作成時に削除されます。')">🔓 全保護解除</a>
