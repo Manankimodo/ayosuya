@@ -213,21 +213,30 @@ function displayCurrentWeekShifts() {
         const validShiftsOfDay = rawShifts.filter(s => !s.dummy && parseInt(s.user_id) > 0);
 
         if (validShiftsOfDay.length === 0) {
-            // ★重要: シフトがない場合の表示判定
-            // 条件: 「過去の日付」または「公開済みリストに含まれる月」なら "出勤者なし"
-            // それ以外（未来の未公開月）なら "作成中"
+            // ★重要: 表示判定ロジックの修正
             
-            const todayStr = formatDate(new Date());
-            const isPastOrToday = dateStr <= todayStr;
-            const isPublished = publishedMonths.includes(monthStr);
+            // 今日の「年月」を取得 (例: "2026-01")
+            const today = new Date();
+            const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            
+            // 表示しようとしている日の「年月」
+            // dateStr は "2026-01-05" などの形式
+            const targetMonthStr = dateStr.substring(0, 7);
+
+            // 条件変更:
+            // 1. 過去の月、または「今月」なら OK (表示)
+            // 2. もしくは、公開済みリストに入っているなら OK
+            const isPastOrCurrentMonth = targetMonthStr <= currentMonthStr;
+            const isPublished = publishedMonths.includes(targetMonthStr);
 
             const li = document.createElement('li');
             li.className = 'shift-item';
             
-            // 過去は公開設定に関係なく「なし」でOK。未来は公開設定を見る。
-            if (isPastOrToday || isPublished) {
+            if (isPastOrCurrentMonth || isPublished) {
+                // 今月までは「シフトなし」として表示
                 li.innerHTML = `<p style="color: #888;">出勤者なし</p>`;
             } else {
+                // 来月以降で、未公開なら「作成中」
                 li.innerHTML = `<p style="color: #ff9800; font-weight:bold;">🚧 作成中</p>`;
             }
             ul.appendChild(li);

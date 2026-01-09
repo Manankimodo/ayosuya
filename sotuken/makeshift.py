@@ -1371,17 +1371,18 @@ def get_user_shifts(user_id):
         
         # 4. フィルタリングとフォーマット
         formatted_shifts = []
-        current_month_str = datetime.now().strftime("%Y-%m") # 今月 "2025-01"
+        current_month_str = datetime.now().strftime("%Y-%m") # 今月 "2026-01"
 
         for shift in raw_shifts:
             # 日付を文字列化
             date_str = safe_date_format(shift["date"])
-            month_str = date_str[:7] # "2025-01-25" -> "2025-01"
+            month_str = date_str[:7] # "2026-01-25" -> "2026-01"
             
-            # 【表示条件】
-            # A. その月が「公開済みリスト」に入っている
-            # B. または、その月が「過去の月」である（過去ログは見れてOK）
-            if (month_str in published_months) or (month_str < current_month_str):
+            # 【表示条件の修正】
+            # 修正前: month_str < current_month_str (先月まで)
+            # 修正後: month_str <= current_month_str (今月までOK！)
+            # これで1月はボタンを押さなくても表示され、2月は隠れます。
+            if (month_str in published_months) or (month_str <= current_month_str):
                 
                 formatted_shifts.append({
                     "user_id": shift["user_id"],
@@ -1391,7 +1392,6 @@ def get_user_shifts(user_id):
                     "end_time": safe_time_format(shift["end_time"]),
                     "type": shift["type"]
                 })
-        
         # レスポンス作成
         # published_months も返しておくと、JS側で「工事中」表示に使えます
         response = {
