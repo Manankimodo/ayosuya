@@ -12,35 +12,20 @@
   <div class="container">
     <h1 class="title"><span class="logo">M</span>{{ date }} の希望入力</h1>
     
-    <!-- ★修正：状況に応じた警告を3パターンに分岐 -->
-    {% if is_locked and is_late %}
-      <!-- パターン：期限外 + 確定済み → 完全ブロック -->
+    {% if is_locked %}
       <div style="background:#f8d7da; color:#721c24; padding:15px; border-radius:5px; margin-bottom:15px; border:1px solid #f5c6cb;">
-        <strong>⛔ 提出不可</strong><br>
-        期限を過ぎており、シフトが確定しているため、変更できません。
-      </div>
-    {% elif is_locked and not is_late %}
-      <!-- パターン：期限内 + 確定済み → 警告付きで変更可能 -->
-      <div style="background:#fff3cd; color:#856404; padding:15px; border-radius:5px; margin-bottom:15px; border:1px solid #ffeeba;">
-        <strong>⚠️ シフト確定済み（調整可能）</strong><br>
-        シフトは確定されていますが、期限内のため微調整が可能です。
-      </div>
-    {% elif is_late and not is_locked %}
-      <!-- パターン：期限外 + 未確定 → 警告付きで変更可能 -->
-      <div style="background:#fff3cd; color:#856404; padding:15px; border-radius:5px; margin-bottom:15px; border:1px solid #ffeeba;">
-        <strong>⚠️ 提出期限を過ぎています</strong><br>
-        変更は可能ですが、管理者に通知されます。
+        <strong>⛔ 編集不可</strong><br>
+        提出期限（毎月{{ deadline_day }}日）を過ぎているか、過去の日付のため変更できません。
       </div>
     {% else %}
-      <!-- パターン：期限内 + 未確定 → 通常（情報表示） -->
       <div style="background:#d1ecf1; color:#0c5460; padding:15px; border-radius:5px; margin-bottom:15px; border:1px solid #bee5eb;">
         <strong>✅ 提出可能</strong><br>
-        期限内です。希望シフトを入力してください。
+        提出期限内です。希望シフトを入力してください。
       </div>
     {% endif %}
     
     {% if notice %}
-    <div style="background:#e2e3e5; padding:15px; margin-bottom:20px; border-radius:8px;">
+    <div style="background:#e2e3e5; padding:15px; margin-bottom:20px; border-radius:8px; border:1px solid #ccc;">
       <strong>店舗からのお知らせ:</strong> {{ notice }}
     </div>
     {% endif %}
@@ -55,14 +40,13 @@
       <input type="hidden" name="date" value="{{ date }}">
 
       <div class="form-group">
-        <label>ID</label>
+        <label>ユーザーID</label>
         <input type="text" name="name" value="{{ session.get('user_id', '') }}" readonly>
       </div>
 
       <div class="form-group">
         <label>出勤有無</label>
-        <!-- ★修正：期限外+確定済みの場合のみ無効化 -->
-        <select id="workSelect" name="work" onchange="toggleTimeInputs()" {% if is_locked and is_late %}disabled{% endif %}>
+        <select id="workSelect" name="work" onchange="toggleTimeInputs()" {% if is_locked %}disabled{% endif %}>
           <option value="1" {% if current_data and current_data.type == '1' %}selected{% endif %}>○ 出勤可能</option>
           <option value="0" {% if current_data and current_data.type == '0' %}selected{% endif %}>× 出勤不可</option>
         </select>
@@ -70,31 +54,26 @@
 
       <div class="form-group">
         <label>開始時間</label>
-        <!-- ★修正：期限外+確定済みの場合のみ無効化 -->
         <input type="time" id="startTime" name="start_time" 
                min="{{ start_limit }}" max="{{ end_limit }}" 
                value="{{ current_data.start_time if current_data else '' }}"
-               {% if is_locked and is_late %}disabled{% endif %} required>
-               
-        <small style="color:#666; font-size:0.85em; display:block; margin-top:5px;">営業時間: {{ start_limit }} 〜 {{ end_limit }}</small>
+               {% if is_locked %}disabled{% endif %} required>
+        <small style="color:#666; font-size:0.85em; display:block; margin-top:5px;">可能範囲: {{ start_limit }} 〜 {{ end_limit }}</small>
       </div>
 
       <div class="form-group">
         <label>終了時間</label>
-        <!-- ★修正：期限外+確定済みの場合のみ無効化 -->
         <input type="time" id="endTime" name="end_time" 
                min="{{ start_limit }}" max="{{ end_limit }}" 
                value="{{ current_data.end_time if current_data else '' }}"
-               {% if is_locked and is_late %}disabled{% endif %} required>
-               
+               {% if is_locked %}disabled{% endif %} required>
         <small style="color:#666; font-size:0.85em; display:block; margin-top:5px;">最低勤務時間: {{ min_hours }} 時間</small>
       </div>
 
-      <!-- ★修正：期限外+確定済みの場合のみボタンを無効化 -->
-      {% if is_locked and is_late %}
-        <button type="button" class="btn" style="background-color: #ccc; cursor: not-allowed;" disabled>変更不可</button>
+      {% if is_locked %}
+        <button type="button" class="btn" style="background-color: #ccc; cursor: not-allowed;" disabled>期限切れのため保存できません</button>
       {% else %}
-        <button type="submit" class="btn">保存</button>
+        <button type="submit" class="btn">希望を保存する</button>
       {% endif %}
       
     </form>

@@ -45,7 +45,7 @@ def admin():
     return render_template("calendar2.html")
 
 # ==========================
-# 🔹 希望申請フォーム（修正版）
+# 🔹 希望申請フォーム（自動ロック版）
 # ==========================
 @calendar_bp.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
@@ -72,57 +72,54 @@ def sinsei(date):
             return redirect(url_for("calendar.calendar"))
 
         # ---------------------------------------------------
-        # ★ 追加: ロック状態と締め切り設定の確認
+        # 2. 自動ロック判定ロジック (常に「翌月分」のみを申請可能にする)
         # ---------------------------------------------------
-        target_month = date[:7] # "2025-01" の形式を取得
+        from datetime import datetime, timedelta
+
+        # 設定から締め切り日を取得 (デフォルト20)
+        cursor.execute("SELECT deadline_day FROM shift_settings WHERE store_id = %s", (store_id,))
+        setting = cursor.fetchone()
+        deadline_day = setting['deadline_day'] if setting and setting['deadline_day'] else 20
+
+        today = datetime.now()
+        target_date_obj = datetime.strptime(date, "%Y-%m-%d")
+
+        # 🔹翌月の「年」と「月」をあらかじめ計算しておく
+        if today.month == 12:
+            next_month_year = today.year + 1
+            next_month = 1
+        else:
+            next_month_year = today.year
+            next_month = today.month + 1
+
+        is_locked = True  # 基本的にはすべての月を「編集不可」として初期化
+
+        # 🔹「申請しようとしている月」が「翌月」かどうかを判定
+        if target_date_obj.year == next_month_year and target_date_obj.month == next_month:
+            # 翌月分であり、かつ今日が締め切り日（20日など）以内であれば、ロックを解除
+            if today.day <= deadline_day:
+                is_locked = False
         
-        # shift_config から設定を取得
-        cursor.execute(
-            "SELECT * FROM shift_config WHERE store_id = %s AND target_month = %s",
-            (store_id, target_month)
-        )
-        config = cursor.fetchone()
-        
-        is_locked = False
-        is_late = False
-        
-        if config:
-            # ロック状態
-            if config['is_locked']:
-                is_locked = True
-            
-            # 締め切り判定 (現在日が締め切り日を過ぎているか)
-            if config['deadline_date']:
-                today_date = datetime.now().date()
-                # config['deadline_date'] が date型か確認して比較
-                deadline = config['deadline_date']
-                if isinstance(deadline, str):
-                    deadline = datetime.strptime(deadline, '%Y-%m-%d').date()
-                
-                if today_date > deadline:
-                    is_late = True
+        # 過去の月、当月、および翌々月以降は、is_locked = True のままなので編集できません
 
         # ---------------------------------------------------
-        # ★ 追加: 既存のシフト希望データを取得 (初期値表示用)
+        # 3. 既存のデータ・設定の取得 (表示用)
         # ---------------------------------------------------
+        # 既存シフト希望データの取得
         cursor.execute(
             "SELECT * FROM calendar WHERE ID = %s AND date = %s",
             (user_id, date)
         )
         current_data = cursor.fetchone()
         
-        # 時間の秒を削る処理 (09:00:00 -> 09:00)
         if current_data:
             if current_data['start_time']:
                 current_data['start_time'] = str(current_data['start_time'])[:5]
             if current_data['end_time']:
                 current_data['end_time'] = str(current_data['end_time'])[:5]
-            # typeカラムがない場合のために補完(workの値を使用)
             current_data['type'] = str(current_data['work'])
 
-        # ---------------------------------------------------
-        # 2. 時間フォーマット整形のヘルパー関数
-        # ---------------------------------------------------
+        # 時間フォーマット整形のヘルパー関数
         def format_time_str(t_obj):
             if t_obj is None: return None
             s = str(t_obj).strip()
@@ -133,9 +130,7 @@ def sinsei(date):
                 return f"{h}:{m}"
             return s[:5]
 
-        # ---------------------------------------------------
-        # 3. 店舗設定時間の取得
-        # ---------------------------------------------------
+        # 店舗設定時間の取得
         cursor.execute(
             "SELECT start_time, end_time, min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
             (store_id,)
@@ -171,16 +166,16 @@ def sinsei(date):
         # 4. 保存処理 (POST)
         # ---------------------------------------------------
         if request.method == "POST":
-            # ★ 修正：期限外 + 確定済み のみブロック
-            if is_locked and is_late:
-                flash("⛔ 期限を過ぎており、シフトが確定しているため、変更できません。", "danger")
+            # 提出期限を過ぎているかチェック
+            if is_locked:
+                flash(f"⛔ {deadline_day}日の提出期限を過ぎているため、変更できません。", "danger")
                 return redirect(url_for("calendar.calendar"))
 
             work = request.form.get("work")
             start_time = request.form.get("start_time")
             end_time = request.form.get("end_time")
 
-            # バリデーション: 最低勤務時間チェック
+            # バリデーション (出勤希望の場合のみ)
             if work == "1" and start_time and end_time and min_hours > 0:
                 try:
                     start_dt = datetime.strptime(start_time, "%H:%M")
@@ -190,11 +185,10 @@ def sinsei(date):
                     
                     if diff < min_hours:
                         flash(f"❌ 希望時間が短すぎます。最低 {min_hours} 時間以上入力してください", "danger")
-                        return render_template("sinsei.html", date=date, start_limit=start_limit, end_limit=end_limit, min_hours=min_hours, notice=notice, is_locked=is_locked, is_late=is_late, current_data=current_data)
+                        return render_template("sinsei.html", date=date, start_limit=start_limit, end_limit=end_limit, min_hours=min_hours, notice=notice, is_locked=is_locked, current_data=current_data)
                 except ValueError:
                     pass
 
-            # データ整形
             if work == "0":
                 start_time = None
                 end_time = None
@@ -202,7 +196,7 @@ def sinsei(date):
                 if start_time and len(start_time) == 5: start_time += ":00"
                 if end_time and len(end_time) == 5: end_time += ":00"
 
-            # 既存データの確認と保存
+            # データベース保存処理
             check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
             result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
 
@@ -217,30 +211,20 @@ def sinsei(date):
 
             db.session.commit()
             
-            # ★メッセージ調整
-            if is_locked and not is_late:
-                # 期限内 + 確定済み
-                flash(f"⚠️ シフトは確定済みですが、期限内のため {msg}", "warning")
-            elif is_late and not is_locked:
-                # 期限外 + 未確定
-                flash(f"⚠️ 期限を過ぎていますが、{msg}", "warning")
-            else:
-                # 通常（期限内 + 未確定）
-                flash(msg, "success")
-                
+            flash(msg, "success")    
             return redirect(url_for("calendar.calendar"))
+
         # ---------------------------------------------------
         # 5. 画面表示 (GET)
         # ---------------------------------------------------
-        # ★ is_locked, is_late, current_data をテンプレートに渡す
         return render_template("sinsei.html", 
                             date=date, 
                             start_limit=start_limit,
                             end_limit=end_limit,
                             min_hours=min_hours,
                             notice=notice,
-                            is_locked=is_locked,
-                            is_late=is_late,
+                            is_locked=is_locked, 
+                            deadline_day=deadline_day,
                             current_data=current_data)
                             
     except Exception as e:
@@ -253,7 +237,6 @@ def sinsei(date):
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
-
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================
@@ -265,7 +248,7 @@ def my_confirmed_shift():
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
 
 # ==========================
-# 🔹 店長のヘルプ希望申請
+# 🔹 店長のヘルプ希望申請 (変更なし)
 # ==========================
 @calendar_bp.route("/manager_help_request")
 def manager_help_request():
@@ -273,11 +256,9 @@ def manager_help_request():
         return redirect(url_for("login.login"))
 
     user_id = session["user_id"]
-
     sql = text("SELECT date FROM calendar WHERE ID = :user_id")
     result = db.session.execute(sql, {"user_id": user_id}).fetchall()
     sent_dates = [row[0].strftime("%Y-%m-%d") for row in result]
-
     return render_template("manager_help_request.html", sent_dates=sent_dates or [])
 
 @calendar_bp.route("/manager_help_sinsei/<date>", methods=["GET", "POST"])
@@ -350,36 +331,33 @@ def update_shift():
     if not target_date_str:
         return jsonify({"status": "error", "message": "日付が必要です"}), 400
         
-    target_month = target_date_str[:7]
-
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # ロック判定と期限判定
-    sql = """
-        SELECT * FROM shift_config 
-        WHERE target_month = %s AND store_id = %s
-    """
-    cursor.execute(sql, (target_month, user_store_id))
-    config = cursor.fetchone()
+    # ★ 変更: API側も自動ロック判定に統一
+    cursor.execute("SELECT deadline_day FROM shift_settings WHERE store_id = %s", (user_store_id,))
+    setting = cursor.fetchone()
+    deadline_day = setting['deadline_day'] if setting and setting['deadline_day'] else 20
     
     cursor.close()
     conn.close()
+    
+    today = datetime.now()
+    target_date_obj = datetime.strptime(target_date_str, "%Y-%m-%d")
 
-    # ★修正：期限外 + 確定済み のみブロック
-    if config and config['is_locked']:
-        # 期限チェック
-        if config['deadline_date']:
-            today_date = datetime.now().date()
-            deadline = config['deadline_date']
-            if isinstance(deadline, str):
-                deadline = datetime.strptime(deadline, '%Y-%m-%d').date()
-            
-            if today_date > deadline:
-                # 期限外 + 確定済み → ブロック
-                return jsonify({"status": "error", "message": "期限を過ぎており、確定済みのため変更できません"}), 403
-            else:
-                # 期限内 + 確定済み → 警告付きで許可
-                return jsonify({"status": "warning", "message": "確定済みですが期限内のため変更可能です"}), 200
+    # 翌月の計算
+    next_month_year = today.year if today.month < 12 else today.year + 1
+    next_month = today.month + 1 if today.month < 12 else 1
+
+    # 翌月かつ20日以内かチェック
+    is_valid_period = (target_date_obj.year == next_month_year and 
+                       target_date_obj.month == next_month and 
+                       today.day <= deadline_day)
+
+    if not is_valid_period:
+        return jsonify({
+            "status": "error", 
+            "message": f"現在は{next_month}月分のシフト申請期間（20日まで）外です。"
+        }), 403
     
     return jsonify({"status": "success", "message": "保存可能です"})
