@@ -1,4 +1,4 @@
-// user_shift_view.js (ボトムナビゲーション対応版)
+// user_shift_view.js (公開機能対応 & ボトムナビゲーション版)
 
 // ユーザーIDの取得 (HTMLから取得)
 const userIdElement = document.querySelector('.user-id-display');
@@ -10,12 +10,15 @@ const nextWeekBtn = document.getElementById('nextWeek');
 const currentWeekRange = document.getElementById('currentWeekRange');
 
 let allGroupedShifts = {}; // 全シフトデータ (日付でグループ化済み)
-let datesByWeek = [];     // 週ごとの日付配列
-let currentWeekIndex = 0; // 現在表示している週のインデックス
+let datesByWeek = [];      // 週ごとの日付配列
+let currentWeekIndex = 0;  // 現在表示している週のインデックス
+
+// ★追加: 公開済みの月リストを保存する変数
+let publishedMonths = []; 
 
 // --- ユーティリティ関数 ---
 
-// 週の開始日（月曜日）を取得 (ISO 8601準拠)
+// 週の開始日（月曜日）を取得
 function getWeekStartDate(dateStr) {
     const parts = dateStr.split('-');
     const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -25,7 +28,6 @@ function getWeekStartDate(dateStr) {
     let dayOfWeek = day === 0 ? 6 : day - 1; 
 
     d.setDate(d.getDate() - dayOfWeek);
-    
     return d;
 }
 
@@ -53,47 +55,63 @@ function groupShiftsByDate(shifts) {
         }
         grouped[date].push(shift);
     });
-    
-    console.log('🔍 グループ化されたシフト:', grouped);
     return grouped;
 }
 
-// 取得した全ての日付を週ごとに分割
+// 取得した全ての日付を週ごとに分割 (修正版: データがなくてもカレンダー枠を強制生成)
 function generateDatesByWeek(dates) {
-    console.log('📅 処理対象の日付:', dates);
+    // 1. 表示範囲の決定
+    // デフォルトで「今日から前後2ヶ月」は必ず表示するようにする
+    const today = new Date();
+    const rangeStart = new Date(today);
+    rangeStart.setMonth(rangeStart.getMonth() - 2); // 2ヶ月前
     
-    if (dates.length === 0) return;
-    dates.sort();
-    
-    const weekMap = new Map();
-    dates.forEach(dateStr => {
-        const weekStart = getWeekStartDate(dateStr);
-        const weekStartStr = formatDate(weekStart);
-        if (!weekMap.has(weekStartStr)) {
-            weekMap.set(weekStartStr, []);
-        }
-        weekMap.get(weekStartStr).push(dateStr);
-    });
+    const rangeEnd = new Date(today);
+    rangeEnd.setMonth(rangeEnd.getMonth() + 2);     // 2ヶ月後（未来）
 
-    datesByWeek = Array.from(weekMap.keys()).sort().map(key => weekMap.get(key));
-    
-    console.log('📊 週ごとの日付配列:', datesByWeek);
+    // もしシフトデータがこの範囲外にあれば、範囲を広げる
+    if (dates.length > 0) {
+        dates.sort();
+        const dataMin = new Date(dates[0]);
+        const dataMax = new Date(dates[dates.length - 1]);
+        
+        if (dataMin < rangeStart) rangeStart.setTime(dataMin.getTime());
+        if (dataMax > rangeEnd) rangeEnd.setTime(dataMax.getTime());
+    }
 
-    // 初期表示を「今日を含む週」または「最初の週」に設定
-    const today = formatDate(new Date());
-    console.log('📆 今日の日付:', today);
+    // 2. 開始日を「月曜日」に揃える
+    let day = rangeStart.getDay(); 
+    let dayOfWeek = day === 0 ? 6 : day - 1; 
+    rangeStart.setDate(rangeStart.getDate() - dayOfWeek);
+    rangeStart.setHours(0,0,0,0);
+
+    // 3. 週ごとの配列を生成 (ループで回して埋める)
+    datesByWeek = [];
+    let current = new Date(rangeStart);
     
-    currentWeekIndex = 0;
-    for (let i = 0; i < datesByWeek.length; i++) {
-        if (datesByWeek[i].includes(today)) {
-            currentWeekIndex = i;
-            console.log(`✅ 今日を含む週が見つかりました (インデックス: ${i})`);
-            break;
+    // 終了日を超えるまで週を追加し続ける
+    while (current <= rangeEnd) {
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+            weekDates.push(formatDate(current)); // YYYY-MM-DD形式で追加
+            current.setDate(current.getDate() + 1); // 1日進める
         }
+        datesByWeek.push(weekDates);
     }
     
-    if (currentWeekIndex === 0) {
-        console.log('⚠️ 今日を含む週が見つかりません。最初の週から開始します');
+    console.log(`📊 カレンダー生成: ${datesByWeek.length}週間分`);
+
+    // 4. 初期表示位置の設定（今日を含む週）
+    // 強制的に今日の枠を作っているので、検索すれば必ず見つかります
+    const todayStr = formatDate(today);
+    currentWeekIndex = 0;
+    
+    for (let i = 0; i < datesByWeek.length; i++) {
+        if (datesByWeek[i].includes(todayStr)) {
+            currentWeekIndex = i;
+            console.log(`✅ 今日を含む週を表示: ${todayStr}`);
+            break; 
+        }
     }
 }
 
@@ -114,41 +132,34 @@ async function fetchShifts() {
         }
         
         const data = await response.json();
-        
         console.log('📥 APIレスポンス:', data);
+        
+        // ★追加: 公開済み月リストを保存 (APIから受け取る)
+        publishedMonths = data.published_months || [];
         
         const shiftsArray = data.shifts || [];
         
-        console.log(`📊 受け取ったシフト件数: ${shiftsArray.length}`);
-        
         // 負のuser_idを除外
-        const validShifts = shiftsArray.filter(shift => {
-            const uid = parseInt(shift.user_id);
-            const isValid = uid > 0;
-            if (!isValid) {
-                console.log(`⚠️ 負のIDをフィルタ: ${shift.user_id}`);
-            }
-            return isValid;
-        });
-        
-        console.log(`✅ フィルタ後のシフト件数: ${validShifts.length}`);
+        const validShifts = shiftsArray.filter(shift => parseInt(shift.user_id) > 0);
         
         if (validShifts.length === 0) {
-            shiftContainer.innerHTML = '<p class="loading">現在、確定しているシフトはありません。</p>';
-            currentWeekRange.textContent = 'データなし';
-            attachEventListeners();
-            return;
+            // データが0件の場合でも、カレンダー枠（今日を含む週）は表示したいので
+            // 空のデータとして処理を続行させるためのダミー日付を入れる
+            const today = formatDate(new Date());
+            validShifts.push({ date: today, user_id: userId, dummy: true }); 
+            // ※ dummyフラグをつけて後で除外
         }
         
         allGroupedShifts = groupShiftsByDate(validShifts);
         
+        // ユニークな日付リスト作成（ダミー含む）
         const uniqueDates = Array.from(new Set(validShifts.map(s => s.date)));
-        console.log(`📌 ユニークな日付: ${uniqueDates.length}件`);
-        
         generateDatesByWeek(uniqueDates);
         
         if (datesByWeek.length === 0) {
-            throw new Error('週データの生成に失敗しました');
+            // それでも生成できなければエラー表示
+            shiftContainer.innerHTML = '<p class="loading">表示できるシフトデータがありません。</p>';
+            return;
         }
         
         displayCurrentWeekShifts();
@@ -165,19 +176,12 @@ async function fetchShifts() {
 // === シフト表示ロジック ===
 
 function displayCurrentWeekShifts() {
-    console.log(`📺 現在の週インデックス: ${currentWeekIndex}`);
-    
-    if (datesByWeek.length === 0) {
-        shiftContainer.innerHTML = '<p class="loading">現在、確定しているシフトはありません。</p>';
-        currentWeekRange.textContent = 'データなし';
-        return;
-    }
+    if (datesByWeek.length === 0) return;
 
     const currentWeekDates = datesByWeek[currentWeekIndex];
-    console.log(`📅 表示対象の週の日付: ${currentWeekDates}`);
     
+    // 週の開始日と終了日計算
     const weekStartObj = getWeekStartDate(currentWeekDates[0]); 
-    
     const weekEndObj = new Date(weekStartObj);
     weekEndObj.setDate(weekEndObj.getDate() + 6);
 
@@ -190,36 +194,46 @@ function displayCurrentWeekShifts() {
     ul.className = 'shift-list';
     shiftContainer.innerHTML = '';
 
-    // 月曜日から日曜日までの7日間
-    const displayDates = [];
+    // 月曜日から日曜日までの7日間をループ
     for (let i = 0; i < 7; i++) {
         const d = new Date(weekStartObj);
         d.setDate(d.getDate() + i);
-        displayDates.push(formatDate(d));
-    }
+        const dateStr = formatDate(d); // YYYY-MM-DD
+        const monthStr = dateStr.substring(0, 7); // YYYY-MM
 
-    console.log(`📆 表示対象の7日間: ${displayDates}`);
-
-    displayDates.forEach(date => {
-        const shiftsOfDay = allGroupedShifts[date] || []; 
-        
-        // 日付ヘッダー
+        // ヘッダー作成
         const dateHeader = document.createElement('div');
         dateHeader.className = 'shift-date-header';
-        dateHeader.innerHTML = `<h3>📅 ${formatDisplayDate(date)}</h3>`;
+        dateHeader.innerHTML = `<h3>📅 ${formatDisplayDate(dateStr)}</h3>`;
         ul.appendChild(dateHeader);
-        
-        const validShiftsOfDay = shiftsOfDay.filter(shift => {
-            const uid = parseInt(shift.user_id);
-            return uid > 0;
-        });
+
+        // その日のシフトを取得
+        const rawShifts = allGroupedShifts[dateStr] || [];
+        // ダミーデータを除外
+        const validShiftsOfDay = rawShifts.filter(s => !s.dummy && parseInt(s.user_id) > 0);
 
         if (validShiftsOfDay.length === 0) {
-            const emptyLi = document.createElement('li');
-            emptyLi.className = 'shift-item';
-            emptyLi.innerHTML = `<p style="color: #888;">出勤者なし</p>`;
-            ul.appendChild(emptyLi);
+            // ★重要: シフトがない場合の表示判定
+            // 条件: 「過去の日付」または「公開済みリストに含まれる月」なら "出勤者なし"
+            // それ以外（未来の未公開月）なら "作成中"
+            
+            const todayStr = formatDate(new Date());
+            const isPastOrToday = dateStr <= todayStr;
+            const isPublished = publishedMonths.includes(monthStr);
+
+            const li = document.createElement('li');
+            li.className = 'shift-item';
+            
+            // 過去は公開設定に関係なく「なし」でOK。未来は公開設定を見る。
+            if (isPastOrToday || isPublished) {
+                li.innerHTML = `<p style="color: #888;">出勤者なし</p>`;
+            } else {
+                li.innerHTML = `<p style="color: #ff9800; font-weight:bold;">🚧 作成中</p>`;
+            }
+            ul.appendChild(li);
+
         } else {
+            // シフトがある場合
             validShiftsOfDay.forEach(shift => {
                 const li = document.createElement('li');
                 li.className = 'shift-item';
@@ -227,12 +241,10 @@ function displayCurrentWeekShifts() {
                 const isCurrentUser = String(shift.user_id) === String(userId);
                 if (isCurrentUser) {
                     li.classList.add('current-user-shift');
-                    console.log(`✨ 自分のシフト: ${shift.user_name} (${shift.start_time} - ${shift.end_time})`);
                 }
                 
                 const time_display = shift.start_time && shift.end_time ? 
-                    `${shift.start_time} - ${shift.end_time}` : 
-                    '時間未定';
+                    `${shift.start_time} - ${shift.end_time}` : '時間未定';
                 
                 li.innerHTML = `
                     <p><strong>${shift.user_name}</strong>: ${time_display}${isCurrentUser ? ' (あなた)' : ''}</p>
@@ -240,7 +252,7 @@ function displayCurrentWeekShifts() {
                 ul.appendChild(li);
             });
         }
-    });
+    }
 
     shiftContainer.appendChild(ul);
     updateButtonState();
@@ -253,70 +265,56 @@ function updateButtonState() {
 }
 
 // === イベントリスナーの登録 ===
-
 function attachEventListeners() {
-    // 週切り替えボタン
-    prevWeekBtn.addEventListener('click', () => {
+    // 重複登録防止のため、一度クローンして置換するテクニックを使用
+    // (または addEventListener の前に removeEventListener する)
+    
+    prevWeekBtn.onclick = () => {
         if (currentWeekIndex > 0) {
             currentWeekIndex--;
             displayCurrentWeekShifts();
         }
-    });
+    };
 
-    nextWeekBtn.addEventListener('click', () => {
+    nextWeekBtn.onclick = () => {
         if (currentWeekIndex < datesByWeek.length - 1) {
             currentWeekIndex++;
             displayCurrentWeekShifts();
         }
-    });
+    };
 
-    // === 📱 ボトムナビゲーション アクティブ状態管理 ===
+    // ボトムナビゲーション
     const navItems = document.querySelectorAll('.nav-item');
     const currentPath = window.location.pathname;
 
     if (navItems.length > 0) {
         navItems.forEach(item => {
             const href = item.getAttribute('href');
-            
             if (href && (href === currentPath || currentPath.startsWith(href))) {
                 item.classList.add('active');
             } else {
                 item.classList.remove('active');
             }
-        });
-
-        navItems.forEach(item => {
+            // タッチフィードバック
             item.addEventListener('click', function(e) {
-                if (this.id === 'logout-link') {
-                    return;
-                }
-                
+                if (this.id === 'logout-link') return;
                 this.style.transform = 'scale(0.95)';
-                setTimeout(() => {
-                    this.style.transform = '';
-                }, 150);
+                setTimeout(() => { this.style.transform = ''; }, 150);
             });
         });
     }
     
-    // === 🚪 ログアウト処理 ===
+    // ログアウト処理
     const logoutLink = document.getElementById("logout-link");
     if (logoutLink) {
-        logoutLink.addEventListener("click", function (e) {
+        // 重複防止のため onclick プロパティを使用
+        logoutLink.onclick = function (e) {
             e.preventDefault(); 
-            
             const logoutUrl = this.getAttribute('data-logout-url');
-            
-            if (!logoutUrl) {
-                console.error("ログアウトURLが見つかりません。");
-                return;
-            }
-            
-            const confirmed = confirm("ログアウトしますか？");
-            if (confirmed) {
+            if (confirm("ログアウトしますか？")) {
                 window.location.href = logoutUrl;
             }
-        });
+        };
     }
 }
 
