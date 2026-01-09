@@ -72,30 +72,40 @@ def sinsei(date):
             return redirect(url_for("calendar.calendar"))
 
         # ---------------------------------------------------
-        # ★ 変更: 日付による自動ロック判定
+        # 2. 自動ロック判定ロジック (常に「翌月分」のみを申請可能にする)
         # ---------------------------------------------------
-        # A. 店舗の締め切り日設定を取得
+        from datetime import datetime, timedelta
+
+        # 設定から締め切り日を取得 (デフォルト20)
         cursor.execute("SELECT deadline_day FROM shift_settings WHERE store_id = %s", (store_id,))
         setting = cursor.fetchone()
-        # 設定がなければデフォルトを20日にする
         deadline_day = setting['deadline_day'] if setting and setting['deadline_day'] else 20
 
-        # B. 日付比較ロジック
         today = datetime.now()
-        target_date_obj = datetime.strptime(date, "%Y-%m-%d") # 申請しようとしている日
+        target_date_obj = datetime.strptime(date, "%Y-%m-%d")
+
+        # 🔹翌月の「年」と「月」をあらかじめ計算しておく
+        if today.month == 12:
+            next_month_year = today.year + 1
+            next_month = 1
+        else:
+            next_month_year = today.year
+            next_month = today.month + 1
+
+        is_locked = True  # 基本的にはすべての月を「編集不可」として初期化
+
+        # 🔹「申請しようとしている月」が「翌月」かどうかを判定
+        if target_date_obj.year == next_month_year and target_date_obj.month == next_month:
+            # 翌月分であり、かつ今日が締め切り日（20日など）以内であれば、ロックを解除
+            if today.day <= deadline_day:
+                is_locked = False
         
-        is_locked = False
-        
-        # 「今日の日付」が「締め切り日」を過ぎている場合 (例: 今日が21日で、締切が20日)
-        if today.day > deadline_day:
-            # 「今月以前のシフト」ならロックする
-            # (例: 1月21日に、1月のシフトをいじるのはNG。2月のシフトはOK)
-            if target_date_obj.year < today.year or (target_date_obj.year == today.year and target_date_obj.month <= today.month):
-                is_locked = True
+        # 過去の月、当月、および翌々月以降は、is_locked = True のままなので編集できません
 
         # ---------------------------------------------------
-        # 既存のシフト希望データを取得 (初期値表示用)
+        # 3. 既存のデータ・設定の取得 (表示用)
         # ---------------------------------------------------
+        # 既存シフト希望データの取得
         cursor.execute(
             "SELECT * FROM calendar WHERE ID = %s AND date = %s",
             (user_id, date)
@@ -109,9 +119,7 @@ def sinsei(date):
                 current_data['end_time'] = str(current_data['end_time'])[:5]
             current_data['type'] = str(current_data['work'])
 
-        # ---------------------------------------------------
         # 時間フォーマット整形のヘルパー関数
-        # ---------------------------------------------------
         def format_time_str(t_obj):
             if t_obj is None: return None
             s = str(t_obj).strip()
@@ -122,9 +130,7 @@ def sinsei(date):
                 return f"{h}:{m}"
             return s[:5]
 
-        # ---------------------------------------------------
         # 店舗設定時間の取得
-        # ---------------------------------------------------
         cursor.execute(
             "SELECT start_time, end_time, min_hours_per_day FROM shift_settings WHERE store_id = %s LIMIT 1",
             (store_id,)
@@ -160,16 +166,16 @@ def sinsei(date):
         # 4. 保存処理 (POST)
         # ---------------------------------------------------
         if request.method == "POST":
-            # ★ 変更: 自動ロックされていたらブロック
+            # 提出期限を過ぎているかチェック
             if is_locked:
-                flash(f"⛔ 今月の提出期限({deadline_day}日)を過ぎているため、変更できません。", "danger")
+                flash(f"⛔ {deadline_day}日の提出期限を過ぎているため、変更できません。", "danger")
                 return redirect(url_for("calendar.calendar"))
 
             work = request.form.get("work")
             start_time = request.form.get("start_time")
             end_time = request.form.get("end_time")
 
-            # バリデーション
+            # バリデーション (出勤希望の場合のみ)
             if work == "1" and start_time and end_time and min_hours > 0:
                 try:
                     start_dt = datetime.strptime(start_time, "%H:%M")
@@ -190,7 +196,7 @@ def sinsei(date):
                 if start_time and len(start_time) == 5: start_time += ":00"
                 if end_time and len(end_time) == 5: end_time += ":00"
 
-            # DB保存処理
+            # データベース保存処理
             check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
             result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
 
@@ -217,8 +223,8 @@ def sinsei(date):
                             end_limit=end_limit,
                             min_hours=min_hours,
                             notice=notice,
-                            is_locked=is_locked, # ★自動ロック判定結果を渡す
-                            deadline_day=deadline_day, # ★締め切り日も渡しておくと親切
+                            is_locked=is_locked, 
+                            deadline_day=deadline_day,
                             current_data=current_data)
                             
     except Exception as e:
@@ -231,7 +237,6 @@ def sinsei(date):
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
-
 # ==========================
 # 🔹 確定シフト確認へのリダイレクト
 # ==========================
@@ -340,9 +345,19 @@ def update_shift():
     today = datetime.now()
     target_date_obj = datetime.strptime(target_date_str, "%Y-%m-%d")
 
-    # 締め切り日を過ぎていて、かつ対象が今月以前ならエラー
-    if today.day > deadline_day:
-        if target_date_obj.year < today.year or (target_date_obj.year == today.year and target_date_obj.month <= today.month):
-             return jsonify({"status": "error", "message": f"締め切り日({deadline_day}日)を過ぎているため変更できません"}), 403
+    # 翌月の計算
+    next_month_year = today.year if today.month < 12 else today.year + 1
+    next_month = today.month + 1 if today.month < 12 else 1
+
+    # 翌月かつ20日以内かチェック
+    is_valid_period = (target_date_obj.year == next_month_year and 
+                       target_date_obj.month == next_month and 
+                       today.day <= deadline_day)
+
+    if not is_valid_period:
+        return jsonify({
+            "status": "error", 
+            "message": f"現在は{next_month}月分のシフト申請期間（20日まで）外です。"
+        }), 403
     
     return jsonify({"status": "success", "message": "保存可能です"})
