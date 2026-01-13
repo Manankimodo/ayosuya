@@ -619,7 +619,7 @@ def auto_calendar():
                         
                         if capable:
                             actual_count = sum(capable)
-                            model.Add(actual_count <= count + 2)
+                            model.Add(actual_count <= count)
                             
                             capped_count = model.NewIntVar(0, count, f'capped_{t_str}_{pid}')
                             model.Add(capped_count <= actual_count)
@@ -636,7 +636,7 @@ def auto_calendar():
                 if total_req == 0:
                     model.Add(current_total_shifts == 0)
                 else:
-                    model.Add(current_total_shifts <= total_req + 5)
+                    model.Add(current_total_shifts <= total_req)
 
             max_hours = float(settings['max_hours_per_day'])
             max_intervals = int((max_hours * 60) / INTERVAL_MINUTES)
@@ -752,7 +752,7 @@ def auto_calendar():
 
             WEIGHT_DEMAND = 100
             WEIGHT_PREFERENCE = 10
-            WEIGHT_OVERSTAFF = -15
+            WEIGHT_OVERSTAFF = 15
             WEIGHT_BALANCE = -3
             WEIGHT_RECENT_WORK = -2
             WEIGHT_OUT_OF_PREF = -5
