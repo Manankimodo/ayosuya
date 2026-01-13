@@ -261,3 +261,54 @@ document.addEventListener("DOMContentLoaded", function() {
 
     console.log("✅ すべての機能を初期化完了");
 });
+
+// ==========================================
+// 6. 人数上限のバリデーション処理（イベント委譲版）
+// ==========================================
+
+// ページ内のどこかに入力があったらすべてキャッチする
+document.addEventListener('input', function(e) {
+    // ターゲットが「必要人数(required_count)」だった場合のみ動く
+    if (e.target && e.target.name === 'required_count') {
+        const input = e.target;
+        const maxPeopleInput = document.querySelector('input[name="max_people_per_shift"]');
+        
+        if (!maxPeopleInput) return;
+
+        const currentMax = parseInt(maxPeopleInput.value) || 0;
+        const val = parseInt(input.value) || 0;
+
+        // 警告メッセージ用の要素を取得（なければ作る）
+        let errorMsg = input.parentNode.querySelector('.limit-warning');
+        if (!errorMsg) {
+            errorMsg = document.createElement('div');
+            errorMsg.className = 'limit-warning';
+            errorMsg.style.cssText = 'color: #d32f2f; font-size: 11px; font-weight: bold; margin-top: 4px;';
+            input.parentNode.appendChild(errorMsg);
+        }
+
+        // 上限チェック
+        if (val > currentMax) {
+            input.value = currentMax; // 数字を上限に戻す
+            
+            // 警告の見た目（赤くする）
+            input.style.border = "2px solid #d32f2f";
+            input.style.backgroundColor = "#ffebee";
+            errorMsg.textContent = `⚠️ 最大${currentMax}名までです`;
+
+            // 1.2秒後に元に戻す
+            setTimeout(() => {
+                input.style.border = "";
+                input.style.backgroundColor = "";
+                errorMsg.textContent = "";
+            }, 1200);
+        } else {
+            // 正常範囲内なら警告を消す
+            errorMsg.textContent = "";
+            input.style.border = "";
+            input.style.backgroundColor = "";
+        }
+    }
+});
+
+console.log("🚀 バリデーション監視システムが起動しました");
