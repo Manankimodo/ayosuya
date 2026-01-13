@@ -15,6 +15,9 @@
       shifts: JSON.parse('{{ shifts|tojson|safe }}') || [],
       settings: JSON.parse('{{ settings|tojson|safe }}') || {}
     };
+    
+    // ★★★ 修正: グラフインスタンスを保存する配列 ★★★
+    window.chartInstances = {};
   </script>
  
   <script>
@@ -45,7 +48,7 @@
       }
 
       // ========================================================
-      // 2. 公開・非公開切り替え関数（新規追加）
+      // 2. 公開・非公開切り替え関数
       // ========================================================
       window.publishShift = async function(month, status) {
           const action = status === 1 ? "公開" : "非公開";
@@ -64,7 +67,7 @@
 
               if (result.success) {
                   alert(`✅ ${result.message}`);
-                  location.reload(); // 状態を反映させるためにリロード
+                  location.reload();
               } else {
                   alert(`❌ エラー: ${result.message}`);
               }
@@ -75,28 +78,50 @@
       };
 
       // ========================================================
-      // 3. ロック切り替え関数(クリック時に発火)
+      // ★★★ 修正: ロック切り替え関数 ★★★
       // ========================================================
-      window.toggleLock = async function(userId, date, chartInstance) {
-          if (!userId || parseInt(userId) < 0) return; // 不足データはロック不可
+      window.toggleLock = async function(userId, date, startTime, endTime, chartId) {
+          if (!userId || parseInt(userId) < 0) {
+              showToast("⚠️ 不足データはロックできません");
+              return;
+          }
 
           try {
               const response = await fetch('/makeshift/toggle_lock', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ user_id: userId, date: date })
+                  body: JSON.stringify({ 
+                      user_id: userId, 
+                      date: date,
+                      start_time: startTime,
+                      end_time: endTime
+                  })
               });
               const result = await response.json();
               
               if (result.status === 'success') {
-                  const targetShift = window.flaskData.shifts.find(s =>
-                      s.user_id == userId && s.date == date
-                  );
-                  if (targetShift) {
-                      targetShift.is_locked = result.new_state;
-                      chartInstance.update();
-                      showToast(result.new_state === 1 ? "🔒 ロックしました" : "🔓 ロック解除しました");
+                  // データを更新
+                  window.flaskData.shifts.forEach(s => {
+                      if (s.user_id == userId && s.date == date && 
+                          s.start_time == startTime && s.end_time == endTime) {
+                          s.is_locked = result.new_state;
+                      }
+                  });
+                  
+                  // グラフを更新
+                  const chart = window.chartInstances[chartId];
+                  if (chart) {
+                      chart.data.datasets[0].data.forEach(d => {
+                          if (d.original_user_id == userId && d.date == date &&
+                              d.x[0].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) == startTime &&
+                              d.x[1].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) == endTime) {
+                              d.is_locked = result.new_state;
+                          }
+                      });
+                      chart.update();
                   }
+                  
+                  showToast(result.new_state === 1 ? "🔒 ロックしました" : "🔓 ロック解除しました");
               } else {
                   alert('エラー: ' + result.message);
               }
@@ -128,6 +153,11 @@
       const settings = window.flaskData.settings;
       const chartsDiv = document.getElementById("charts");
       
+      // ★★★ デバッグ: 初期データの確認 ★★★
+      console.log('rawData総数:', rawData.length);
+      console.log('rawData不足データ数:', rawData.filter(s => parseInt(s.user_id) < 0).length);
+      console.log('rawData不足データ一覧:', rawData.filter(s => parseInt(s.user_id) < 0));
+      
       if (!rawData || rawData.length === 0 || !chartsDiv) {
           if(chartsDiv) chartsDiv.innerHTML = '<p style="text-align:center; padding:20px;">シフトデータがありません。</p>';
           return;
@@ -151,11 +181,23 @@
           let current = { ...rawData[0] };
           for (let i = 1; i < rawData.length; i++) {
               const next = rawData[i];
-              if (current.user_id === next.user_id &&
+              
+              // ★★★ 修正: 不足データ（負のuser_id）は絶対にマージしない ★★★
+              const shouldMerge = (
+                  parseInt(current.user_id) > 0 &&  // 通常のスタッフのみマージ
+                  current.user_id === next.user_id &&
                   current.date === next.date &&
                   current.type === next.type &&
                   (current.is_locked || 0) === (next.is_locked || 0) &&
-                  current.end_time === next.start_time) {
+                  current.end_time === next.start_time
+              );
+              
+              // ★★★ デバッグ: マージ判定の詳細を出力 ★★★
+              if (parseInt(current.user_id) < 0 || parseInt(next.user_id) < 0) {
+                  console.log(`不足データチェック: current=${current.user_id}(${current.type}), next=${next.user_id}(${next.type}), shouldMerge=${shouldMerge}`);
+              }
+              
+              if (shouldMerge) {
                   current.end_time = next.end_time;
               } else {
                   mergedShifts.push(current);
@@ -164,6 +206,11 @@
           }
           mergedShifts.push(current);
       }
+      
+      // ★★★ デバッグ: マージ後の不足データ確認 ★★★
+      const shortageCountJS = mergedShifts.filter(s => parseInt(s.user_id) < 0).length;
+      console.log(`JavaScript DEBUG: マージ後のシフト数: ${mergedShifts.length}, 不足データ数: ${shortageCountJS}`);
+      console.log('不足データ一覧:', mergedShifts.filter(s => parseInt(s.user_id) < 0));
 
       const minTime = settings.start_time ? new Date(`1970-01-01T${settings.start_time}:00`) : new Date("1970-01-01T08:00:00");
       const maxTime = settings.end_time ? new Date(`1970-01-01T${settings.end_time}:00`) : new Date("1970-01-01T23:00:00");
@@ -179,6 +226,7 @@
       let colorIndex = 0;
 
       Object.entries(groupedByDate).forEach(([date, shifts], idx) => {
+          const chartId = `chart_${idx}`;
           const container = document.createElement("div");
           container.className = "chart-container";
           container.style.cssText = "margin-bottom:30px; padding:20px; background:#ffffff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);";
@@ -188,11 +236,11 @@
                 <h3 style="margin:0; color: #333;">📅 ${date} のシフト</h3>
                 <small style="color:#666;">※バーをクリックで固定(ロック)切替</small>
             </div>
-            <div style="height: 400px;"><canvas id="chart_${idx}"></canvas></div>
+            <div style="height: 400px;"><canvas id="${chartId}"></canvas></div>
           `;
           chartsDiv.appendChild(container);
 
-          const ctx = document.getElementById(`chart_${idx}`).getContext("2d");
+          const ctx = document.getElementById(chartId).getContext("2d");
           const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
 
           const chartDataPoints = shifts.map(s => {
@@ -211,14 +259,15 @@
                   x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
                   y: uName,
                   type: s.type,
-                  is_locked: s.is_locked,
+                  is_locked: s.is_locked || 0,
                   original_user_id: s.user_id,
                   date: s.date,
                   backgroundColor: barColor
               };
           });
 
-          new Chart(ctx, {
+          // ★★★ 修正: グラフインスタンスを保存 ★★★
+          const chart = new Chart(ctx, {
               type: "bar",
               data: {
                   datasets: [{
@@ -239,7 +288,9 @@
                       if (elements.length > 0) {
                           const elementIndex = elements[0].index;
                           const dataPoint = chart.data.datasets[0].data[elementIndex];
-                          window.toggleLock(dataPoint.original_user_id, dataPoint.date, chart);
+                          const startTime = dataPoint.x[0].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+                          const endTime = dataPoint.x[1].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+                          window.toggleLock(dataPoint.original_user_id, dataPoint.date, startTime, endTime, chartId);
                       }
                   },
                   scales: {
@@ -297,6 +348,9 @@
                 }
               }]
           });
+          
+          // ★★★ グラフインスタンスを保存 ★★★
+          window.chartInstances[chartId] = chart;
       });
     });
   </script>
@@ -334,7 +388,8 @@
  
   <div id="charts"></div>
   {% if shifts and shifts[0] %}
-    {% set target_month = shifts[0].date[:7] %} <div class="settings-box" style="border-left: 5px solid #28a745; background: #e9f7ef; margin-top: 20px;">
+    {% set target_month = shifts[0].date[:7] %} 
+    <div class="settings-box" style="border-left: 5px solid #28a745; background: #e9f7ef; margin-top: 20px;">
       <h3 style="color: #28a745;">📢 シフトの公開設定 (対象月: {{ target_month }})</h3>
       <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
         ※自動作成された内容を確認し、問題なければ「公開」ボタンを押してください。<br>
@@ -348,14 +403,12 @@
   {% endif %}
 
   <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
     <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成(穴埋め)</a>
     <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか?\n次回作成時に削除されます。')">🔓 全保護解除</a>
     <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか?')">🔄 全リセット</a>
     
     <button onclick="openHelpModal()" class="btn danger" style="background: #e91e63;">🚨 ヘルプ募集</button>
-
-    </div>
+  </div>
  
   <div id="helpModal" class="modal-overlay">
     <div class="modal-content">

@@ -53,7 +53,10 @@
   </div>
 
   <div id="controls" style="text-align: center; margin: 30px 0;">
-    <form action="/makeshift/auto_calendar" method="get">
+    <form action="{{ url_for('makeshift.auto_calendar') }}" method="get">
+      
+      <input type="hidden" name="target_month" value="{{ next_month }}">
+      
       <button type="submit" id="make-shift-btn" style="padding: 15px 40px; font-size: 1.2em; cursor: pointer; background: #333; color: white; border: none; border-radius: 30px; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
         🗓️ {{ next_month }}月分のシフトを自動作成する
       </button>
