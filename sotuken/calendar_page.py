@@ -39,11 +39,68 @@ def calendar():
     return render_template("calendar.html", sent_dates=sent_dates or [])
 
 
+# どのファイルにあるか確認してください（おそらく calendar_page.py）
+# calendar_page.py (または makeshift.py)
+
 @calendar_bp.route("/admin") 
 def admin(): 
-    if "user_id" not in session: return redirect(url_for("login.login")) 
-    return render_template("calendar2.html")
+    if "user_id" not in session: 
+        return redirect(url_for("login.login")) 
+    
+    user_id = session["user_id"]
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
+    try:
+        # 店舗ID取得
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+
+        # ------------------------------------------------
+        # 2. 「来月」の計算 (YYYY-MM形式にする)
+        # ------------------------------------------------
+        from datetime import datetime
+        today = datetime.now()
+        
+        # 来月を計算
+        if today.month == 12:
+            next_month_dt = today.replace(year=today.year+1, month=1, day=1)
+        else:
+            next_month_dt = today.replace(month=today.month+1, day=1)
+            
+        # ★ここが重要: "2" ではなく "2026-02" という文字列を作る
+        next_month_str = next_month_dt.strftime("%Y-%m") 
+
+        # ------------------------------------------------
+        # 3. その他の情報取得 (変更なし)
+        # ------------------------------------------------
+        cursor.execute("SELECT deadline_day FROM shift_settings WHERE store_id = %s", (store_id,))
+        setting = cursor.fetchone()
+        deadline_day = setting['deadline_day'] if setting and setting['deadline_day'] else 20
+        
+        is_application_open = (today.day <= deadline_day)
+
+        cursor.execute("""
+            SELECT is_published FROM shift_publish_status 
+            WHERE store_id = %s AND target_month = %s
+        """, (store_id, next_month_str))
+        pub_status = cursor.fetchone()
+        is_published = pub_status['is_published'] if pub_status else False
+
+        # HTMLに渡す
+        return render_template("admin.html", # ファイル名に合わせてください
+                               next_month=next_month_str, # これで "2026-02" が渡る
+                               deadline_day=deadline_day,
+                               is_application_open=is_application_open,
+                               is_published=is_published,
+                               results=[])
+
+    except Exception as e:
+        print(f"Admin Error: {e}")
+        return redirect(url_for("login.manager_home"))
+    finally:
+        if conn: conn.close()
 # ==========================
 # 🔹 希望申請フォーム（自動ロック版）
 # ==========================

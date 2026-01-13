@@ -370,6 +370,29 @@ def auto_calendar():
             return time(0, 0)
 
         # ========================================================
+        # ★★★ 修正: target_month パラメータの取得 ★★★
+        # ========================================================
+        target_month = request.args.get('target_month', type=int)
+        
+        # target_monthが指定されていない場合は翌月を計算
+        if not target_month:
+            today = datetime.now()
+            if today.month == 12:
+                target_month = 1
+                target_year = today.year + 1
+            else:
+                target_month = today.month + 1
+                target_year = today.year
+        else:
+            # target_monthから年を推定
+            today = datetime.now()
+            if target_month < today.month:
+                # 例: 今が12月で target_month が 1 なら来年
+                target_year = today.year + 1
+            else:
+                target_year = today.year
+
+        # ========================================================
         # 2. 設定取得
         # ========================================================
         cursor.execute("SELECT * FROM shift_settings LIMIT 1")
@@ -435,23 +458,34 @@ def auto_calendar():
             target_map[t_str][pid] = row['required_count']
 
         # ========================================================
-        # 4. 削除処理
+        # ★★★ 修正: 対象月のデータのみ取得 ★★★
         # ========================================================
         mode = request.args.get('mode', 'fill')
         
-        cursor.execute("SELECT DISTINCT date FROM calendar WHERE work = 1 ORDER BY date")
+        # 対象月の日付のみ取得（YEAR()とMONTH()で絞り込み）
+        cursor.execute("""
+            SELECT DISTINCT date 
+            FROM calendar 
+            WHERE work = 1 
+            AND YEAR(date) = %s 
+            AND MONTH(date) = %s 
+            ORDER BY date
+        """, (target_year, target_month))
         target_dates = [row['date'] for row in cursor.fetchall()]
 
         if not target_dates:
             conn.close()
             return render_template("auto_calendar.html", 
-                                   message="希望シフトが登録されていません", 
+                                   message=f"{target_month}月の希望シフトが登録されていません", 
                                    shifts=[], 
                                    settings=settings)
 
         dates_list = [str(d) for d in target_dates]
         placeholders = ','.join(['%s'] * len(dates_list))
 
+        # ========================================================
+        # 4. 削除処理（対象月のみ）
+        # ========================================================
         if mode == 'reset':
             # 完全リセット
             sql = f"DELETE FROM shift_table WHERE date IN ({placeholders})"
@@ -469,12 +503,13 @@ def auto_calendar():
         
         # unlock_allの場合はここで終了
         if mode == 'unlock_all':
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type, s.is_locked
                 FROM shift_table s 
                 LEFT JOIN account a ON s.user_id = a.ID 
+                WHERE s.date IN ({placeholders})
                 ORDER BY s.user_id, s.date, s.start_time
-            """)
+            """, tuple(dates_list))
             raw_shifts = cursor.fetchall()
             
             final_display_shifts = []
@@ -495,7 +530,7 @@ def auto_calendar():
                                    message="🔓 全てのシフトの保護を解除しました")
         
         all_generated_shifts = []
-        dates_with_shortage = set()  # 不足があった日付を記録
+        dates_with_shortage = set()
 
         # ========================================================
         # 5. 日付ごとの最適化ループ
@@ -791,7 +826,6 @@ def auto_calendar():
                 for item in active_shortages.values(): 
                     shortage_list_day.append(item)
                 
-                # 不足があった場合、この日付を記録
                 if shortage_list_day:
                     dates_with_shortage.add(target_date_str)
                 
@@ -850,37 +884,44 @@ def auto_calendar():
                         })
 
         # ========================================================
-        # DB保存と自動保護処理
+        # DB保存（自動保護は削除）
         # ========================================================
         if all_generated_shifts:
-            # ここは is_locked = 0 で保存しているのでOK
             sql = "INSERT INTO shift_table (user_id, date, start_time, end_time, type, is_locked) VALUES (%s, %s, %s, %s, %s, %s)"
             data = [(s['user_id'], s['date'], s['start_time'], s['end_time'], s['type'], 0) 
                     for s in all_generated_shifts]
             cursor.executemany(sql, data)
             conn.commit()
             
-            # ▼▼▼ このブロックを削除またはコメントアウトしてください ▼▼▼
-            # ★自動保護：不足があった日付のシフトをロック★
-            # if dates_with_shortage:
-            #     shortage_placeholders = ','.join(['%s'] * len(dates_with_shortage))
-            #     cursor.execute(f"""
-            #         UPDATE shift_table 
-            #         SET is_locked = 1 
-            #         WHERE date IN ({shortage_placeholders})
-            #         AND CAST(user_id AS SIGNED) > 0
-            #         AND is_locked = 0
-            #     """, tuple(dates_with_shortage))
-            #     conn.commit()
-            # ▲▲▲ 削除ここまで ▲▲▲
-            
-        cursor.execute("""
-            SELECT s.user_id, a.name as user_name, s.date, s.start_time, s.end_time, s.type, s.is_locked
+        # ========================================================
+        # ★★★ 修正: 表示データも対象月のみ取得（不足データも含む） ★★★
+        # ========================================================
+        cursor.execute(f"""
+            SELECT 
+                s.user_id, 
+                CASE 
+                    WHEN CAST(s.user_id AS SIGNED) < 0 THEN s.type
+                    ELSE a.name 
+                END as user_name,
+                s.date, 
+                s.start_time, 
+                s.end_time, 
+                s.type, 
+                s.is_locked
             FROM shift_table s 
             LEFT JOIN account a ON s.user_id = a.ID 
-            ORDER BY s.user_id, s.date, s.start_time
-        """)
+            WHERE s.date IN ({placeholders})
+            ORDER BY 
+                CASE WHEN CAST(s.user_id AS SIGNED) > 0 THEN 0 ELSE 1 END,
+                s.user_id, 
+                s.date, 
+                s.start_time
+        """, tuple(dates_list))
         raw_shifts = cursor.fetchall()
+        
+        # ★★★ デバッグ: 不足データの存在確認 ★★★
+        shortage_count_debug = len([s for s in raw_shifts if int(s['user_id']) < 0])
+        print(f"DEBUG: 取得した全シフト数: {len(raw_shifts)}, 不足データ数: {shortage_count_debug}")
         
         final_display_shifts = []
         if raw_shifts:
@@ -903,17 +944,27 @@ def auto_calendar():
                 if int(nxt['user_id']) < 0: 
                     nxt['user_name'] = nxt['type']
 
-                if (curr['user_id'] == nxt['user_id'] and 
+                # ★★★ 修正: 不足データは絶対にマージしない ★★★
+                should_merge = (
+                    int(curr['user_id']) > 0 and  # 通常のスタッフのみマージ
+                    curr['user_id'] == nxt['user_id'] and 
                     curr['date'] == nxt['date'] and 
                     curr['type'] == nxt['type'] and 
                     curr.get('is_locked') == nxt.get('is_locked') and
-                    curr['end_time'] == nxt['start_time']):
+                    curr['end_time'] == nxt['start_time']
+                )
+                
+                if should_merge:
                     curr['end_time'] = nxt['end_time']
                 else:
                     final_display_shifts.append(curr)
                     curr = nxt
             
             final_display_shifts.append(curr)
+        
+        # ★★★ デバッグ: 最終的な不足データ数 ★★★
+        final_shortage_count = len([s for s in final_display_shifts if int(s['user_id']) < 0])
+        print(f"DEBUG: 最終表示シフト数: {len(final_display_shifts)}, 不足データ数: {final_shortage_count}")
 
         conn.close()
         
@@ -922,10 +973,7 @@ def auto_calendar():
         locked_shifts = len([s for s in final_display_shifts if int(s['user_id']) > 0 and s.get('is_locked') == 1])
         shortage_count = len([s for s in final_display_shifts if int(s['user_id']) < 0])
         
-        if dates_with_shortage:
-            message = f"✅ シフト作成完了: {total_shifts}件 | 🔒保護済み: {locked_shifts}件 | 🚨不足: {shortage_count}件（不足があった日のシフトを自動保護しました）"
-        else:
-            message = f"✅ シフト作成完了: {total_shifts}件 | 🚨不足: {shortage_count}件（完璧！）"
+        message = f"✅ {target_month}月シフト作成完了: {total_shifts}件 | 🔒保護済み: {locked_shifts}件 | 🚨不足: {shortage_count}件"
         
         return render_template("auto_calendar.html", 
                                settings=settings, 
@@ -940,28 +988,26 @@ def auto_calendar():
                                settings=error_settings, 
                                shifts=[], 
                                message=f"❌ エラーが発生しました: {str(e)}")
-#------------------------------------------------------------------------------------------------------------------------------------------------------
 
-from flask import jsonify, request
 
 @makeshift_bp.route("/toggle_lock", methods=["POST"])
 def toggle_lock():
     data = request.json
     shift_user_id = data.get('user_id')
     shift_date = data.get('date')
-    # 時間帯を一意に特定するために start_time も必要かもしれません
-    # 今回は簡易的に「その人のその日のシフト全体」をロックする例にします
+    shift_start_time = data.get('start_time')  # ★★★ 追加 ★★★
+    shift_end_time = data.get('end_time')      # ★★★ 追加 ★★★
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # まず現在の状態を確認
+        # ★★★ 修正: start_timeとend_timeで一意に特定 ★★★
         cursor.execute("""
             SELECT is_locked FROM shift_table 
-            WHERE user_id = %s AND date = %s 
+            WHERE user_id = %s AND date = %s AND start_time = %s AND end_time = %s
             LIMIT 1
-        """, (shift_user_id, shift_date))
+        """, (shift_user_id, shift_date, shift_start_time, shift_end_time))
         row = cursor.fetchone()
         
         if not row:
@@ -970,11 +1016,12 @@ def toggle_lock():
         # 状態を反転させる (0 -> 1, 1 -> 0)
         new_status = 0 if row['is_locked'] else 1
         
+        # ★★★ 修正: 特定のシフトのみ更新 ★★★
         cursor.execute("""
             UPDATE shift_table 
             SET is_locked = %s 
-            WHERE user_id = %s AND date = %s
-        """, (new_status, shift_user_id, shift_date))
+            WHERE user_id = %s AND date = %s AND start_time = %s AND end_time = %s
+        """, (new_status, shift_user_id, shift_date, shift_start_time, shift_end_time))
         conn.commit()
         
         return jsonify({'status': 'success', 'new_state': new_status})
