@@ -73,20 +73,6 @@
     </nav>
 
     <script src="{{ url_for('static', filename='js/user_shift_view.js') }}"></script>
-    <!-- ボトムナビゲーションのアクティブ状態切り替え（オプション） -->
-  <script>
-    // 現在のページに応じてアクティブ状態を切り替え
-    document.addEventListener('DOMContentLoaded', function() {
-      const currentPath = window.location.pathname;
-      const navItems = document.querySelectorAll('.nav-item');
-      
-      navItems.forEach(item => {
-        if (item.getAttribute('href') === currentPath) {
-          navItems.forEach(nav => nav.classList.remove('active'));
-          item.classList.add('active');
-        }
-      });
-    });
-  </script>
+
 </body>
 </html>

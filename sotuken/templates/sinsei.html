@@ -78,7 +78,7 @@
       
     </form>
 
-    <a href="{{ url_for('calendar.calendar') }}" class="back-link">← カレンダーに戻る</a>
+    <a href="{{ url_for('calendar.calendar', month=date[:7]) }}" class="back-link">← カレンダーに戻る</a>
   </div>
 
   <script src="{{ url_for('static', filename='js/shinsei.js') }}"></script>

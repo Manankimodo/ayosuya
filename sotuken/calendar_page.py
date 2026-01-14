@@ -178,11 +178,12 @@ def sinsei(date):
             return redirect(url_for("calendar.calendar"))
 
         # ---------------------------------------------------
-        # 2. 自動ロック判定ロジック (常に「翌月分」のみを申請可能にする)
+        # 2. 自動切り替えロジック (期限を過ぎたらターゲットを翌々月にスライド)
         # ---------------------------------------------------
-        from datetime import datetime, timedelta
+        from datetime import datetime
+        from dateutil.relativedelta import relativedelta
 
-        # 設定から締め切り日を取得 (デフォルト20)
+        # 設定から締め切り日を取得
         cursor.execute("SELECT deadline_day FROM shift_settings WHERE store_id = %s", (store_id,))
         setting = cursor.fetchone()
         deadline_day = setting['deadline_day'] if setting and setting['deadline_day'] else 20
@@ -190,22 +191,23 @@ def sinsei(date):
         today = datetime.now()
         target_date_obj = datetime.strptime(date, "%Y-%m-%d")
 
-        # 🔹翌月の「年」と「月」をあらかじめ計算しておく
-        if today.month == 12:
-            next_month_year = today.year + 1
-            next_month = 1
+        # 🔹 A. 今月の締め切り日を算出 (例: 1月15日 23:59)
+        this_month_deadline = today.replace(day=deadline_day, hour=23, minute=59, second=59)
+
+        # 🔹 B. 今日の時点で「今月の期限」を過ぎているか判定
+        if today > this_month_deadline:
+            # 期限を過ぎたので、募集対象は「翌々月」にバトンタッチ
+            # (1月16日なら、ターゲットは3月)
+            recruiting_month = today + relativedelta(months=2)
         else:
-            next_month_year = today.year
-            next_month = today.month + 1
+            # 期限内なので、募集対象は「翌月」
+            # (1月14日なら、ターゲットは2月)
+            recruiting_month = today + relativedelta(months=1)
 
-        is_locked = True  # 基本的にはすべての月を「編集不可」として初期化
-
-        # 🔹「申請しようとしている月」が「翌月」かどうかを判定
-        if target_date_obj.year == next_month_year and target_date_obj.month == next_month:
-            # 翌月分であり、かつ今日が締め切り日（20日など）以内であれば、ロックを解除
-            if today.day <= deadline_day:
-                is_locked = False
-        
+        # 🔹 C. ユーザーが開いた画面が「募集中の月」と一致するか判定
+        is_locked = True
+        if target_date_obj.year == recruiting_month.year and target_date_obj.month == recruiting_month.month:
+            is_locked = False
         # 過去の月、当月、および翌々月以降は、is_locked = True のままなので編集できません
 
         # ---------------------------------------------------
