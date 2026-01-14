@@ -1,174 +1,250 @@
-    :root {
-        /* デフォルト（ダーク/Netflix風） */
-        --bg-color: #141414;
-        --card-bg: #181818;
-        --text-main: #ffffff;
-        --text-sub: #b3b3b3;
-        --input-bg: #333333;
-        --input-text: #ffffff;
-        --border-color: #404040;
-        --accent-color: #e50914; /* Netflix Red */
-        --accent-hover: #f40612;
-        --shadow: 0 4px 15px rgba(0,0,0,0.5);
-    }
- 
-    /* ライトモード（白系）の設定 */
-    body.light-mode {
-        --bg-color: #f4f4f9;
-        --card-bg: #ffffff;
-        --text-main: #333333;
-        --text-sub: #666666;
-        --input-bg: #f9f9f9;
-        --input-text: #333333;
-        --border-color: #dddddd;
-        --accent-color: #d32f2f; /* 少し落ち着いた赤 */
-        --accent-hover: #b71c1c;
-        --shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
- 
-    /* =========================================
-       Base Styles using Variables
-       ========================================= */
-    body {
-        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-        background-color: var(--bg-color);
-        color: var(--text-main);
-        margin: 0;
-        padding: 0;
-        transition: background-color 0.3s, color 0.3s; /* 切り替え時のアニメーション */
-    }
- 
-    /* Navigation & Menu */
-    .menu-btn {
-        position: fixed; top: 20px; left: 20px; z-index: 1001; cursor: pointer;
-        background: var(--card-bg); padding: 10px; border-radius: 4px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    .menu-btn span {
-        display: block; width: 25px; height: 3px;
-        background-color: var(--accent-color); margin: 5px 0; transition: 0.3s;
-    }
- 
-    .side-menu {
-        position: fixed; top: 0; left: -250px; width: 250px; height: 100%;
-        background-color: var(--card-bg); /* メニュー背景も可変に */
-        border-right: 1px solid var(--border-color);
-        transition: 0.4s; z-index: 1000; padding-top: 80px;
-    }
-    .side-menu.active { left: 0; }
-    .side-menu ul { list-style: none; padding: 0; }
-    .side-menu li a {
-        display: block; padding: 15px 25px; color: var(--text-sub);
-        text-decoration: none; border-bottom: 1px solid var(--border-color);
-    }
-    .side-menu li a:hover {
-        color: var(--text-main);
-        background-color: rgba(128,128,128,0.1);
-        border-left: 4px solid var(--accent-color);
-    }
- 
-    /* Container */
-    .container { max-width: 1100px; margin: 0 auto; padding: 40px 20px; padding-top: 80px; }
-    h1, h2, h3, h4 { color: var(--text-main); }
-    h2 { border-left: 5px solid var(--accent-color); padding-left: 15px; }
- 
-    /* Cards */
-    .basic-settings-card, .zone-card, .demand-list, #special-hours-add-form {
-        background-color: var(--card-bg) !important;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: var(--shadow);
-    }
- 
-    /* Inputs */
-    input, select {
-        width: 100%; padding: 12px;
-        border: 1px solid var(--border-color); border-radius: 4px;
-        background: var(--input-bg); color: var(--input-text);
-        box-sizing: border-box; transition: 0.3s;
-    }
-    input:focus, select:focus {
-        outline: none; border-color: var(--accent-color);
-    }
-    label { color: var(--text-sub); display: block; margin-bottom: 5px; }
- 
-    /* Buttons */
-    .save-btn {
-        background-color: var(--accent-color); color: #fff;
-        padding: 15px 40px; border: none; border-radius: 4px;
-        font-size: 1.1em; cursor: pointer; width: 100%; font-weight: bold;
-    }
-    .save-btn:hover { background-color: var(--accent-hover); }
- 
-    .add-btn {
-        background-color: transparent !important;
-        border: 2px solid var(--accent-color) !important;
-        color: var(--accent-color) !important;
-        padding: 10px; width: 100%; margin-top: 15px; font-weight: bold; cursor: pointer;
-    }
-    .add-btn:hover {
-        background-color: var(--accent-color) !important;
-        color: #fff !important;
-    }
- 
-    /* Tabs */
-    .tab-container { border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 30px; gap: 15px; display: flex;}
-    .tab-btn {
-        background: transparent; color: var(--text-sub);
-        padding: 10px 20px; border: 1px solid var(--border-color);
-        border-radius: 4px; cursor: pointer; font-size: 1.1em;
-    }
-    .tab-btn.active {
-        background: var(--accent-color); color: #fff; border-color: var(--accent-color);
-    }
- 
-    /* Grid layout */
-    .time-zone-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
-    
-    /* Tables */
-    table { width: 100%; border-collapse: collapse; color: var(--text-sub); }
-    th { text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color); color: var(--text-main); }
-    td { padding: 10px; border-bottom: 1px solid var(--border-color); }
- 
-    /* Theme Toggle Button Style */
-    .theme-toggle {
-        position: fixed; top: 20px; right: 20px; z-index: 1002;
-        background: var(--card-bg); color: var(--text-main);
-        border: 1px solid var(--border-color);
-        padding: 10px 15px; border-radius: 20px;
-        cursor: pointer; font-size: 1.2em;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        transition: 0.3s;
-    }
-    .theme-toggle:hover { transform: scale(1.1); }
-    /* =========================================
-       読みやすさ修正パッチ
-       ========================================= */
- 
-    /* 1. HTMLに直書きされた「白背景」を強制的にダークモード色で上書き */
-    .demand-list > div,       /* 平日・土日祝のリスト枠 */
-    .demand-list + div {      /* 特別営業時間の設定枠 */
-        background-color: var(--card-bg) !important;
-        border: 1px solid var(--border-color);
-        color: var(--text-main);
-    }
- 
-    /* 2. テーブルのヘッダー（項目名）を見やすくする */
-    .demand-list table th,
-    #special-hours-table th {
-        background-color: rgba(0, 0, 0, 0.5) !important; /* 半透明の黒 */
-        color: #fff !important;
-        border-bottom: 2px solid var(--border-color);
-    }
- 
-    /* 3. 暗い青や赤の文字を、ダークモード用に明るく補正 */
-    h4[style*="color:#3f51b5"] { color: #82b1ff !important; } /* 明るい青へ */
-    h4[style*="color:#d32f2f"] { color: #ff8a80 !important; } /* 明るい赤へ */
-    
-    /* 4. 「設定がありません」などの文字色 */
-    td {
-        color: var(--text-sub);
-    }
+/* =========================================
+   1. デザイン変数 (Theme Variables)
+   ========================================= */
+:root {
+    --bg-color: #141414;
+    --card-bg: #181818;
+    --text-main: #ffffff;
+    --text-sub: #b3b3b3;
+    --input-bg: #333333;
+    --input-text: #ffffff;
+    --border-color: #404040;
+    --accent-color: #e50914;
+    --accent-hover: #f40612;
+    --shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+body.light-mode {
+    --bg-color: #f4f4f9;
+    --card-bg: #ffffff;
+    --text-main: #333333;
+    --text-sub: #666666;
+    --input-bg: #f9f9f9;
+    --input-text: #333333;
+    --border-color: #dddddd;
+    --accent-color: #d32f2f;
+    --accent-hover: #b71c1c;
+    --shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* =========================================
+   2. レイアウト (Layout)
+   ========================================= */
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    margin: 0; padding: 0;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* 全体の器は広く取る */
+.container {
+    max-width: 1400px; 
+    margin: 0 auto;
+    padding: 80px 20px 40px 20px;
+}
+
+/* 【重要】上部のエリアだけ元の幅に制限する */
+.basic-settings-card,
+.tab-container,
+p[style*="text-align:center"],
+.demand-area {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h1, h2, h3, h4 { color: var(--text-main); }
+h2 { border-left: 5px solid var(--accent-color); padding-left: 15px; }
+
+/* =========================================
+   3. 共通部品 (Forms & Cards)
+   ========================================= */
+.basic-settings-card, .zone-card, .demand-list, #special-hours-add-form {
+    background-color: var(--card-bg) !important;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: var(--shadow);
+}
+
+.time-zone-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+input, select {
+    width: 100%; padding: 12px;
+    border: 1px solid var(--border-color); border-radius: 4px;
+    background: var(--input-bg); color: var(--input-text);
+    box-sizing: border-box; transition: 0.3s;
+}
+
+label { color: var(--text-sub); display: block; margin-bottom: 5px; }
+
+/* =========================================
+   4. ボタンデザインの統一
+   ========================================= */
+/* 保存ボタン (基本設定用) */
+.save-btn {
+    background-color: var(--accent-color); color: #fff;
+    padding: 15px 40px; border: none; border-radius: 4px;
+    font-size: 1.1em; cursor: pointer; font-weight: bold;
+}
+
+/* 追加ボタン (枠線タイプ) */
+.add-btn {
+    background-color: transparent !important;
+    border: 2px solid var(--accent-color) !important;
+    color: var(--accent-color) !important;
+    padding: 10px; width: 100%; margin-top: 15px; font-weight: bold; cursor: pointer;
+}
+
+/* 更新ボタン (青) */
+.btn-update,
+.inline-edit-form button[type="submit"] {
+    background-color: #0071eb !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 4px !important;
+    height: 36px !important;
+    padding: 0 15px !important;
+    font-size: 0.85em !important;
+    font-weight: bold !important;
+    cursor: pointer;
+}
+
+/* 削除ボタン (赤) */
+.btn-delete,
+.demand-list button[style*="background:#ff5252"],
+td[style*="text-align: right"] button,
+form[action*="delete"] button {
+    background-color: #e50914 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 4px !important;
+    height: 36px !important;
+    padding: 0 15px !important;
+    font-size: 0.85em !important;
+    font-weight: bold !important;
+    cursor: pointer;
+}
+
+/* =========================================
+   5. 役割管理エリア (Inline Forms)
+   ========================================= */
+.inline-edit-form {
+    display: flex !important;
+    gap: 8px !important;
+    align-items: center !important;
+}
+
+.inline-edit-form input[type="text"] {
+    flex: 1;
+    height: 36px !important;
+    padding: 0 10px !important;
+}
+
+/* =========================================
+   6. 下部：設定一覧 & 特別営業時間 (広幅)
+   ========================================= */
+.demand-list, 
+#special-hours-add-form,
+div[style*="background:#fff"] { /* 特別営業時間の外枠 */
+    width: 100% !important;
+    max-width: none !important;
+    padding: 30px !important;
+}
+
+/* 表のゆとり調整 */
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 15px 10px; border-bottom: 1px solid var(--border-color); }
+
+/* 特別営業時間のグリッド */
+#special-hours-add-form div[style*="display:grid"] {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: 20px !important;
+}
+
+/* =========================================
+   7. その他 (Menu, Scrollbar, Patch)
+   ========================================= */
+.menu-btn {
+    position: fixed; top: 20px; left: 20px; z-index: 1001; cursor: pointer;
+    background: var(--card-bg); padding: 10px; border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.side-menu {
+    position: fixed; top: 0; left: -250px; width: 250px; height: 100%;
+    background-color: var(--card-bg); border-right: 1px solid var(--border-color);
+    transition: 0.4s; z-index: 1000; padding-top: 80px;
+}
+
+.side-menu.active { left: 0; }
+
+.tab-btn {
+    background: transparent; color: var(--text-sub);
+    padding: 10px 20px; border: 1px solid var(--border-color);
+    border-radius: 4px; cursor: pointer;
+}
+
+.tab-btn.active {
+    background: var(--accent-color); color: #fff; border-color: var(--accent-color);
+}
+
+div::-webkit-scrollbar { width: 4px; }
+div::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+
+h4[style*="color:#3f51b5"] { color: #82b1ff !important; }
+h4[style*="color:#d32f2f"] { color: #ff8a80 !important; }
+
+/* =========================================
+   枠内の白背景を強制的にダークモード化するパッチ
+   ========================================= */
+
+/* 1. HTMLに直書きされた背景色をすべて上書き */
+.demand-list,
+.demand-list > div,
+div[style*="background:#f5f5f5"],
+div[style*="background:#fff"],
+div[style*="background:#fff3e0"],
+form[style*="background:#f5f5f5"] {
+    background-color: var(--card-bg) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* 2. テーブル内の白背景・薄いグレーを修正 */
+table tr, 
+table tr[style*="background"],
+thead tr[style*="background"] {
+    background-color: transparent !important;
+    color: var(--text-main) !important;
+}
+
+table td, 
+table th {
+    border-bottom: 1px solid var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+
+/* 3. テーブルヘッダー（項目名）を少し暗くして目立たせる */
+table thead tr {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* 4. 特別営業時間フォーム内の文字色補正 */
+#special-hours-add-form label,
+#special-hours-add-form p {
+    color: var(--text-sub) !important;
+}
+
+/* 5. プレースホルダー（入力欄のヒント文字）を見やすく */
+::placeholder {
+    color: #666 !important;
+    opacity: 1;
+}
