@@ -1923,3 +1923,84 @@ def toggle_publish_status():
     finally:
         cursor.close()
         conn.close()
+
+
+from flask import Blueprint, request, redirect, url_for, flash, session
+
+# ==========================================
+# 役割（ポジション）追加・変更・削除
+# ==========================================
+@makeshift_bp.route('/settings/position/add', methods=['POST'])
+def add_position():
+    if "user_id" not in session:
+        return redirect(url_for("login.login"))
+
+    name = request.form.get('name')
+    user_id = session["user_id"]
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # 1. ユーザーの所属店舗IDを取得
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_row = cursor.fetchone()
+        store_id = user_row["store_id"] if user_row else None
+
+        if name and store_id:
+            # 2. データベースに挿入（テーブル名は positions に合わせる）
+            cursor.execute("INSERT INTO positions (name, store_id) VALUES (%s, %s)", (name, store_id))
+            conn.commit()  # 【重要】反映を確定させる
+            flash(f'役割「{name}」を追加しました', 'success')
+        else:
+            flash('役割名または店舗情報が不足しています', 'danger')
+            
+    except Exception as e:
+        conn.rollback()
+        print(f"Add Position Error: {e}")
+        flash('追加に失敗しました', 'danger')
+    finally:
+        conn.close()
+        
+    return redirect(url_for('makeshift.settings'))
+
+@makeshift_bp.route('/settings/position/update/<int:position_id>', methods=['POST'])
+def update_position(position_id):
+    new_name = request.form.get('name')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if new_name:
+            # SQLの実行
+            cursor.execute("UPDATE positions SET name = %s WHERE id = %s", (new_name, position_id))
+            conn.commit()  # 【重要】反映を確定させる
+            flash('役割名を更新しました', 'success')
+    except Exception as e:
+        conn.rollback()
+        print(f"Update Position Error: {e}")
+        flash('更新に失敗しました', 'danger')
+    finally:
+        conn.close()
+        
+    return redirect(url_for('makeshift.settings'))
+
+@makeshift_bp.route('/settings/position/delete/<int:position_id>', methods=['POST'])
+def delete_position(position_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # SQLの実行
+        cursor.execute("DELETE FROM positions WHERE id = %s", (position_id,))
+        conn.commit()  # 【重要】反映を確定させる
+        flash('役割を削除しました', 'info')
+    except Exception as e:
+        conn.rollback()
+        print(f"Delete Position Error: {e}")
+        flash('この役割は他の設定で使用されているため削除できません', 'danger')
+    finally:
+        conn.close()
+        
+    return redirect(url_for('makeshift.settings'))
