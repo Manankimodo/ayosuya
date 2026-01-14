@@ -191,6 +191,8 @@ def admin():
 # ==========================
 # 🔹 希望申請フォーム（自動ロック版）
 # ==========================
+# calendar_page.py の sinsei ルートを以下のように修正してください
+
 @calendar_bp.route("/sinsei/<date>", methods=["GET", "POST"])
 def sinsei(date):
     # 1. ログイン確認
@@ -218,7 +220,7 @@ def sinsei(date):
         # ---------------------------------------------------
         # 2. 自動切り替えロジック (期限を過ぎたらターゲットを翌々月にスライド)
         # ---------------------------------------------------
-        from datetime import datetime
+        from datetime import datetime, timedelta
         from dateutil.relativedelta import relativedelta
 
         # 設定から締め切り日を取得
@@ -234,24 +236,39 @@ def sinsei(date):
 
         # 🔹 B. 今日の時点で「今月の期限」を過ぎているか判定
         if today > this_month_deadline:
-            # 期限を過ぎたので、募集対象は「翌々月」にバトンタッチ
-            # (1月16日なら、ターゲットは3月)
             recruiting_month = today + relativedelta(months=2)
         else:
-            # 期限内なので、募集対象は「翌月」
-            # (1月14日なら、ターゲットは2月)
             recruiting_month = today + relativedelta(months=1)
 
         # 🔹 C. ユーザーが開いた画面が「募集中の月」と一致するか判定
         is_locked = True
         if target_date_obj.year == recruiting_month.year and target_date_obj.month == recruiting_month.month:
             is_locked = False
-        # 過去の月、当月、および翌々月以降は、is_locked = True のままなので編集できません
+
+        # ---------------------------------------------------
+        # 🆕 日付ナビゲーション用の前日・翌日を計算
+        # ---------------------------------------------------
+        prev_date_obj = target_date_obj - timedelta(days=1)
+        next_date_obj = target_date_obj + timedelta(days=1)
+        
+        prev_date = prev_date_obj.strftime("%Y-%m-%d")
+        next_date = next_date_obj.strftime("%Y-%m-%d")
+        
+        # 前日・翌日がロックされているかチェック
+        def is_date_locked(check_date_obj):
+            return not (check_date_obj.year == recruiting_month.year and 
+                       check_date_obj.month == recruiting_month.month)
+        
+        prev_date_locked = is_date_locked(prev_date_obj)
+        next_date_locked = is_date_locked(next_date_obj)
+        
+        # 表示用の日付フォーマット (MM/DD)
+        prev_date_display = prev_date_obj.strftime("%m/%d")
+        next_date_display = next_date_obj.strftime("%m/%d")
 
         # ---------------------------------------------------
         # 3. 既存のデータ・設定の取得 (表示用)
         # ---------------------------------------------------
-        # 既存シフト希望データの取得
         cursor.execute(
             "SELECT * FROM calendar WHERE ID = %s AND date = %s",
             (user_id, date)
@@ -320,6 +337,7 @@ def sinsei(date):
             work = request.form.get("work")
             start_time = request.form.get("start_time")
             end_time = request.form.get("end_time")
+            save_action = request.form.get("save_action", "return")  # 🆕 保存後のアクション
 
             # バリデーション (出勤希望の場合のみ)
             if work == "1" and start_time and end_time and min_hours > 0:
@@ -331,7 +349,21 @@ def sinsei(date):
                     
                     if diff < min_hours:
                         flash(f"❌ 希望時間が短すぎます。最低 {min_hours} 時間以上入力してください", "danger")
-                        return render_template("sinsei.html", date=date, start_limit=start_limit, end_limit=end_limit, min_hours=min_hours, notice=notice, is_locked=is_locked, current_data=current_data)
+                        return render_template("sinsei.html", 
+                                             date=date, 
+                                             start_limit=start_limit, 
+                                             end_limit=end_limit, 
+                                             min_hours=min_hours, 
+                                             notice=notice, 
+                                             is_locked=is_locked, 
+                                             current_data=current_data,
+                                             prev_date=prev_date,
+                                             next_date=next_date,
+                                             prev_date_locked=prev_date_locked,
+                                             next_date_locked=next_date_locked,
+                                             prev_date_display=prev_date_display,
+                                             next_date_display=next_date_display,
+                                             deadline_day=deadline_day)
                 except ValueError:
                     pass
 
@@ -357,8 +389,13 @@ def sinsei(date):
 
             db.session.commit()
             
-            flash(msg, "success")    
-            return redirect(url_for("calendar.calendar"))
+            flash(msg, "success")
+            
+            # 🆕 保存後のリダイレクト先を選択
+            if save_action == "next" and not next_date_locked:
+                return redirect(url_for("calendar.sinsei", date=next_date))
+            else:
+                return redirect(url_for("calendar.calendar"))
 
         # ---------------------------------------------------
         # 5. 画面表示 (GET)
@@ -371,7 +408,14 @@ def sinsei(date):
                             notice=notice,
                             is_locked=is_locked, 
                             deadline_day=deadline_day,
-                            current_data=current_data)
+                            current_data=current_data,
+                            # 🆕 日付ナビゲーション用のデータ
+                            prev_date=prev_date,
+                            next_date=next_date,
+                            prev_date_locked=prev_date_locked,
+                            next_date_locked=next_date_locked,
+                            prev_date_display=prev_date_display,
+                            next_date_display=next_date_display)
                             
     except Exception as e:
         print(f"Sinsei Error: {e}")

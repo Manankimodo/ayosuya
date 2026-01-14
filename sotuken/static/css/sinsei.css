@@ -1,7 +1,8 @@
 /*
- * Netflix風入力フォームCSS (最終統合版)
+ * Netflix風入力フォームCSS (日付ナビゲーション対応版)
  * - ダークな背景色とNetflixレッドのアクセント
  * - スマートフォンでの操作性を考慮し、入力フィールドのサイズを調整済み
+ * - 日付ナビゲーション機能を追加
  */
 
 /* 背景全体：Netflix風 */
@@ -57,6 +58,79 @@ body {
   letter-spacing: -1px;
 }
 
+/* ================================================= */
+/* 🆕 日付ナビゲーション */
+/* ================================================= */
+.date-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 10px;
+  padding: 15px;
+  background: rgba(40, 40, 40, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(229, 9, 20, 0.3);
+}
+
+.nav-button {
+  padding: 10px 15px;
+  background: linear-gradient(to bottom, #e50914, #b8070f);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: all 0.3s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  text-align: center;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(229, 9, 20, 0.4);
+}
+
+.nav-button:hover {
+  background: linear-gradient(to bottom, #f6121d, #d8080f);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 9, 20, 0.6);
+}
+
+.nav-button:active {
+  transform: translateY(0);
+}
+
+/* ロックされた（無効な）ナビゲーションボタン */
+.nav-button[style*="pointer-events: none"] {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.current-date {
+  font-weight: bold;
+  font-size: 1.1em;
+  color: #e50914;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* 保存オプション（2つのボタン） */
+.save-options {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  flex-direction: column;
+}
+
+.save-options button {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 入力フォーム全体 */
 .form-card {
   display: flex;
@@ -80,18 +154,20 @@ label {
 /* ★調整済み: 入力フィールドとセレクトボックスのパディングとフォントサイズ */
 input, select {
   width: 100%;
-  padding: 12px; /* タッチ操作性を高めるためパディングを増やす */
+  padding: 12px;
   border: none;
   border-radius: 6px;
   background-color: #333;
   color: #fff;
-  font-size: 1em; /* フォントサイズを1emに固定 */
+  font-size: 1em;
   transition: background-color 0.3s;
+  box-sizing: border-box;
 }
 
 input:focus, select:focus {
   background-color: #444;
   outline: none;
+  border: 1px solid rgba(229, 9, 20, 0.5);
 }
 
 /* 保存ボタン */
@@ -105,10 +181,30 @@ input:focus, select:focus {
   cursor: pointer;
   transition: 0.3s;
   margin-top: 10px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(229, 9, 20, 0.4);
 }
 
 .btn:hover {
   background-color: #f6121d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 9, 20, 0.6);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* セカンダリーボタン（次の日へ） */
+.btn-secondary {
+  background: linear-gradient(to bottom, #555, #333);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(to bottom, #666, #444);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
 }
 
 /* 戻るリンク */
@@ -122,6 +218,49 @@ input:focus, select:focus {
 
 .back-link:hover {
   color: #fff;
+  text-decoration: underline;
+}
+
+/* 後で申請するボタン */
+.btn-later {
+  display: block;
+  margin-top: 15px;
+  padding: 12px;
+  background: rgba(60, 60, 60, 0.8);
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  text-decoration: none;
+  text-align: center;
+  font-size: 0.95em;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.btn-later:hover {
+  background: rgba(80, 80, 80, 0.9);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ユーザー情報表示 */
+.user-info {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 8px 15px;
+  font-size: 13px;
+  color: #fffefe;
+  background-color: rgba(43, 43, 43, 0.95);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.user-info p {
+  margin: 0;
 }
 
 /* ================================================= */
@@ -156,6 +295,32 @@ input:focus, select:focus {
         font-size: 1.5em;
     }
 
+    /* 🆕 日付ナビゲーション（スマホ版） */
+    .date-navigation {
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .nav-button {
+        width: 100%;
+        min-width: 0;
+        padding: 12px;
+        font-size: 0.9em;
+    }
+
+    .current-date {
+        font-size: 1em;
+        order: -1; /* 日付を一番上に表示 */
+        margin-bottom: 8px;
+    }
+
+    /* 保存オプション（スマホでは縦並び） */
+    .save-options {
+        flex-direction: column;
+        gap: 8px;
+    }
+
     /* 入力フォーム全体 */
     .form-card {
         gap: 12px; 
@@ -184,21 +349,33 @@ input:focus, select:focus {
         font-size: 0.9em;
         margin-top: 15px;
     }
+
+    /* 後で申請するボタン（スマホ版） */
+    .btn-later {
+        margin-top: 12px;
+        padding: 12px;
+        font-size: 0.95em;
+    }
 }
 
-.user-info {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  padding: 8px 15px;
-  font-size: 13px;
-  color: #fffefe;
-  background-color: rgba(43, 43, 43, 0.95);
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  z-index: 10;
-}
+/* ================================================= */
+/* ▼ タブレット対応（481px〜768px） */
+/* ================================================= */
+@media (min-width: 481px) and (max-width: 768px) {
+    .container {
+        max-width: 500px;
+    }
 
-.user-info p {
-  margin: 0;
+    .date-navigation {
+        padding: 12px;
+    }
+
+    .nav-button {
+        min-width: 100px;
+        font-size: 0.9em;
+    }
+
+    .current-date {
+        font-size: 1.05em;
+    }
 }
