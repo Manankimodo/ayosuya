@@ -634,3 +634,24 @@ h1 {
         margin: 0 auto;
     }
 }
+
+
+/* 通知バッジのスタイル */
+.notification-badge {
+    position: absolute;
+    top: 5px;          /* アイコンの右上に配置 */
+    right: 15px;       /* アイコンの右上に配置 */
+    background-color: #ff5252; /* 通知らしい赤色 */
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 50%; /* 正円にする */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #1a1a1a; /* 背景色（ダークモード用）と境界を作って目立たせる */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 10;
+}

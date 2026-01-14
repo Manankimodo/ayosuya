@@ -25,6 +25,10 @@ def get_user_store_id(user_id):
 # ==========================
 # 🔹 カレンダー画面
 # ==========================
+from datetime import datetime
+
+from datetime import datetime
+
 @calendar_bp.route("/")
 def calendar():
     if "user_id" not in session:
@@ -32,13 +36,58 @@ def calendar():
 
     user_id = session["user_id"]
 
-    sql = text("SELECT date FROM calendar WHERE ID = :user_id")
-    result = db.session.execute(sql, {"user_id": user_id}).fetchall()
+    # 1. ユーザーの店舗IDを取得
+    sql_store = text("SELECT store_id FROM account WHERE ID = :user_id")
+    user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
+    store_id = user_data[0] if user_data else None
+
+    # 2. 希望日リスト取得（既存）
+    sql_dates = text("SELECT date FROM calendar WHERE ID = :user_id")
+    result = db.session.execute(sql_dates, {"user_id": user_id}).fetchall()
     sent_dates = [row[0].strftime("%Y-%m-%d") for row in result]
 
-    return render_template("calendar.html", sent_dates=sent_dates or [])
+    # 3. シフトの公開状態と更新日時を確認
+    target_month = "2026-02" 
+    sql_publish = text("""
+        SELECT is_published, updated_at FROM shift_publish_status 
+        WHERE store_id = :store_id AND target_month = :target_month
+    """)
+    publish_res = db.session.execute(sql_publish, {
+        "store_id": store_id, 
+        "target_month": target_month
+    }).fetchone()
+    
+    # 4. 📢 修正：エラーを回避し、再公開に対応する判定ロジック
+    has_new_shift = False
+    
+    # publish_res が存在し、かつ is_published が 1 (公開中) の場合
+    if publish_res and publish_res[0] == 1:
+        # DBの更新時間を取得し、比較のためにタイムゾーン情報を除去(Naive化)
+        db_updated_at = publish_res[1]
+        if db_updated_at and db_updated_at.tzinfo is not None:
+            db_updated_at = db_updated_at.replace(tzinfo=None)
+            
+        last_viewed_at = session.get("last_viewed_at")
 
+        if not last_viewed_at:
+            # まだ一度も確定シフトを見ていないなら表示
+            has_new_shift = True
+        else:
+            # セッションの時間もタイムゾーン情報を除去して比較
+            if last_viewed_at.tzinfo is not None:
+                last_viewed_at = last_viewed_at.replace(tzinfo=None)
+            
+            # DBの更新時間が、最後に見た時間より新しければ表示（再公開対応）
+            if db_updated_at > last_viewed_at:
+                has_new_shift = True
 
+    return render_template(
+        "calendar.html", 
+        sent_dates=sent_dates or [],
+        has_new_shift=has_new_shift,
+        store_id=store_id,
+        user_name=session.get("user_name")
+    )
 # どのファイルにあるか確認してください（おそらく calendar_page.py）
 # calendar_page.py (または makeshift.py)
 
@@ -301,9 +350,13 @@ def sinsei(date):
 def my_confirmed_shift():
     if "user_id" not in session:
         return redirect(url_for("login.login"))
+    
+    # タイムゾーンなしの現在時刻を保存
+    from datetime import datetime
+    session["last_viewed_at"] = datetime.now()
+    
     user_id = session["user_id"]
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
-
 # ==========================
 # 🔹 店長のヘルプ希望申請 (変更なし)
 # ==========================
