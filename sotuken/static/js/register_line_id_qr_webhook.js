@@ -105,15 +105,24 @@ function showMessage(message, type) {
 function goHome() {
   if (pollInterval) clearInterval(pollInterval);
   
-  // window.LINE_CONFIGから値を取得
-  const effectiveRole = window.LINE_CONFIG.selectedRole || window.LINE_CONFIG.userRole;
-  
+  const role = window.LINE_CONFIG.userRole;
+  const selRole = window.LINE_CONFIG.selectedRole;
+  const effectiveRole = selRole || role;
+
+  // 1. まずコンソールで何が起きているか見る
+  console.log("Debug Info:", { role, selRole, effectiveRole });
+
   if (effectiveRole === 'manager') {
-    // 管理者画面へ
     window.location.href = window.LINE_CONFIG.managerHomeUrl;
-  } else {
-    // 従業員画面へ
+    return;
+  } 
+  
+  // 2. staff、またはそれ以外の従業員の場合
+  if (window.LINE_CONFIG.calendarUrl) {
     window.location.href = window.LINE_CONFIG.calendarUrl;
+  } else {
+    // URL自体が渡ってきていない場合のフォールバック
+    window.location.href = '/'; 
   }
 }
 
