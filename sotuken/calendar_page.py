@@ -29,6 +29,11 @@ from datetime import datetime
 
 from datetime import datetime
 
+from flask import render_template, session, redirect, url_for, request
+from sqlalchemy import text
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
 @calendar_bp.route("/")
 def calendar():
     if "user_id" not in session:
@@ -41,13 +46,58 @@ def calendar():
     user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
     store_id = user_data[0] if user_data else None
 
-    # 2. 希望日リスト取得（既存）
+    if not store_id:
+        return "店舗情報が見つかりません", 404
+
+    # --- 🌟 2. 募集中のターゲット月を自動計算するロジック ---
+    # 設定から締め切り日を取得
+    sql_deadline = text("SELECT deadline_day FROM shift_settings WHERE store_id = :store_id")
+    setting = db.session.execute(sql_deadline, {"store_id": store_id}).fetchone()
+    deadline_day = setting[0] if setting and setting[0] else 20
+
+    today = datetime.now()
+    # 今月の締め切り日時（例: 1月13日 23:59:59）
+    this_month_deadline = today.replace(day=deadline_day, hour=23, minute=59, second=59)
+
+    if today > this_month_deadline:
+        # 期限を過ぎたので「翌々月」を表示 (例: 1/14なら3月分)
+        target_month = (today + relativedelta(months=2)).strftime("%Y-%m")
+    else:
+        # 期限内なので「翌月」を表示 (例: 1/12なら2月分)
+        target_month = (today + relativedelta(months=1)).strftime("%Y-%m")
+
+    # --- 🌟 3. グラフに表示するデータをターゲット月に絞って取得 ---
+    # ここで target_month を使うことで、期限切れの月のグラフは出なくなります
+    sql_shifts = text("""
+        SELECT c.*, a.name as user_name 
+        FROM calendar c
+        JOIN account a ON c.ID = a.ID
+        WHERE a.store_id = :store_id 
+        AND DATE_FORMAT(c.date, '%Y-%m') = :target_month
+    """)
+    shift_results = db.session.execute(sql_shifts, {
+        "store_id": store_id, 
+        "target_month": target_month
+    }).fetchall()
+
+    # JavaScript (Chart.js) が読める形式に変換
+    shifts_for_js = []
+    for s in shift_results:
+        shifts_for_js.append({
+            "user_id": s.ID,
+            "user_name": s.user_name,
+            "date": s.date.strftime("%Y-%m-%d"),
+            "start_time": str(s.start_time)[:5] if s.start_time else "00:00",
+            "end_time": str(s.end_time)[:5] if s.end_time else "00:00",
+            "type": "出勤" if s.work == 1 else "休み"
+        })
+
+    # 4. 希望日リスト取得（ドット表示用などは全期間でもOKですが、月を絞るならここも調整）
     sql_dates = text("SELECT date FROM calendar WHERE ID = :user_id")
     result = db.session.execute(sql_dates, {"user_id": user_id}).fetchall()
     sent_dates = [row[0].strftime("%Y-%m-%d") for row in result]
 
-    # 3. シフトの公開状態と更新日時を確認
-    target_month = "2026-02" 
+    # 5. シフトの公開状態と通知判定 (target_monthと連動)
     sql_publish = text("""
         SELECT is_published, updated_at FROM shift_publish_status 
         WHERE store_id = :store_id AND target_month = :target_month
@@ -57,36 +107,24 @@ def calendar():
         "target_month": target_month
     }).fetchone()
     
-    # 4. 📢 修正：エラーを回避し、再公開に対応する判定ロジック
     has_new_shift = False
-    
-    # publish_res が存在し、かつ is_published が 1 (公開中) の場合
     if publish_res and publish_res[0] == 1:
-        # DBの更新時間を取得し、比較のためにタイムゾーン情報を除去(Naive化)
-        db_updated_at = publish_res[1]
-        if db_updated_at and db_updated_at.tzinfo is not None:
-            db_updated_at = db_updated_at.replace(tzinfo=None)
-            
+        db_updated_at = publish_res[1].replace(tzinfo=None) if publish_res[1] else None
         last_viewed_at = session.get("last_viewed_at")
-
-        if not last_viewed_at:
-            # まだ一度も確定シフトを見ていないなら表示
-            has_new_shift = True
-        else:
-            # セッションの時間もタイムゾーン情報を除去して比較
-            if last_viewed_at.tzinfo is not None:
-                last_viewed_at = last_viewed_at.replace(tzinfo=None)
+        if last_viewed_at:
+            last_viewed_at = last_viewed_at.replace(tzinfo=None) if hasattr(last_viewed_at, 'replace') else last_viewed_at
             
-            # DBの更新時間が、最後に見た時間より新しければ表示（再公開対応）
-            if db_updated_at > last_viewed_at:
-                has_new_shift = True
+        if not last_viewed_at or (db_updated_at and db_updated_at > last_viewed_at):
+            has_new_shift = True
 
     return render_template(
         "calendar.html", 
         sent_dates=sent_dates or [],
         has_new_shift=has_new_shift,
         store_id=store_id,
-        user_name=session.get("user_name")
+        user_name=session.get("user_name"),
+        target_month=target_month,
+        shifts_js=shifts_for_js  # これをテンプレートの flaskData に渡す
     )
 # どのファイルにあるか確認してください（おそらく calendar_page.py）
 # calendar_page.py (または makeshift.py)
