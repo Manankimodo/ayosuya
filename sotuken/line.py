@@ -282,19 +282,20 @@ def check_line_id_registration():
 
 
 # ==========================================
-# 🚑 ヘルプ募集機能 (ワンタップ配信システム)
+# 🚑 ヘルプ募集機能 (ワンタップ配信システム) ★改善版★
 # ==========================================
 
 @line_bp.route("/api/help/create", methods=["POST"])
 def create_help_request():
     """
     店長用: ヘルプ募集を作成し、通知対象（空いているスタッフ）をリストアップするAPI
-    改善: 店舗ごとに通知を送り分け
+    ★改善: position_id を追加して、ポジション指定を可能に★
     """
     data = request.json
     target_date = data.get("date")
     start_time_str = data.get("start_time")
     end_time_str = data.get("end_time")
+    position_id = data.get("position_id")  # ★新規追加★
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -302,7 +303,7 @@ def create_help_request():
     try:
         conn.start_transaction()
 
-        # 0. 【新規】店長のstore_idを取得
+        # 0. 店長のstore_idを取得
         if "user_id" not in session:
             return jsonify({"error": "ログインしてください"}), 401
         
@@ -319,11 +320,18 @@ def create_help_request():
         manager_store_id = manager_data['store_id']
         print(f"📍 店長の店舗ID: {manager_store_id}")
 
-        # 1. 募集データをDBに登録
+        # ★ポジション名を取得★
         cursor.execute("""
-            INSERT INTO help_requests (date, start_time, end_time, status)
-            VALUES (%s, %s, %s, 'open')
-        """, (target_date, start_time_str, end_time_str))
+            SELECT name FROM positions WHERE id = %s
+        """, (position_id,))
+        position_data = cursor.fetchone()
+        position_name = position_data['name'] if position_data else "未指定"
+
+        # 1. 募集データをDBに登録（★position_idを追加★）
+        cursor.execute("""
+            INSERT INTO help_requests (date, start_time, end_time, position_id, status)
+            VALUES (%s, %s, %s, %s, 'open')
+        """, (target_date, start_time_str, end_time_str, position_id))
         request_id = cursor.lastrowid
         
         # 2. 募集を shift_table に「pending」ステータスで登録
@@ -333,7 +341,7 @@ def create_help_request():
         """, (target_date, start_time_str, end_time_str))
         help_shift_id = cursor.lastrowid
         
-        # 3. 【修正】「その時間にすでにシフトが入っている人」を除外（同じ店舗のみ）
+        # 3. 「その時間にすでにシフトが入っている人」を除外（同じ店舗のみ）
         cursor.execute("""
             SELECT DISTINCT s.user_id 
             FROM shift_table s
@@ -346,12 +354,14 @@ def create_help_request():
         
         busy_users = [str(row['user_id']) for row in cursor.fetchall()]
 
-        # 4. 【修正】同じ店舗のユーザーのみを抽出
+        # 4. ★該当ポジションのスキルを持つユーザーのみを抽出★
         cursor.execute("""
-            SELECT ID, name, line_id, store_id 
-            FROM account 
-            WHERE store_id = %s
-        """, (manager_store_id,))
+            SELECT a.ID, a.name, a.line_id, a.store_id 
+            FROM account a
+            JOIN user_positions up ON a.ID = up.user_id
+            WHERE a.store_id = %s
+            AND up.position_id = %s
+        """, (manager_store_id, position_id))
         all_staff = cursor.fetchall()
         
         # 5. 通知対象をフィルタリング
@@ -365,7 +375,7 @@ def create_help_request():
             if staff.get('line_id'):
                 eligible_staff.append(staff)
 
-        print(f"--- 📍 店舗ID {manager_store_id} の通知対象スタッフ数: {len(eligible_staff)}人 ---")
+        print(f"--- 📍 店舗ID {manager_store_id} / ポジション: {position_name} の通知対象スタッフ数: {len(eligible_staff)}人 ---")
         print(f"--- 忙しいスタッフ: {busy_users}")
 
         # 6. ターゲットのスタッフにLINE通知を送信
@@ -377,6 +387,7 @@ def create_help_request():
             "date": target_date,
             "start_time": start_time_str,
             "end_time": end_time_str,
+            "position_name": position_name,  # ★ポジション名を追加★
             "request_id": request_id
         }
 
@@ -395,11 +406,12 @@ def create_help_request():
         conn.commit()
 
         return jsonify({
-            "message": f"店舗ID {manager_store_id} のスタッフに募集を送信しました。",
+            "message": f"店舗ID {manager_store_id} の {position_name} スタッフに募集を送信しました。",
             "request_id": request_id,
             "help_shift_id": help_shift_id,
             "target_count": target_count,
-            "store_id": manager_store_id
+            "store_id": manager_store_id,
+            "position_name": position_name
         })
 
     except Exception as e:
@@ -416,6 +428,7 @@ def create_help_request():
 def accept_help_request():
     """
     スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
+    ★改善: position_idに基づいてシフトタイプを設定★
     """
     data = request.json
     req_id = data.get("request_id")
@@ -438,27 +451,39 @@ def accept_help_request():
             conn.rollback()
             return jsonify({"status": "failed", "message": "タッチの差で募集が埋まってしまいました🙇‍♂️"}), 409
 
-        # 2. 募集情報を取得
-        cursor.execute("SELECT date, start_time, end_time FROM help_requests WHERE id = %s", (req_id,))
+        # 2. 募集情報を取得（★position_idを含む★）
+        cursor.execute("""
+            SELECT date, start_time, end_time, position_id 
+            FROM help_requests 
+            WHERE id = %s
+        """, (req_id,))
         req_data = cursor.fetchone()
 
-        # 3. shift_table の help_pending を確定シフトに更新
+        # ★ポジション名を取得★
+        cursor.execute("""
+            SELECT name FROM positions WHERE id = %s
+        """, (req_data['position_id'],))
+        position_data = cursor.fetchone()
+        position_name = position_data['name'] if position_data else "ヘルプ"
+
+        # 3. shift_table の help_pending を確定シフトに更新（★typeにポジション名を設定★）
         cursor.execute("""
             UPDATE shift_table
-            SET user_id = %s, type = 'help'
+            SET user_id = %s, type = %s
             WHERE date = %s 
             AND start_time = %s 
             AND end_time = %s 
             AND type = 'help_pending'
             AND user_id IS NULL
             LIMIT 1
-        """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+        """, (user_id, position_name, req_data['date'], req_data['start_time'], req_data['end_time']))
 
         if cursor.rowcount == 0:
+            # pending がなかった場合は新規作成
             cursor.execute("""
                 INSERT INTO shift_table (user_id, date, start_time, end_time, type)
-                VALUES (%s, %s, %s, %s, 'help')
-            """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time'], position_name))
 
         # 4. calendar テーブルに出勤情報を登録
         cursor.execute("""
@@ -478,7 +503,7 @@ def accept_help_request():
 
         return jsonify({
             "status": "success", 
-            "message": "シフトが確定しました！ありがとうございます！"
+            "message": f"シフトが確定しました！\n役割: {position_name}\nありがとうございます！"
         })
 
     except Exception as e:
@@ -492,20 +517,25 @@ def accept_help_request():
 
 
 # ==========================================
-# 🙋‍♂️ ヘルプ応募画面の表示
+# 🙋‍♂️ ヘルプ応募画面の表示 ★改善版★
 # ==========================================
 
 @line_bp.route("/help/respond/<int:request_id>", methods=["GET"])
 def help_respond_page(request_id):
     """
     スタッフ用: ヘルプ募集の詳細を表示し、応募ボタンを提供する画面
+    ★改善: position_nameを表示★
     """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
+        # ★募集データとポジション名を結合して取得★
         cursor.execute("""
-            SELECT * FROM help_requests WHERE id = %s
+            SELECT hr.*, p.name as position_name
+            FROM help_requests hr
+            LEFT JOIN positions p ON hr.position_id = p.id
+            WHERE hr.id = %s
         """, (request_id,))
         request_data = cursor.fetchone()
     
@@ -527,6 +557,38 @@ def help_respond_page(request_id):
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": "サーバー内部エラー"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ==========================================
+# 📋 ポジション一覧取得API（ヘルプモーダル用）
+# ==========================================
+
+@line_bp.route("/api/positions", methods=["GET"])
+def get_positions():
+    """
+    ポジション一覧を取得するAPI
+    ヘルプモーダルのドロップダウンで使用
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("""
+            SELECT id, name 
+            FROM positions 
+            ORDER BY id
+        """)
+        positions = cursor.fetchall()
+        
+        return jsonify(positions), 200
+    
+    except Exception as e:
+        print(f"❌ Error getting positions: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "ポジション取得に失敗しました"}), 500
+    
     finally:
         cursor.close()
         conn.close()
