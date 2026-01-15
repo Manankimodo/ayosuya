@@ -105,28 +105,45 @@ function showMessage(message, type) {
 function goHome() {
   if (pollInterval) clearInterval(pollInterval);
   
-  const role = window.LINE_CONFIG.userRole;
-  const selRole = window.LINE_CONFIG.selectedRole;
+  const role = window.LINE_CONFIG.userRole || '';
+  const selRole = window.LINE_CONFIG.selectedRole || '';
+  
+  // ★ selected_roleが設定されている場合は、それを優先（管理者が従業員として入っている場合）
+  // selected_roleが空の場合は、通常のroleを使用
   const effectiveRole = selRole || role;
 
-  // 1. まずコンソールで何が起きているか見る
-  console.log("Debug Info:", { role, selRole, effectiveRole });
+  // デバッグ用ログ
+  console.log("🔍 LINE ID登録後の遷移先判定:", { 
+    userRole: role,
+    selectedRole: selRole,
+    effectiveRole: effectiveRole,
+    判定結果: selRole ? '「従業員として入る」モード' : '通常ログイン'
+  });
 
-  if (effectiveRole === 'manager') {
+  // 管理者判定（'manager'、'admin'、'administrator' などに対応）
+  const isManager = ['manager', 'admin', 'administrator'].includes(effectiveRole.toLowerCase());
+  
+  if (isManager) {
+    console.log("✅ 管理者として管理画面に遷移:", window.LINE_CONFIG.managerHomeUrl);
     window.location.href = window.LINE_CONFIG.managerHomeUrl;
     return;
-  } 
+  }
   
-  // 2. staff、またはそれ以外の従業員の場合
+  // 従業員の場合
   if (window.LINE_CONFIG.calendarUrl) {
+    console.log("✅ 従業員としてカレンダーに遷移:", window.LINE_CONFIG.calendarUrl);
     window.location.href = window.LINE_CONFIG.calendarUrl;
   } else {
-    // URL自体が渡ってきていない場合のフォールバック
-    window.location.href = '/'; 
+    console.warn("⚠️ カレンダーURLが設定されていません。ルートにリダイレクトします。");
+    window.location.href = '/calendar';
   }
 }
 
 function skipRegistration() {
-  if (pollInterval) clearInterval(pollInterval);
+  console.log("⏭️ LINE ID登録をスキップしました");
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    registrationInProgress = false;
+  }
   goHome();
 }

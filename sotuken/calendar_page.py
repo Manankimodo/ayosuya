@@ -117,6 +117,9 @@ def calendar():
         if not last_viewed_at or (db_updated_at and db_updated_at > last_viewed_at):
             has_new_shift = True
 
+    # ★ return_monthパラメータを取得（シフト提出後の戻り先指定用）
+    return_month = request.args.get('month', '')
+
     return render_template(
         "calendar.html", 
         sent_dates=sent_dates or [],
@@ -124,7 +127,8 @@ def calendar():
         store_id=store_id,
         user_name=session.get("user_name"),
         target_month=target_month,
-        shifts_js=shifts_for_js  # これをテンプレートの flaskData に渡す
+        shifts_js=shifts_for_js,
+        return_month=return_month  # ★ JavaScriptでURLパラメータとして使用
     )
 # どのファイルにあるか確認してください（おそらく calendar_page.py）
 # calendar_page.py (または makeshift.py)

@@ -64,8 +64,8 @@
   </div>
 
   <!-- ★ FlaskのURLを渡すためのスクリプト（HTML内に残す） -->
+
   <script>
-    // FlaskのURL_forで生成したURLをJavaScriptに渡す
     window.LINE_CONFIG = {
       startRegistrationUrl: "{{ url_for('line.start_line_id_registration') }}",
       checkRegistrationUrl: "{{ url_for('line.check_line_id_registration') }}",
@@ -75,6 +75,7 @@
       userRole: "{{ session.get('role', '') }}"
     };
   </script>
+
   
   <!-- ★ 外部JSファイルを読み込む -->
   <script src="{{ url_for('static', filename='js/register_line_id_qr_webhook.js') }}"></script>
