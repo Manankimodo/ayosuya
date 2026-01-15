@@ -58,6 +58,18 @@
             margin-left: 5px;
         }
 
+        /* ★ポジション名のバッジスタイル★ */
+        .position-badge {
+            font-size: 1.2rem;
+            font-weight: 700;
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
         /* 6. ローディング画面（最初は隠す） */
         .loading-overlay { 
             position: absolute;
@@ -95,7 +107,8 @@
 
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-5"> <div class="card p-4 position-relative">
+        <div class="col-md-6 col-lg-5">
+            <div class="card p-4 position-relative">
                 
                 <div class="text-center">
                     <h3 class="mb-4">🚨 ヘルプ募集</h3>
@@ -123,9 +136,14 @@
                     </div>
                 </div>
                 
-                <div class="mb-4">
+                <!-- ★ポジション名を目立つバッジで表示★ -->
+                <div class="mb-4 text-center">
                     <label class="form-label text-muted">募集ポジション</label>
-                    <p class="fs-5 ms-2">{{ req.position_id }}</p>
+                    <div>
+                        <span class="position-badge">
+                            {{ req.position_name or '未指定' }}
+                        </span>
+                    </div>
                 </div>
 
                 <hr class="my-4">
@@ -200,7 +218,7 @@
             if (response.ok && result.status === 'success') {
                 messageArea.classList.remove('d-none', 'alert-danger', 'alert-warning');
                 messageArea.classList.add('alert-success');
-                messageArea.innerHTML = "🎉 **シフトが確定しました！**";
+                messageArea.innerHTML = result.message || "🎉 **シフトが確定しました！**";
                 btn.innerText = "応募完了";
                 setTimeout(() => { location.reload(); }, 1500); 
             } else {

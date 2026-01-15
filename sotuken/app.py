@@ -129,8 +129,7 @@ if __name__ == "__main__":
     print("="*30 + "\n")
     # ▲▲▲ 追加する魔法のコード（ここまで） ▲▲▲
 
-    # use_reloader=False のままでOKです
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    # 1行にまとめる（reloaderをTrueにする）
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True)
 
 # どの画面の render_template でも has_new_shift が使えるようにする
