@@ -88,6 +88,8 @@ def login():
             }
             session['user_id'] = staff.id
             session['role'] = staff.role
+            session['user_name'] = staff.name  # ★ この行を追加
+            session['store_id'] = staff.store_id  # ★ この行も追加
             return redirect(url_for("calendar.calendar"))
 
         # 3. ログイン失敗
@@ -131,6 +133,8 @@ def confirm_role():
     session['user_id'] = temp_user['id']
     session['role'] = temp_user['role']  # 元のrole（manager）
     session['selected_role'] = selected_role  # ★ 選択したロールを保存
+    session['user_name'] = temp_user['name']  # ★ この行を追加
+    session['store_id'] = temp_user['store_id']  # ★ この行も追加
     
     # 一時保存データを削除
     session.pop('temp_user', None)
