@@ -67,7 +67,7 @@ body {
     background-color: #0c0c0c; 
     scroll-behavior: smooth;
     padding-top: 80px; /* ヘッダー分の余白 */
-    padding-bottom: 170px; /* フォーム + ボトムナビ分の余白 */
+    padding-bottom: 190px; /* フォーム + ボトムナビ分の余白（増加） */
 }
 
 /* 吹き出し全体 */
@@ -129,7 +129,7 @@ body {
 /* === ✏️ 入力フォーム (画面下固定) === */
 form, #chat-form {
     position: fixed; 
-    bottom: 70px; /* ボトムナビの上に配置 */
+    bottom: 85px; /* ボトムナビの上に配置（余裕を持たせる） */
     left: 0;
     width: 100%; 
     padding: 12px 12px; 
@@ -140,7 +140,7 @@ form, #chat-form {
     align-items: center;
     gap: 8px; 
     z-index: 50;
-    padding-bottom: max(12px, env(safe-area-inset-bottom) + 12px);
+    padding-bottom: 12px;
 }
 
 input[type="text"], #question {
@@ -314,7 +314,7 @@ button:active {
     form, #chat-form {
         padding: 10px 10px;
         gap: 6px;
-        bottom: 65px;
+        bottom: 75px; /* スマホでも十分な余裕を確保 */
     }
 
     input[type="text"], #question {
@@ -335,7 +335,7 @@ button:active {
 
     .chat-container {
         padding-top: 70px;
-        padding-bottom: 155px;
+        padding-bottom: 170px; /* スマホでのチャットエリア下部余白を調整 */
     }
 
     .nav-icon {
