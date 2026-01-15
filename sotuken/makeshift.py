@@ -1353,6 +1353,7 @@ def auto_calendar():
                                settings=error_settings, 
                                shifts=[], 
                                message=f"❌ エラーが発生しました: {str(e)}")
+
 @makeshift_bp.route("/toggle_lock", methods=["POST"])
 def toggle_lock():
     data = request.json
