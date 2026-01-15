@@ -424,15 +424,21 @@ def create_help_request():
         conn.close()
 
 
+# デバッグ版: accept_help_request関数
+
 @line_bp.route("/api/help/accept", methods=["POST"])
 def accept_help_request():
     """
-    スタッフ用: ヘルプに応募するAPI (早い者勝ちロジック)
-    ★改善: position_idに基づいてシフトタイプを設定★
+    スタッフ用: ヘルプに応募するAPI
+    ★改善版: 不足データを削除する処理を追加★
     """
     data = request.json
     req_id = data.get("request_id")
     user_id = data.get("user_id")
+
+    print(f"\n========== ヘルプ応募開始 ==========")
+    print(f"request_id: {req_id}")
+    print(f"user_id: {user_id}")
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -440,7 +446,8 @@ def accept_help_request():
     try:
         conn.start_transaction()
 
-        # 1. 【重要】早い者勝ち判定
+        # 1. 早い者勝ち判定
+        print(f"\n--- ステップ1: 早い者勝ち判定 ---")
         cursor.execute("""
             UPDATE help_requests 
             SET status = 'closed', accepted_by = %s
@@ -449,24 +456,31 @@ def accept_help_request():
         
         if cursor.rowcount == 0:
             conn.rollback()
+            print(f"❌ 早い者勝ちで失敗")
             return jsonify({"status": "failed", "message": "タッチの差で募集が埋まってしまいました🙇‍♂️"}), 409
 
-        # 2. 募集情報を取得（★position_idを含む★）
+        # 2. 募集情報を取得
+        print(f"\n--- ステップ2: 募集情報取得 ---")
         cursor.execute("""
             SELECT date, start_time, end_time, position_id 
             FROM help_requests 
             WHERE id = %s
         """, (req_id,))
         req_data = cursor.fetchone()
+        print(f"募集データ: {req_data}")
 
-        # ★ポジション名を取得★
-        cursor.execute("""
-            SELECT name FROM positions WHERE id = %s
-        """, (req_data['position_id'],))
-        position_data = cursor.fetchone()
-        position_name = position_data['name'] if position_data else "ヘルプ"
+        # ポジション名を取得
+        position_name = "ヘルプ"
+        if req_data.get('position_id'):
+            cursor.execute("""
+                SELECT name FROM positions WHERE id = %s
+            """, (req_data['position_id'],))
+            position_data = cursor.fetchone()
+            position_name = position_data['name'] if position_data else "ヘルプ"
+            print(f"ポジション名: {position_name}")
 
-        # 3. shift_table の help_pending を確定シフトに更新（★typeにポジション名を設定★）
+        # 3. shift_tableを更新
+        print(f"\n--- ステップ3: shift_table更新 ---")
         cursor.execute("""
             UPDATE shift_table
             SET user_id = %s, type = %s
@@ -478,28 +492,99 @@ def accept_help_request():
             LIMIT 1
         """, (user_id, position_name, req_data['date'], req_data['start_time'], req_data['end_time']))
 
-        if cursor.rowcount == 0:
-            # pending がなかった場合は新規作成
+        update_count = cursor.rowcount
+        print(f"UPDATE実行: 影響を受けた行数 = {update_count}")
+
+        if update_count == 0:
+            print(f"⚠️ help_pendingが見つからなかったため、新規INSERT")
             cursor.execute("""
                 INSERT INTO shift_table (user_id, date, start_time, end_time, type)
                 VALUES (%s, %s, %s, %s, %s)
             """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time'], position_name))
+            print(f"INSERT実行: ID = {cursor.lastrowid}")
 
-        # 4. calendar テーブルに出勤情報を登録
+        # ========================================================
+        # ★ステップ3.5: 該当する不足データを削除★
+        # ========================================================
+        print(f"\n--- ステップ3.5: 不足データ削除 ---")
+        
+        # 削除前に確認
         cursor.execute("""
-            SELECT ID FROM calendar 
+            SELECT id, user_id, type 
+            FROM shift_table
+            WHERE date = %s 
+            AND start_time = %s 
+            AND end_time = %s 
+            AND CAST(user_id AS SIGNED) < 0
+        """, (req_data['date'], req_data['start_time'], req_data['end_time']))
+        shortage_before = cursor.fetchall()
+        print(f"削除前の不足データ: {shortage_before}")
+        
+        # 不足データを削除（該当ポジションのみ）
+        # 例: "🚨 ホール不足 (1)" のようなtypeを削除
+        cursor.execute("""
+            DELETE FROM shift_table
+            WHERE date = %s 
+            AND start_time = %s 
+            AND end_time = %s 
+            AND CAST(user_id AS SIGNED) < 0
+            AND type LIKE %s
+            LIMIT 1
+        """, (req_data['date'], req_data['start_time'], req_data['end_time'], f'%{position_name}%'))
+        
+        deleted_count = cursor.rowcount
+        print(f"削除した不足データ: {deleted_count}件")
+        
+        # 削除後に確認
+        cursor.execute("""
+            SELECT id, user_id, type 
+            FROM shift_table
+            WHERE date = %s 
+            AND start_time = %s 
+            AND end_time = %s 
+            AND CAST(user_id AS SIGNED) < 0
+        """, (req_data['date'], req_data['start_time'], req_data['end_time']))
+        shortage_after = cursor.fetchall()
+        print(f"削除後の不足データ: {shortage_after}")
+
+        # 4. calendar テーブルに登録
+        print(f"\n--- ステップ4: calendar登録 ---")
+        cursor.execute("""
+            SELECT ID, date, work, start_time, end_time 
+            FROM calendar 
             WHERE ID = %s AND date = %s
         """, (user_id, req_data['date']))
         
         existing_calendar = cursor.fetchone()
+        print(f"既存のcalendarレコード: {existing_calendar}")
         
         if not existing_calendar:
+            print(f"calendarに新規INSERT")
             cursor.execute("""
                 INSERT INTO calendar (ID, date, work, start_time, end_time)
                 VALUES (%s, %s, 1, %s, %s)
             """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time']))
+        else:
+            print(f"既にcalendarにレコードが存在")
+
+        # コミット前の最終確認
+        print(f"\n--- コミット前の最終確認 ---")
+        cursor.execute("""
+            SELECT 
+                s.id, s.user_id, a.name as user_name, 
+                s.date, s.start_time, s.end_time, s.type
+            FROM shift_table s
+            LEFT JOIN account a ON s.user_id = a.ID
+            WHERE s.date = %s 
+            AND s.start_time = %s 
+            AND s.end_time = %s
+        """, (req_data['date'], req_data['start_time'], req_data['end_time']))
+        final_shifts = cursor.fetchall()
+        print(f"コミット前のshift_table: {final_shifts}")
 
         conn.commit()
+        print(f"\n✅ コミット成功")
+        print(f"========== ヘルプ応募完了 ==========\n")
 
         return jsonify({
             "status": "success", 
@@ -514,7 +599,6 @@ def accept_help_request():
     finally:
         cursor.close()
         conn.close()
-
 
 # ==========================================
 # 🙋‍♂️ ヘルプ応募画面の表示 ★改善版★
