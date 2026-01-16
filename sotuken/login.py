@@ -183,17 +183,18 @@ def staff_home():
     )
 
 ## ----------------------------------------------------
-## ログアウト処理
+## ログアウト処理 (login.py)
 ## ----------------------------------------------------
 @login_bp.route('/logout') 
 def logout():
-    # セッション内の認証情報をクリアする
     session.pop('user_id', None)
     session.pop('role', None)
     session.pop('user', None)
-    session.pop('temp_user', None)  # 一時データも削除
+    session.pop('temp_user', None)
 
-    flash("ログアウトしました", "success") 
+    # 🌟 "success" を "danger" に書き換える
+    # 今のHTMLは category != 'success' のものだけを表示するので、これで表示されます
+    flash("ログアウトしました", "danger") 
     
     return redirect(url_for("login.login"))
 

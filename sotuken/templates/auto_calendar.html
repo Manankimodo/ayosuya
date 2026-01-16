@@ -417,6 +417,10 @@
         <label>📅 日付:</label> <input type="date" id="helpDate" class="form-control">
         <label>⏰ 開始:</label> <input type="time" id="helpStart" class="form-control">
         <label>🏁 終了:</label> <input type="time" id="helpEnd" class="form-control">
+        <label>👤 募集ポジション:</label>
+        <select id="helpPosition" class="form-control">
+            <option value="">読み込み中...</option>
+        </select>
         <div class="modal-actions">
             <button onclick="closeHelpModal()" class="btn secondary">キャンセル</button>
             <button onclick="submitHelpRequest()" class="btn danger">配信</button>
@@ -425,47 +429,97 @@
   </div>
 
  
-  <script>
-    function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
-    function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
-    
-    async function submitHelpRequest() {
-        const helpDate = document.getElementById('helpDate').value;
-        const helpStart = document.getElementById('helpStart').value;
-        const helpEnd = document.getElementById('helpEnd').value;
+    <script>
+    // ★モーダル表示時にポジションリストを取得★
+    function openHelpModal() {
+        document.getElementById('helpModal').style.display = 'flex';
         
-        if (!helpDate || !helpStart || !helpEnd) {
-            alert('日付と時間をすべて入力してください。');
-            return;
-        }
- 
-        const btn = document.querySelector('#helpModal .btn.danger');
-        const originalText = btn.innerText;
-        btn.disabled = true;
-        btn.innerText = '配信中...';
- 
+        // 今日の日付をデフォルト設定
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('helpDate').value = today;
+        
+        // ポジションリストを取得
+        loadPositions();
+    }
+
+    function closeHelpModal() {
+        document.getElementById('helpModal').style.display = 'none';
+    }
+
+    // ★ポジションリストをDBから取得★
+    async function loadPositions() {
+        const selectElement = document.getElementById('helpPosition');
+        
         try {
-            const response = await fetch("{{ url_for('line.create_help_request') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date: helpDate, start_time: helpStart, end_time: helpEnd })
+            const response = await fetch('/line/api/positions'); // ✅ これでBlueprintのルートと一致します // positions取得API
+            const positions = await response.json();
+            
+            // セレクトボックスをクリア
+            selectElement.innerHTML = '<option value="">-- ポジションを選択 --</option>';
+            
+            // ポジションを追加
+            positions.forEach(pos => {
+                const option = document.createElement('option');
+                option.value = pos.id;
+                option.textContent = pos.name;
+                selectElement.appendChild(option);
             });
-            const result = await response.json();
- 
-            closeHelpModal();
-            if (response.ok) {
-                alert(`🎉 募集を配信しました! (${result.target_count} 名に通知)`);
-            } else {
-                alert(`❌ 配信失敗: ${result.error || '不明なエラー'}`);
-            }
+            
         } catch (error) {
-            console.error('API Error:', error);
-            alert('通信中にエラーが発生しました。');
-        } finally {
-            btn.disabled = false;
-            btn.innerText = originalText;
+            console.error('ポジション取得エラー:', error);
+            selectElement.innerHTML = '<option value="">読み込み失敗</option>';
         }
     }
-  </script>
+
+    // ★ヘルプ募集送信（position_idを含める）★
+    async function submitHelpRequest() {
+        const date = document.getElementById('helpDate').value;
+        const start = document.getElementById('helpStart').value;
+        const end = document.getElementById('helpEnd').value;
+        const positionId = document.getElementById('helpPosition').value;
+        
+        // バリデーション
+        if (!date || !start || !end) {
+            alert('日付と時間を入力してください');
+            return;
+        }
+        
+        if (!positionId) {
+            alert('ポジションを選択してください');
+            return;
+        }
+        
+        if (start >= end) {
+            alert('終了時刻は開始時刻より後にしてください');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/line/api/help/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: date,
+                    start_time: start,
+                    end_time: end,
+                    position_id: parseInt(positionId)  // ★ポジションIDを送信★
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert(`✅ ${result.target_count}人のスタッフに通知を送信しました！\nポジション: ${result.position_name}`);
+                closeHelpModal();
+            } else {
+                alert(`❌ エラー: ${result.error || result.message}`);
+            }
+            
+        } catch (error) {
+            console.error('送信エラー:', error);
+            alert('通信エラーが発生しました');
+        }
+    }
+    </script>
 </body>
 </html>
