@@ -638,18 +638,18 @@ def auto_calendar():
             
             print(f"DEBUG: スキル保有者数: {[(position_names.get(pid), cnt) for pid, cnt in skill_holder_count.items()]}")
             
-            # 開店・閉店作業の役割IDを取得
-            opening_role_id = None
-            closing_role_id = None
-            for pid, pname in position_names.items():
-                if "開店" in pname or "オープン" in pname or "開店作業" in pname:
-                    opening_role_id = pid
-                    print(f"DEBUG: 開店作業を検出: ID={pid}, 名前={pname}")
-                if "閉店" in pname or "クロー" in pname or "閉店作業" in pname:
-                    closing_role_id = pid
-                    print(f"DEBUG: 閉店作業を検出: ID={pid}, 名前={pname}")
+            # # 開店・閉店作業の役割IDを取得
+            # opening_role_id = None
+            # closing_role_id = None
+            # for pid, pname in position_names.items():
+            #     if "開店" in pname or "オープン" in pname or "開店作業" in pname:
+            #         opening_role_id = pid
+            #         print(f"DEBUG: 開店作業を検出: ID={pid}, 名前={pname}")
+            #     if "閉店" in pname or "クロー" in pname or "閉店作業" in pname:
+            #         closing_role_id = pid
+            #         print(f"DEBUG: 閉店作業を検出: ID={pid}, 名前={pname}")
             
-            print(f"DEBUG: 開店作業ID={opening_role_id}, 閉店作業ID={closing_role_id}")
+            # print(f"DEBUG: 開店作業ID={opening_role_id}, 閉店作業ID={closing_role_id}")
             
             # 時間インターバル生成
             time_intervals = []
@@ -703,14 +703,14 @@ def auto_calendar():
                     if l_start <= t_time < l_end:
                         user_locked_map[u_idx][t_idx] = True
                         
-            # 修正前は else で 0 を強制していましたが、
-            # ロックされていない時間はAIが自由に配置できるように変更します
-            for u_idx, locked_slots in user_locked_map.items():
-                for t_idx, is_locked in enumerate(locked_slots):
-                    if is_locked:
-                        # ロックされている時間帯だけ「必ず働く」ように固定
-                        model.Add(shifts[u_idx, t_idx] == 1)
-                    # else (ロックなし) の場合は、AIの計算に任せるため何もしない
+            # # 修正前は else で 0 を強制していましたが、
+            # # ロックされていない時間はAIが自由に配置できるように変更します
+            # for u_idx, locked_slots in user_locked_map.items():
+            #     for t_idx, is_locked in enumerate(locked_slots):
+            #         if is_locked:
+            #             # ロックされている時間帯だけ「必ず働く」ように固定
+            #             model.Add(shifts[u_idx, t_idx] == 1)
+            #         # else (ロックなし) の場合は、AIの計算に任せるため何もしない
 
             # ========================================================
             # 10. 需要充足制約
@@ -818,37 +818,62 @@ def auto_calendar():
                 WHERE date = %s AND work = 1
             """, (target_date_str,))
             preference_rows = cursor.fetchall()
-            
-            print(f"DEBUG: {target_date_str} - 希望シフト登録者数: {len(preference_rows)}")
+
+            # 希望時間帯マップを作成
+            user_pref_intervals = {}
             for row in preference_rows:
-                uid = str(row['ID'])
-                s_time = safe_to_time(row['start_time']).strftime("%H:%M")
-                e_time = safe_to_time(row['end_time']).strftime("%H:%M")
-                skills = user_skill_ids.get(uid, [])
-                skill_names = [position_names.get(pid, pid) for pid in skills]
-                print(f"  - User {uid}: {s_time}~{e_time}, スキル: {skill_names}")
+                uid_str = str(row['ID'])
+                if uid_str not in user_map:
+                    continue
+                u_idx = user_map[uid_str]
+                
+                s_val = safe_to_time(row['start_time'])
+                e_val = safe_to_time(row['end_time'])
+                
+                user_pref_intervals[u_idx] = []
+                for t_idx, t_val in enumerate(time_intervals):
+                    if s_val <= t_val < e_val:
+                        user_pref_intervals[u_idx].append(t_idx)
 
-            print(f"DEBUG: {target_date_str} - 需要データ:")
-            for t_str, demands in demand_map.items():
-                demand_str = ", ".join([f"{position_names.get(pid, pid)}:{cnt}" for pid, cnt in demands.items()])
-                print(f"  - {t_str}: {demand_str}")
-            
-            # 希望シフト未登録ユーザーは0に固定
-            users_with_pref = {str(row['ID']) for row in preference_rows}
-            for u, uid in enumerate(user_ids):
-                if str(uid) not in locked_user_ids_set and str(uid) not in users_with_pref:
-                    for t in range(num_intervals): 
-                        model.Add(shifts[u, t] == 0)
+            print(f"DEBUG: {target_date_str} - 希望シフト登録者数: {len(preference_rows)}")
+            # ... 既存のログ出力 ...
 
+            # 希望外の時間帯は完全に禁止（保護シフト考慮版）
+            for u_idx in range(num_users):
+                uid = user_ids[u_idx]
+                
+                # 保護シフトがある場合
+                if str(uid) in locked_user_ids_set:
+                    # 保護シフトの時間帯のみ1に固定、それ以外は0
+                    for t_idx, is_locked in enumerate(user_locked_map[u_idx]):
+                        if is_locked:
+                            model.Add(shifts[u_idx, t_idx] == 1)
+                        else:
+                            model.Add(shifts[u_idx, t_idx] == 0)
+                    continue
+                
+                # 希望シフト未登録の場合は全て0
+                if u_idx not in user_pref_intervals:
+                    for t in range(num_intervals):
+                        model.Add(shifts[u_idx, t] == 0)
+                else:
+                    # 希望時間帯以外は0に固定
+                    pref_times = set(user_pref_intervals[u_idx])
+                    for t in range(num_intervals):
+                        if t not in pref_times:
+                            model.Add(shifts[u_idx, t] == 0)
             # ========================================================
             # 14. 目的関数（スコア計算）
             # ========================================================
-            pref_score = []
-            out_of_pref_penalty = []
-            
+
+            # 希望開始時間ボーナス
+            start_time_bonus = []
+            # 希望時間帯の充足率ボーナス
+            coverage_bonus = []
+
             for row in preference_rows:
                 uid_str = str(row['ID'])
-                if uid_str not in user_map: 
+                if uid_str not in user_map:
                     continue
                 u = user_map[uid_str]
                 
@@ -858,11 +883,20 @@ def auto_calendar():
                 s_val = safe_to_time(row['start_time'])
                 e_val = safe_to_time(row['end_time'])
                 
+                # 希望開始時間に最も近い時間帯を特定
+                start_intervals = []
                 for t, t_val in enumerate(time_intervals):
                     if s_val <= t_val < e_val:
-                        pref_score.append(shifts[u, t])
-                    else:
-                        out_of_pref_penalty.append(shifts[u, t])
+                        start_intervals.append(t)
+                
+                if start_intervals:
+                    # 希望開始時刻ちょうどから始まるボーナス
+                    first_interval = start_intervals[0]
+                    start_time_bonus.append(shifts[u, first_interval])
+                    
+                    # 希望時間帯全体をできるだけ埋めるボーナス
+                    for t in start_intervals:
+                        coverage_bonus.append(shifts[u, t])
 
             # 最近の勤務日数ペナルティ
             recent_work_penalty = []
@@ -872,30 +906,30 @@ def auto_calendar():
                 WHERE date BETWEEN %s AND %s AND CAST(user_id AS SIGNED) > 0
                 GROUP BY user_id
             """, (target_date_obj - timedelta(days=6), target_date_obj - timedelta(days=1)))
-            
+
             recent_work_days = {str(row['user_id']): row['work_days'] for row in cursor.fetchall()}
-            
+
             for u_idx, user_id in enumerate(user_ids):
                 if recent_work_days.get(user_id, 0) >= 5:
                     penalty = sum(shifts[u_idx, t] for t in range(num_intervals))
                     recent_work_penalty.append(penalty)
 
-            # 重み付け設定
-            WEIGHT_DEMAND = 100
-            WEIGHT_PREFERENCE = 10
-            WEIGHT_OVERSTAFF = 15
-            WEIGHT_BALANCE = -3
-            WEIGHT_RECENT_WORK = -2
-            WEIGHT_OUT_OF_PREF = -5
+            # 重み付け設定（大幅変更）
+            WEIGHT_DEMAND = 1000          # 需要充足を最優先
+            WEIGHT_START_TIME = 50        # 希望開始時間ボーナス（新規）
+            WEIGHT_COVERAGE = 30          # 希望時間帯カバー率（新規）
+            WEIGHT_OVERSTAFF = 20         # 過剰人員ペナルティ
+            WEIGHT_BALANCE = 3            # バランスペナルティ
+            WEIGHT_RECENT_WORK = 2        # 最近の勤務ペナルティ
 
             # 目的関数定義
             model.Maximize(
-                sum(demand_fulfillment) * WEIGHT_DEMAND + 
-                sum(pref_score) * WEIGHT_PREFERENCE - 
+                sum(demand_fulfillment) * WEIGHT_DEMAND +
+                sum(start_time_bonus) * WEIGHT_START_TIME +
+                sum(coverage_bonus) * WEIGHT_COVERAGE -
                 sum(over_staff_penalty) * WEIGHT_OVERSTAFF -
                 balance_penalty * WEIGHT_BALANCE -
-                sum(recent_work_penalty) * WEIGHT_RECENT_WORK -
-                sum(out_of_pref_penalty) * WEIGHT_OUT_OF_PREF
+                sum(recent_work_penalty) * WEIGHT_RECENT_WORK
             )
 
             # ========================================================
@@ -958,41 +992,41 @@ def auto_calendar():
                             for _ in range(count): 
                                 open_slots.append(pid)
                     
-                    # ========================================================
-                    # ★開店・閉店作業の強制追加★
-                    # ========================================================
-                    is_opening_time = (t_idx == 0)
-                    is_closing_time = (t_idx >= num_intervals - 2)
+                    # # ========================================================
+                    # # ★開店・閉店作業の強制追加★
+                    # # ========================================================
+                    # is_opening_time = (t_idx == 0)
+                    # is_closing_time = (t_idx >= num_intervals - 2)
                     
-                    # 開店作業を強制追加（需要になくても）
-                    if is_opening_time and opening_role_id:
-                        # 開店作業ができる人がworking_usersにいるか確認
-                        can_open = [u for u in working_users 
-                                   if opening_role_id in user_skill_ids.get(user_ids[u], [])]
-                        if can_open and opening_role_id not in open_slots:
-                            # 需要になくても強制的に追加
-                            open_slots.insert(0, opening_role_id)
-                            print(f"DEBUG: {t_str} 開店作業を強制追加")
+                    # # 開店作業を強制追加（需要になくても）
+                    # if is_opening_time and opening_role_id:
+                    #     # 開店作業ができる人がworking_usersにいるか確認
+                    #     can_open = [u for u in working_users 
+                    #                if opening_role_id in user_skill_ids.get(user_ids[u], [])]
+                    #     if can_open and opening_role_id not in open_slots:
+                    #         # 需要になくても強制的に追加
+                    #         open_slots.insert(0, opening_role_id)
+                    #         print(f"DEBUG: {t_str} 開店作業を強制追加")
                     
-                    # 閉店作業を強制追加（需要になくても）
-                    if is_closing_time and closing_role_id:
-                        # 閉店作業ができる人がworking_usersにいるか確認
-                        can_close = [u for u in working_users 
-                                    if closing_role_id in user_skill_ids.get(user_ids[u], [])]
-                        if can_close and closing_role_id not in open_slots:
-                            # 需要になくても強制的に追加
-                            open_slots.insert(0, closing_role_id)
-                            print(f"DEBUG: {t_str} 閉店作業を強制追加")
+                    # # 閉店作業を強制追加（需要になくても）
+                    # if is_closing_time and closing_role_id:
+                    #     # 閉店作業ができる人がworking_usersにいるか確認
+                    #     can_close = [u for u in working_users 
+                    #                 if closing_role_id in user_skill_ids.get(user_ids[u], [])]
+                    #     if can_close and closing_role_id not in open_slots:
+                    #         # 需要になくても強制的に追加
+                    #         open_slots.insert(0, closing_role_id)
+                    #         print(f"DEBUG: {t_str} 閉店作業を強制追加")
                     
-                    # 保護ユーザーの枠を先に消費
-                    for u_idx in locked_users_in_this_slot:
-                        uid = user_ids[u_idx]
-                        skills = user_skill_ids.get(uid, [])
+                    # # 保護ユーザーの枠を先に消費
+                    # for u_idx in locked_users_in_this_slot:
+                    #     uid = user_ids[u_idx]
+                    #     skills = user_skill_ids.get(uid, [])
                         
-                        for skill in skills:
-                            if skill in open_slots:
-                                open_slots.remove(skill)
-                                break
+                    #     for skill in skills:
+                    #         if skill in open_slots:
+                    #             open_slots.remove(skill)
+                    #             break
                     
                     # ========================================================
                     # ★ユーザーのソート: グローバルスキル希少性ベース★
@@ -1001,13 +1035,13 @@ def auto_calendar():
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
                         
-                        # 開店時間で開店スキル持ち → 最優先
-                        if is_opening_time and opening_role_id and opening_role_id in skills:
-                            return (0, 0, 0)
+                        # # 開店時間で開店スキル持ち → 最優先
+                        # if is_opening_time and opening_role_id and opening_role_id in skills:
+                        #     return (0, 0, 0)
                         
-                        # 閉店時間で閉店スキル持ち → 最優先
-                        if is_closing_time and closing_role_id and closing_role_id in skills:
-                            return (0, 0, 0)
+                        # # 閉店時間で閉店スキル持ち → 最優先
+                        # if is_closing_time and closing_role_id and closing_role_id in skills:
+                        #     return (0, 0, 0)
                         
                         # 通常時: (スキル数, 最も希少なスキルの保有者数, ユーザーID)
                         # スキルが少ない人 & 希少スキルを持つ人を優先
