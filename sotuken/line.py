@@ -540,18 +540,19 @@ def accept_help_request():
         """, (req_data['date'], req_data['start_time'], req_data['end_time']))
         pending_exists = cursor.fetchone()
 
+        # ステップ4: shift_tableに確定シフト作成
         if pending_exists:
-            # ロックなし(is_locked=0)で更新
+            # is_lockedを1に戻す
             cursor.execute("""
                 UPDATE shift_table
-                SET user_id = %s, type = %s, is_locked = 0
+                SET user_id = %s, type = %s, is_locked = 1
                 WHERE id = %s
             """, (user_id, position_name, pending_exists['id']))
         else:
-            # ロックなし(is_locked=0)で新規作成
+            # is_lockedを1に戻す
             cursor.execute("""
                 INSERT INTO shift_table (user_id, date, start_time, end_time, type, is_locked)
-                VALUES (%s, %s, %s, %s, %s, 0)
+                VALUES (%s, %s, %s, %s, %s, 1)
             """, (user_id, req_data['date'], req_data['start_time'], req_data['end_time'], position_name))
         
         print(f"✅ shift_table登録完了（is_locked=0）")

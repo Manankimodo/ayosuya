@@ -702,15 +702,15 @@ def auto_calendar():
                 for t_idx, t_time in enumerate(time_intervals):
                     if l_start <= t_time < l_end:
                         user_locked_map[u_idx][t_idx] = True
-
-            # 保護シフト制約適用
+                        
+            # 修正前は else で 0 を強制していましたが、
+            # ロックされていない時間はAIが自由に配置できるように変更します
             for u_idx, locked_slots in user_locked_map.items():
-                if any(locked_slots):
-                    for t_idx, is_locked in enumerate(locked_slots):
-                        if is_locked:
-                            model.Add(shifts[u_idx, t_idx] == 1)
-                        else:
-                            model.Add(shifts[u_idx, t_idx] == 0)
+                for t_idx, is_locked in enumerate(locked_slots):
+                    if is_locked:
+                        # ロックされている時間帯だけ「必ず働く」ように固定
+                        model.Add(shifts[u_idx, t_idx] == 1)
+                    # else (ロックなし) の場合は、AIの計算に任せるため何もしない
 
             # ========================================================
             # 10. 需要充足制約
