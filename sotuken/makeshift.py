@@ -628,39 +628,40 @@ def auto_calendar():
             print(f"DEBUG: {target_date_str}({day_type_str}) - 需要時間帯数: {len(demand_map)}, 総需要: {total_demand}")
             
             # ========================================================
-            # 8. グローバルスキル希少性の計算（★新規追加★）
+            # 8. グローバルスキル希少性の計算（★役割タイプ追加★）
             # ========================================================
+            # 役割名とタイプのマッピング
+            position_names = {}
+            position_types = {}  # ★新規追加
+
+            cursor.execute("SELECT id, name, priority_type FROM positions")
+            for p in cursor.fetchall():
+                # 安全性チェック追加
+                if p.get('id') is not None and p.get('name') is not None:
+                    pid = str(p['id'])
+                    position_names[pid] = p['name']
+                    position_types[pid] = p.get('priority_type', 'normal')  # ★新規追加
+
+            print(f"DEBUG: 取得した役割: {[(position_names[pid], position_types[pid]) for pid in position_names.keys()]}")
+
             # 各スキルを持っている人数を事前計算
             skill_holder_count = {}
             for pid in position_names.keys():
                 count = sum(1 for uid in user_ids if pid in user_skill_ids.get(uid, []))
                 skill_holder_count[pid] = count if count > 0 else 999  # 誰も持っていない場合は999
-            
-            print(f"DEBUG: スキル保有者数: {[(position_names.get(pid), cnt) for pid, cnt in skill_holder_count.items()]}")
-            
-            # # 開店・閉店作業の役割IDを取得
-            # opening_role_id = None
-            # closing_role_id = None
-            # for pid, pname in position_names.items():
-            #     if "開店" in pname or "オープン" in pname or "開店作業" in pname:
-            #         opening_role_id = pid
-            #         print(f"DEBUG: 開店作業を検出: ID={pid}, 名前={pname}")
-            #     if "閉店" in pname or "クロー" in pname or "閉店作業" in pname:
-            #         closing_role_id = pid
-            #         print(f"DEBUG: 閉店作業を検出: ID={pid}, 名前={pname}")
-            
-            # print(f"DEBUG: 開店作業ID={opening_role_id}, 閉店作業ID={closing_role_id}")
-            
+
+            print(f"DEBUG: スキル保有者数: {[(position_names.get(pid), position_types.get(pid), cnt) for pid, cnt in skill_holder_count.items()]}")
+
             # 時間インターバル生成
             time_intervals = []
             base_date = datetime(2000, 1, 1)
             current_dt = base_date.replace(hour=SHIFT_START.hour, minute=SHIFT_START.minute)
             target_end_dt = base_date.replace(hour=SHIFT_END.hour, minute=SHIFT_END.minute)
-            
+
             while current_dt < target_end_dt:
                 time_intervals.append(current_dt.time())
                 current_dt += timedelta(minutes=INTERVAL_MINUTES)
-            
+
             num_intervals = len(time_intervals)
             if num_intervals == 0: 
                 continue
@@ -672,11 +673,10 @@ def auto_calendar():
                 WHERE date = %s AND is_locked = 1 AND CAST(user_id AS SIGNED) > 0
             """, (target_date_str,))
             locked_shifts_data = cursor.fetchall()
-            
+
             locked_user_ids_set = set()
             for ls in locked_shifts_data:
                 locked_user_ids_set.add(str(ls['user_id']))
-
             # ========================================================
             # 9. CP-SAT モデル構築
             # ========================================================
@@ -702,17 +702,6 @@ def auto_calendar():
                 for t_idx, t_time in enumerate(time_intervals):
                     if l_start <= t_time < l_end:
                         user_locked_map[u_idx][t_idx] = True
-<<<<<<< HEAD
-
-            # 保護シフト制約適用
-            for u_idx, locked_slots in user_locked_map.items():
-                if any(locked_slots):
-                    for t_idx, is_locked in enumerate(locked_slots):
-                        if is_locked:
-                            model.Add(shifts[u_idx, t_idx] == 1)
-                        else:
-                            model.Add(shifts[u_idx, t_idx] == 0)
-=======
                         
             # # 修正前は else で 0 を強制していましたが、
             # # ロックされていない時間はAIが自由に配置できるように変更します
@@ -722,7 +711,6 @@ def auto_calendar():
             #             # ロックされている時間帯だけ「必ず働く」ように固定
             #             model.Add(shifts[u_idx, t_idx] == 1)
             #         # else (ロックなし) の場合は、AIの計算に任せるため何もしない
->>>>>>> 7f39e693c7b9a700507a87134d21acf6d547b669
 
             # ========================================================
             # 10. 需要充足制約
@@ -877,34 +865,12 @@ def auto_calendar():
             # ========================================================
             # 14. 目的関数（スコア計算）
             # ========================================================
-<<<<<<< HEAD
-            pref_score = []
-            out_of_pref_penalty = []
-            
-            # ========================================================
-            # 14. 希望範囲の強制と目的関数（スコア計算）
-            # ========================================================
-            # ========================================================
-            # 14. 重み付け定義と希望範囲の強制（順序修正版）
-            # ========================================================
-            
-            # ★エラー修正: 先に重みを定義します
-            WEIGHT_DEMAND = 100       # 需要（人数）を満たす
-            WEIGHT_PREFERENCE = 10    # 希望を守る（基本点）
-            WEIGHT_OVERSTAFF = 15     # 人数オーバーへのペナルティ
-            WEIGHT_BALANCE = 3        # バランス（引き算で使用）
-            WEIGHT_RECENT_WORK = 2    # 連勤抑制
-            
-            pref_score_terms = []     # スコア計算用リスト
-            
-=======
 
             # 希望開始時間ボーナス
             start_time_bonus = []
             # 希望時間帯の充足率ボーナス
             coverage_bonus = []
 
->>>>>>> 7f39e693c7b9a700507a87134d21acf6d547b669
             for row in preference_rows:
                 uid_str = str(row['ID'])
                 if uid_str not in user_map:
@@ -918,33 +884,6 @@ def auto_calendar():
                 s_val = safe_to_time(row['start_time'])
                 e_val = safe_to_time(row['end_time'])
                 
-<<<<<<< HEAD
-                # 希望の開始時間が「何番目のスロットか」を探す（開始優先ボーナス計算用）
-                start_slot_idx = -1
-                for i, t_val in enumerate(time_intervals):
-                    if s_val <= t_val:
-                        start_slot_idx = i
-                        break
-                
-                for t, t_val in enumerate(time_intervals):
-                    if s_val <= t_val < e_val:
-                        # --- 🌟 開始時間優先ロジック ---
-                        # 「希望開始時間」からの距離が近いほど、ボーナス点を加算
-                        # これにより、AIは「後ろにズラす」よりも「開始時間通り」を好むようになります
-                        
-                        dist_from_start = t - start_slot_idx
-                        # 早く始まるほど点が高い（最大5点のボーナス）
-                        # 時間が遅くなるにつれ 5, 4, 3... とボーナスが減る
-                        early_bonus = max(0, 5 - int(dist_from_start * 0.5))
-                        
-                        # (基本点10点 + ボーナス点) × その時間のシフト変数
-                        current_score = WEIGHT_PREFERENCE + early_bonus
-                        pref_score_terms.append(shifts[u, t] * current_score)
-                        
-                    else:
-                        # --- 🔒 希望時間外は絶対禁止 ---
-                        model.Add(shifts[u, t] == 0)
-=======
                 # 希望開始時間に最も近い時間帯を特定
                 start_intervals = []
                 for t, t_val in enumerate(time_intervals):
@@ -959,7 +898,6 @@ def auto_calendar():
                     # 希望時間帯全体をできるだけ埋めるボーナス
                     for t in start_intervals:
                         coverage_bonus.append(shifts[u, t])
->>>>>>> 7f39e693c7b9a700507a87134d21acf6d547b669
 
             # --- 最近の勤務日数ペナルティ ---
             recent_work_penalty = []
@@ -977,14 +915,6 @@ def auto_calendar():
                     penalty = sum(shifts[u_idx, t] for t in range(num_intervals))
                     recent_work_penalty.append(penalty)
 
-<<<<<<< HEAD
-            # ========================================================
-            # 15. ソルバー実行（目的関数）
-            # ========================================================
-            model.Maximize(
-                sum(demand_fulfillment) * WEIGHT_DEMAND + 
-                sum(pref_score_terms) -  # ★修正: ここで既に重みを掛けているので sum() だけでOK
-=======
             # 重み付け設定（大幅変更）
             WEIGHT_DEMAND = 1000          # 需要充足を最優先
             WEIGHT_START_TIME = 50        # 希望開始時間ボーナス（新規）
@@ -998,7 +928,6 @@ def auto_calendar():
                 sum(demand_fulfillment) * WEIGHT_DEMAND +
                 sum(start_time_bonus) * WEIGHT_START_TIME +
                 sum(coverage_bonus) * WEIGHT_COVERAGE -
->>>>>>> 7f39e693c7b9a700507a87134d21acf6d547b669
                 sum(over_staff_penalty) * WEIGHT_OVERSTAFF -
                 balance_penalty * WEIGHT_BALANCE -
                 sum(recent_work_penalty) * WEIGHT_RECENT_WORK
@@ -1036,10 +965,10 @@ def auto_calendar():
                 shortage_list_day = []
 
                 # ========================================================
-                # 17. 役割割り当てロジック（改善版）
+                # 17. 役割割り当てロジック（必須役割優先版）
                 # ========================================================
                 user_assigned_roles = {}
-                # active_shortages は日付ループの外（または日付の先頭）で初期化されている想定
+                active_shortages = {}
                 shortage_list_day = []
 
                 for t_idx, t_time in enumerate(time_intervals):
@@ -1062,145 +991,177 @@ def auto_calendar():
                             for _ in range(count): 
                                 open_slots.append(pid)
                     
-<<<<<<< HEAD
-                    # 3. 保護（ロック）済みユーザーの枠を優先的に消費
-                    for u_idx in locked_users_in_this_slot:
-                        uid = user_ids[u_idx]
-                        skills = user_skill_ids.get(uid, [])
-                        for skill in skills:
-                            if skill in open_slots:
-                                open_slots.remove(skill)
-                                break
+                    # ========================================================
+                    # ★3. 需要枠を優先度順にソート★
+                    # critical（必須） > normal（通常） > support（サポート）
+                    # ========================================================
+                    def slot_priority(pid):
+                        ptype = position_types.get(pid, 'normal')
+                        if ptype == 'critical':
+                            return 0  # 最優先
+                        elif ptype == 'normal':
+                            return 1
+                        else:  # support
+                            return 2
                     
-                    # 4. 通常ユーザーを希少スキル順にソートして割り当て
-                    working_users.sort(key=lambda u: (len(user_skill_ids.get(user_ids[u], [])), u))
-=======
-                    # # ========================================================
-                    # # ★開店・閉店作業の強制追加★
-                    # # ========================================================
-                    # is_opening_time = (t_idx == 0)
-                    # is_closing_time = (t_idx >= num_intervals - 2)
+                    open_slots.sort(key=slot_priority)
                     
-                    # # 開店作業を強制追加（需要になくても）
-                    # if is_opening_time and opening_role_id:
-                    #     # 開店作業ができる人がworking_usersにいるか確認
-                    #     can_open = [u for u in working_users 
-                    #                if opening_role_id in user_skill_ids.get(user_ids[u], [])]
-                    #     if can_open and opening_role_id not in open_slots:
-                    #         # 需要になくても強制的に追加
-                    #         open_slots.insert(0, opening_role_id)
-                    #         print(f"DEBUG: {t_str} 開店作業を強制追加")
-                    
-                    # # 閉店作業を強制追加（需要になくても）
-                    # if is_closing_time and closing_role_id:
-                    #     # 閉店作業ができる人がworking_usersにいるか確認
-                    #     can_close = [u for u in working_users 
-                    #                 if closing_role_id in user_skill_ids.get(user_ids[u], [])]
-                    #     if can_close and closing_role_id not in open_slots:
-                    #         # 需要になくても強制的に追加
-                    #         open_slots.insert(0, closing_role_id)
-                    #         print(f"DEBUG: {t_str} 閉店作業を強制追加")
-                    
-                    # # 保護ユーザーの枠を先に消費
-                    # for u_idx in locked_users_in_this_slot:
-                    #     uid = user_ids[u_idx]
-                    #     skills = user_skill_ids.get(uid, [])
-                        
-                    #     for skill in skills:
-                    #         if skill in open_slots:
-                    #             open_slots.remove(skill)
-                    #             break
+                    if len(open_slots) > 0 and len(open_slots) <= 10:  # スロット数が少ない場合のみ詳細出力
+                        slot_summary = [f'{position_names.get(pid, "?")}({position_types.get(pid, "?")})' for pid in open_slots]
+                        print(f"DEBUG: {t_str} 需要枠（優先度順）: {slot_summary}")
                     
                     # ========================================================
-                    # ★ユーザーのソート: グローバルスキル希少性ベース★
+                    # ★4. ユーザーのソート: 必須スキル保有者を優先★
                     # ========================================================
                     def user_priority(u_idx):
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
                         
-                        # # 開店時間で開店スキル持ち → 最優先
-                        # if is_opening_time and opening_role_id and opening_role_id in skills:
-                        #     return (0, 0, 0)
+                        # 必須スキル（critical）を持っているか
+                        has_critical_skill = any(position_types.get(s) == 'critical' for s in skills)
                         
-                        # # 閉店時間で閉店スキル持ち → 最優先
-                        # if is_closing_time and closing_role_id and closing_role_id in skills:
-                        #     return (0, 0, 0)
+                        # 必須スキル保有者を最優先
+                        if has_critical_skill:
+                            priority_tier = 0
+                        else:
+                            priority_tier = 1
                         
-                        # 通常時: (スキル数, 最も希少なスキルの保有者数, ユーザーID)
-                        # スキルが少ない人 & 希少スキルを持つ人を優先
+                        # スキル希少性（保有者が少ないほど優先）
                         min_rarity = min([skill_holder_count.get(s, 999) for s in skills]) if skills else 999
-                        return (len(skills), min_rarity, u_idx)
+                        
+                        # (優先ティア, スキル数, 希少性, ユーザーID)
+                        return (priority_tier, len(skills), min_rarity, u_idx)
                     
                     working_users.sort(key=user_priority)
->>>>>>> 7f39e693c7b9a700507a87134d21acf6d547b669
                     
+                    # ========================================================
+                    # ★5. 役割割り当て: 役割タイプ >>> 希少性 >> 緊急度★
+                    # ========================================================
                     assigned_pids = {}
+                    
                     for u_idx in working_users:
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
+                        
                         # このユーザーが埋められる枠があるか
                         available_slots = [(i, pid) for i, pid in enumerate(open_slots) if pid in skills]
                         
                         if available_slots:
-                            slot_idx, selected_pid = available_slots[0]
+                            # --- スコアリング方式で最適な役割を選択 ---
+                            
+                            # 各役割の不足数をカウント（緊急度）
+                            shortage_count = {}
+                            for pid in open_slots:
+                                shortage_count[pid] = shortage_count.get(pid, 0) + 1
+                            
+                            # 各スロットにスコアを付ける
+                            slot_scores = []
+                            for slot_idx, pid in available_slots:
+                                # 1. 役割タイプスコア（必須 > 通常 > サポート）
+                                ptype = position_types.get(pid, 'normal')
+                                if ptype == 'critical':
+                                    type_score = 1000  # ★圧倒的に優先
+                                elif ptype == 'normal':
+                                    type_score = 100
+                                else:  # support
+                                    type_score = 10
+                                
+                                # 2. スキル希少性スコア（保有者が少ないほど高い）
+                                rarity_score = 100 / max(skill_holder_count.get(pid, 1), 1)
+                                
+                                # 3. 緊急度スコア（不足数が多いほど高い）
+                                urgency_score = shortage_count.get(pid, 1) * 10
+                                
+                                # 4. 総合スコア（重み付け）
+                                # 役割タイプ >>> 希少性 >> 緊急度
+                                total_score = type_score + (rarity_score * 3) + (urgency_score * 2)
+                                
+                                slot_scores.append((slot_idx, pid, total_score))
+                            
+                            # スコアが最も高い役割を選択
+                            sorted_slots = sorted(slot_scores, key=lambda x: -x[2])
+                            slot_idx, selected_pid, score = sorted_slots[0]
+                            
                             assigned_pids[u_idx] = selected_pid
-                            open_slots.pop(slot_idx) # 枠を埋める
+                            open_slots.pop(slot_idx)
+                            
+                            # デバッグ出力（ユーザーが少ない場合のみ）
+                            if len(working_users) <= 5:
+                                p_name = position_names.get(selected_pid, "不明")
+                                p_type = position_types.get(selected_pid, "normal")
+                                type_icon = {"critical": "⭐", "normal": "📋", "support": "🔧"}.get(p_type, "")
+                                print(f"    User {uid} → {type_icon}{p_name} (スコア: {score:.1f})")
                         else:
                             # 枠はないが勤務する場合
                             assigned_pids[u_idx] = skills[0] if skills else "Staff"
 
-                    # 5. 結果を記録
+                    # 6. 結果を記録
                     for u_idx, pid in assigned_pids.items():
-                        if u_idx not in user_assigned_roles: user_assigned_roles[u_idx] = {}
+                        if u_idx not in user_assigned_roles: 
+                            user_assigned_roles[u_idx] = {}
                         user_assigned_roles[u_idx][t_idx] = position_names.get(pid, "Work")
+
+                    # （この後、18番セクション「不足データ生成」が続きます）
 
                     # ========================================================
                     # 18. 不足データ生成（★個別スロット管理で人数分出す★）
                     # ========================================================
                     # 現在この時間枠で、誰も割り当てられず余っている「枠」をカウント
-                    current_needed_shortages = {}
-                    for pid in open_slots:
-                        current_needed_shortages[pid] = current_needed_shortages.get(pid, 0) + 1
-                    
+                    # ★修正: リストで管理して、個別のスロットとして扱う
+                    remaining_open_slots = list(open_slots)  # 残っている枠のリスト
+
                     next_end_dt = (datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)).time()
-                    
+
                     # --- A. 継続中の不足を更新（既存の不足枠を維持） ---
                     for key in list(active_shortages.keys()):
+                        # keyの形式: "position_id_index" (例: "2_0", "2_1")
                         pid = key.split('_')[0]
-                        if pid in current_needed_shortages and current_needed_shortages[pid] > 0:
+                        
+                        # まだこの役割の不足が続いているか確認
+                        if pid in remaining_open_slots:
                             # まだ不足が続いているので、終了時間を15分延ばす
                             active_shortages[key]['end_time'] = next_end_dt.strftime("%H:%M")
-                            current_needed_shortages[pid] -= 1 # 1枠分カウント消化
+                            remaining_open_slots.remove(pid)  # 1枠分消化
                         else:
                             # このスロットの不足は解消されたので、保存リストへ移動して削除
                             shortage_list_day.append(active_shortages[key])
                             del active_shortages[key]
-                    
-                    # --- B. 新しく発生した不足を「独立したID」で作成 ---
-                    for pid, count in current_needed_shortages.items():
-                        for _ in range(count):
-                            # 空いている最小の連番を探す（キーの重複を避ける）
-                            n = 0
-                            while f"{pid}_{n}" in active_shortages:
-                                n += 1
-                            
-                            unique_key = f"{pid}_{n}"
-                            p_name = position_names.get(pid, "役割")
-                            
-                            # 【重要】IDが重ならないように計算（例：役割10の1人目は-10001, 2人目は-10002）
-                            # これにより、グラフ上で別の行として認識されます
-                            unique_neg_id = -1 * (int(pid) * 1000 + n + 1)
-                            
-                            active_shortages[unique_key] = {
-                                "user_id": unique_neg_id, 
-                                "user_name": f"🚨 {p_name}不足({n+1})",
-                                "date": target_date_str,
-                                "start_time": t_time.strftime("%H:%M"),
-                                "end_time": next_end_dt.strftime("%H:%M"), 
-                                "type": f"🚨 {p_name}不足"
-                            }
 
-                # ========================================================
+                    # --- B. 新しく発生した不足を「独立したID」で作成 ---
+                    # ★修正: 残っている枠を1つずつ処理
+                    for pid in remaining_open_slots:
+                        # 空いている最小の連番を探す（キーの重複を避ける）
+                        n = 0
+                        while f"{pid}_{n}" in active_shortages:
+                            n += 1
+                        
+                        unique_key = f"{pid}_{n}"
+                        p_name = position_names.get(pid, "役割")
+                        
+                        # 【重要】IDが重ならないように計算（例：役割2の1人目は-2001, 2人目は-2002）
+                        # これにより、グラフ上で別の行として認識されます
+                        try:
+                            unique_neg_id = -1 * (int(pid) * 1000 + n + 1)
+                        except (ValueError, TypeError) as e:
+                            print(f"ERROR: pidの変換に失敗: pid={pid}, type={type(pid)}, error={e}")
+                            unique_neg_id = -1 * (hash(str(pid)) % 1000000)
+                        
+                        # ★修正: 人数が複数の場合、(1), (2)などの番号を付ける
+                        shortage_count_for_this_position = sum(1 for k in active_shortages.keys() if k.startswith(f"{pid}_"))
+                        if shortage_count_for_this_position > 0:
+                            display_name = f"🚨 {p_name}不足 ({n+1})"
+                        else:
+                            display_name = f"🚨 {p_name}不足"
+                        
+                        active_shortages[unique_key] = {
+                            "user_id": unique_neg_id, 
+                            "user_name": display_name,
+                            "date": target_date_str,
+                            "start_time": t_time.strftime("%H:%M"),
+                            "end_time": next_end_dt.strftime("%H:%M"), 
+                            "type": display_name
+                        }
+                                    # ========================================================
                 # 最終処理：閉店まで残った不足をすべて回収
                 # ========================================================
                 for item in active_shortages.values(): 
@@ -1294,24 +1255,36 @@ def auto_calendar():
                         locked = locked_count_by_position.get(pid, 0)
                         shortage = max(0, required_count - locked)
                         
+                        # ★修正: shortage数だけループ（人数分のバーを生成）
                         for i in range(shortage):
-                            key = (pid, i, t_idx)
+                            # 空いている最小の連番を探す
+                            n = 0
+                            while f"{pid}_{n}" in active_shortages:
+                                n += 1
+                            
+                            key = f"{pid}_{n}"
                             next_end_dt = datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)
                             
+                            # keyが既に存在する場合は終了時間を延長
                             if key in active_shortages:
                                 active_shortages[key]['end_time'] = next_end_dt.time().strftime("%H:%M")
                             else:
                                 p_name = position_names.get(pid, "役割")
-                                # 安全性チェック追加
+                                
                                 try:
-                                    neg_id = -1 * (int(pid) * 1000 + i)
+                                    unique_neg_id = -1 * (int(pid) * 1000 + n + 1)
                                 except (ValueError, TypeError) as e:
                                     print(f"ERROR: pidの変換に失敗(失敗時): pid={pid}, type={type(pid)}, error={e}")
-                                    neg_id = -1 * (hash(str(pid)) % 1000000)
+                                    unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                                 
-                                unique_name = f"🚨 {p_name}不足 ({i+1})"
+                                # ★修正: 複数人の場合は番号を付ける
+                                if shortage > 1:
+                                    unique_name = f"🚨 {p_name}不足 ({n+1})"
+                                else:
+                                    unique_name = f"🚨 {p_name}不足"
+                                
                                 active_shortages[key] = {
-                                    "user_id": neg_id,
+                                    "user_id": unique_neg_id,
                                     "user_name": unique_name,
                                     "date": target_date_str,
                                     "start_time": t_time.strftime("%H:%M"),
@@ -1601,9 +1574,9 @@ def settings():
             settings_data["start_time"] = safe_time_format(settings_data["start_time"])
             settings_data["end_time"] = safe_time_format(settings_data["end_time"])
 
-        # 2. 役割リスト
-        cursor.execute("SELECT * FROM positions WHERE store_id = %s", (store_id,))
-        positions_list = cursor.fetchall()
+        # 2. 役割リスト（priority_typeも取得）
+        cursor.execute("SELECT id, name, priority_type FROM positions WHERE store_id = %s ORDER BY priority_type, name", (store_id,))
+        positions_list = cursor.fetchall()  
         
         # 3. 需要リスト（表示用）
         cursor.execute("""
@@ -1667,15 +1640,30 @@ def settings():
 def add_demand():
     from datetime import datetime, timedelta
     
+    # ★追加: ログイン確認とstore_id取得
+    if "user_id" not in session:
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
+    
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
+        # ★追加: store_id取得
+        user_id = session["user_id"]
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
+        
         start_str = request.form.get("start_time")
         end_str = request.form.get("end_time")
         pos_id = request.form.get("position_id")
         count = int(request.form.get("required_count"))
-        day_type = request.form.get("day_type", "weekday")  # ★追加: weekday or weekend
+        day_type = request.form.get("day_type", "weekday")
         
         fmt = "%H:%M"
         start_dt = datetime.strptime(start_str, fmt)
@@ -1688,18 +1676,18 @@ def add_demand():
         while current < end_dt:
             time_val = current.strftime(fmt)
             
-            # ★修正: day_typeも条件に追加
+            # ★修正: store_idも条件に追加
             cursor.execute("""
                 DELETE FROM shift_demand 
-                WHERE time_slot = %s AND position_id = %s AND day_type = %s
-            """, (time_val, pos_id, day_type))
+                WHERE time_slot = %s AND position_id = %s AND day_type = %s AND store_id = %s
+            """, (time_val, pos_id, day_type, store_id))
             
             if count > 0:
-                # ★修正: day_typeも保存
+                # ★修正: store_idも保存
                 cursor.execute("""
-                    INSERT INTO shift_demand (time_slot, position_id, required_count, day_type)
-                    VALUES (%s, %s, %s, %s)
-                """, (time_val, pos_id, count, day_type))
+                    INSERT INTO shift_demand (time_slot, position_id, required_count, day_type, store_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (time_val, pos_id, count, day_type, store_id))
             
             current += timedelta(minutes=15)
             
@@ -1720,10 +1708,27 @@ def add_demand():
 # ==========================================
 @makeshift_bp.route("/settings/demand/reset", methods=["POST"])
 def reset_demand():
+    # ★追加: ログイン確認
+    if "user_id" not in session:
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
+    
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
+    
     try:
-        cursor.execute("DELETE FROM shift_demand")
+        # ★追加: store_id取得
+        user_id = session["user_id"]
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
+        
+        # ★修正: store_idで絞り込み
+        cursor.execute("DELETE FROM shift_demand WHERE store_id = %s", (store_id,))
         conn.commit()
         flash("🗑 設定をすべてリセットしました", "warning")
     except Exception as e:
@@ -1737,18 +1742,34 @@ def reset_demand():
 # ==========================================
 @makeshift_bp.route("/settings/demand/delete", methods=["POST"])
 def delete_demand():
+    # ★追加: ログイン確認
+    if "user_id" not in session:
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
+    
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
+        # ★追加: store_id取得
+        user_id = session["user_id"]
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
+        
         time_slot = request.form.get("time_slot")
         position_id = request.form.get("position_id")
-        day_type = request.form.get("day_type", "weekday")  # ★追加
+        day_type = request.form.get("day_type", "weekday")
         
+        # ★修正: store_idも条件に追加
         cursor.execute("""
             DELETE FROM shift_demand 
-            WHERE time_slot = %s AND position_id = %s AND day_type = %s
-        """, (time_slot, position_id, day_type))  # ★day_type追加
+            WHERE time_slot = %s AND position_id = %s AND day_type = %s AND store_id = %s
+        """, (time_slot, position_id, day_type, store_id))
         
         conn.commit()
         flash(f"✅ {time_slot} の設定を削除しました", "success")
@@ -1767,26 +1788,43 @@ def delete_demand():
 # ==========================================
 @makeshift_bp.route("/settings/demand/reset_by_type", methods=["POST"])
 def reset_demand_by_type():
+    # ログイン確認
+    if "user_id" not in session:
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
+    
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
+        # store_id取得
+        user_id = session["user_id"]
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
+        
         day_type = request.form.get("day_type", "weekday")
         
-        cursor.execute("DELETE FROM shift_demand WHERE day_type = %s", (day_type,))
+        # day_typeで絞り込んで削除
+        cursor.execute("""
+            DELETE FROM shift_demand 
+            WHERE store_id = %s AND day_type = %s
+        """, (store_id, day_type))
+        
         conn.commit()
-        
-        type_label = "平日" if day_type == "weekday" else "土日祝"
-        flash(f"🗑 {type_label}の設定をリセットしました", "warning")
-        
+        day_type_label = "平日" if day_type == "weekday" else "土日祝"
+        flash(f"🗑 {day_type_label}の設定をリセットしました", "warning")
     except Exception as e:
         conn.rollback()
         print(f"Reset By Type Error: {e}")
-        flash("リセットに失敗しました", "danger")
     finally:
         conn.close()
-        
-    return redirect(url_for('makeshift.settings'))
+    return redirect(url_for('makeshift.settings') + '#demand-section')
+
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash, jsonify
 import mysql.connector
 from datetime import datetime, timedelta, time
@@ -2235,60 +2273,88 @@ from flask import Blueprint, request, redirect, url_for, flash, session
 # ==========================================
 # 役割（ポジション）追加・変更・削除
 # ==========================================
-@makeshift_bp.route('/settings/position/add', methods=['POST'])
+@makeshift_bp.route("/settings/position/add", methods=["POST"])
 def add_position():
+    # ログイン確認
     if "user_id" not in session:
+        flash("ログインが必要です", "danger")
         return redirect(url_for("login.login"))
-
-    name = request.form.get('name')
-    user_id = session["user_id"]
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # 1. ユーザーの所属店舗IDを取得
+        # store_id取得
+        user_id = session["user_id"]
         cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
-        user_row = cursor.fetchone()
-        store_id = user_row["store_id"] if user_row else None
-
-        if name and store_id:
-            # 2. データベースに挿入（テーブル名は positions に合わせる）
-            cursor.execute("INSERT INTO positions (name, store_id) VALUES (%s, %s)", (name, store_id))
-            conn.commit()  # 【重要】反映を確定させる
-            flash(f'役割「{name}」を追加しました', 'success')
-        else:
-            flash('役割名または店舗情報が不足しています', 'danger')
-            
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
+        
+        name = request.form.get("name")
+        priority_type = request.form.get("priority_type", "normal")  # ★追加
+        
+        cursor.execute("""
+            INSERT INTO positions (name, priority_type, store_id) 
+            VALUES (%s, %s, %s)
+        """, (name, priority_type, store_id))
+        
+        conn.commit()
+        
+        type_label = {"critical": "⭐必須", "normal": "通常", "support": "サポート"}.get(priority_type, "通常")
+        flash(f"✅ 役割「{name}」({type_label})を追加しました", "success")
+        
     except Exception as e:
         conn.rollback()
         print(f"Add Position Error: {e}")
-        flash('追加に失敗しました', 'danger')
+        flash(f"❌ エラー: {str(e)}", "danger")
     finally:
         conn.close()
-        
+    
     return redirect(url_for('makeshift.settings'))
-
-@makeshift_bp.route('/settings/position/update/<int:position_id>', methods=['POST'])
+@makeshift_bp.route("/settings/position/update/<int:position_id>", methods=["POST"])
 def update_position(position_id):
-    new_name = request.form.get('name')
+    # ログイン確認
+    if "user_id" not in session:
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
     
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
-        if new_name:
-            # SQLの実行
-            cursor.execute("UPDATE positions SET name = %s WHERE id = %s", (new_name, position_id))
-            conn.commit()  # 【重要】反映を確定させる
-            flash('役割名を更新しました', 'success')
+        # store_id取得
+        user_id = session["user_id"]
+        cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
+        user_data = cursor.fetchone()
+        store_id = user_data["store_id"] if user_data else None
+        
+        if not store_id:
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
+        
+        name = request.form.get("name")
+        priority_type = request.form.get("priority_type", "normal")  # ★追加
+        
+        cursor.execute("""
+            UPDATE positions 
+            SET name = %s, priority_type = %s
+            WHERE id = %s AND store_id = %s
+        """, (name, priority_type, position_id, store_id))
+        
+        conn.commit()
+        flash(f"✅ 役割を更新しました", "success")
+        
     except Exception as e:
         conn.rollback()
         print(f"Update Position Error: {e}")
-        flash('更新に失敗しました', 'danger')
+        flash(f"❌ エラー: {str(e)}", "danger")
     finally:
         conn.close()
-        
+    
     return redirect(url_for('makeshift.settings'))
 
 @makeshift_bp.route('/settings/position/delete/<int:position_id>', methods=['POST'])
