@@ -405,40 +405,70 @@
                 </form>
             </div>
             <div class="zone-card zone-position" style="border-top: 4px solid #9c27b0;">
-                <div class="zone-title">👥 役割の追加・管理</div>
-                
-                <form method="POST" action="{{ url_for('makeshift.add_position') }}" style="margin-bottom: 15px;">
-                    <div class="form-row">
-                        <label style="font-size: 0.8em;">新しい役割名</label>
-                        <input type="text" name="name" placeholder="例: 洗い場" required style="padding: 8px; font-size: 0.9em;">
-                    </div>
-                    <button type="submit" class="add-btn" style="border-color: #9c27b0 !important; color: #9c27b0 !important; margin-top: 10px; padding: 5px;">＋ 役割を追加</button>
-                </form>
-
-                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
-
-                <div style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
-                        <tbody>
-                            {% for pos in positions %}
-                            <tr style="border-bottom: 1px solid var(--border-color);">
-                                <td style="padding: 8px 0;">
-                                    <form class="inline-edit-form" action="{{ url_for('makeshift.update_position', position_id=pos.id) }}" method="POST" style="display: flex; gap: 5px;">
-                                        <input type="text" name="name" value="{{ pos.name }}" required style="padding: 3px 6px; font-size: 0.9em; height: 28px;">
-                                        <button type="submit" style="background: var(--accent-color); color: white; border: none; border-radius: 3px; padding: 0 8px; cursor: pointer; font-size: 0.7em;">更新</button>
-                                    </form>
-                                </td>
-                                <td style="text-align: right; width: 30px;">
-                                    <form action="{{ url_for('makeshift.delete_position', position_id=pos.id) }}" method="POST" onsubmit="return confirm('この役割を削除しますか？');">
-                                        <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 1.1em;">×</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+              <div class="zone-title">👥 役割の追加・管理</div>
+          
+              <!-- 役割追加フォーム（修正版） -->
+              <form method="POST" action="{{ url_for('makeshift.add_position') }}" style="margin-bottom: 15px;">
+                  <div class="form-row">
+                      <label style="font-size: 0.8em;">新しい役割名</label>
+                      <input type="text" name="name" placeholder="例: 洗い場" required style="padding: 8px; font-size: 0.9em;">
+                  </div>
+                  
+                  <!-- ★追加: 役割タイプ選択 -->
+                  <div class="form-row">
+                      <label style="font-size: 0.8em;">役割タイプ</label>
+                      <select name="priority_type" style="padding: 8px; font-size: 0.9em; border: 1px solid #ddd; border-radius: 4px;">
+                          <option value="normal">📋 通常（ホール・キッチンなど）</option>
+                          <option value="critical">⭐ 必須（開店・閉店・責任者）</option>
+                          <option value="support">🔧 サポート（洗い場など）</option>
+                      </select>
+                  </div>
+                  
+                  <button type="submit" class="add-btn" style="border-color: #9c27b0 !important; color: #9c27b0 !important; margin-top: 10px; padding: 5px;">＋ 役割を追加</button>
+              </form>
+          
+              <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+          
+              <div style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                      <tbody>
+                          {% for pos in positions %}
+                          <tr style="border-bottom: 1px solid var(--border-color);">
+                              <td style="padding: 8px 0;">
+                                  <form class="inline-edit-form" action="{{ url_for('makeshift.update_position', position_id=pos.id) }}" method="POST" style="display: flex; flex-direction: column; gap: 5px;">
+                                      <!-- 役割名入力 -->
+                                      <div style="display: flex; gap: 5px; align-items: center;">
+                                          {% if pos.priority_type == 'critical' %}
+                                              <span style="font-size: 0.9em;">⭐</span>
+                                          {% elif pos.priority_type == 'support' %}
+                                              <span style="font-size: 0.9em;">🔧</span>
+                                          {% else %}
+                                              <span style="font-size: 0.9em;">📋</span>
+                                          {% endif %}
+                                          <input type="text" name="name" value="{{ pos.name }}" required style="padding: 3px 6px; font-size: 0.9em; height: 28px; flex: 1;">
+                                      </div>
+                                      <!-- 役割タイプ選択 -->
+                                      <div style="display: flex; gap: 5px;">
+                                          <select name="priority_type" style="padding: 3px 6px; font-size: 0.85em; height: 28px; flex: 1; border: 1px solid #ddd; border-radius: 3px;">
+                                              <option value="normal" {% if pos.priority_type == 'normal' %}selected{% endif %}>📋 通常</option>
+                                              <option value="critical" {% if pos.priority_type == 'critical' %}selected{% endif %}>⭐ 必須</option>
+                                              <option value="support" {% if pos.priority_type == 'support' %}selected{% endif %}>🔧 サポート</option>
+                                          </select>
+                                          <button type="submit" style="background: var(--accent-color); color: white; border: none; border-radius: 3px; padding: 0 8px; cursor: pointer; font-size: 0.7em;">更新</button>
+                                      </div>
+                                  </form>
+                              </td>
+                              <td style="text-align: right; width: 30px; vertical-align: top; padding-top: 8px;">
+                                  <form action="{{ url_for('makeshift.delete_position', position_id=pos.id) }}" method="POST" onsubmit="return confirm('この役割を削除しますか？');">
+                                      <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 1.1em;">×</button>
+                                  </form>
+                              </td>
+                          </tr>
+                          {% endfor %}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
         </div>
     </div>
         
