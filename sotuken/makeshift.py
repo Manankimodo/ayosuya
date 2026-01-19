@@ -754,7 +754,7 @@ def auto_calendar():
                     model.Add(current_total_shifts <= total_req)
 
             # ========================================================
-            # 11. 労働時間制約
+            # 11. 労働時間制約（★最低勤務時間をハード制約化★）
             # ========================================================
             max_hours = float(settings['max_hours_per_day'])
             max_intervals = int((max_hours * 60) / INTERVAL_MINUTES)
@@ -766,14 +766,36 @@ def auto_calendar():
                 total_worked = sum(shifts[u, t] for t in range(num_intervals))
                 user_total_hours.append(total_worked)
                 
-                # 最大時間制約
+                # ★修正: 保護シフトがあるユーザーもチェック対象に含める
+                uid = user_ids[u]
+                is_locked_user = str(uid) in locked_user_ids_set
+                
+                # 最大時間制約（ハード制約）
                 model.Add(total_worked <= max_intervals)
                 
-                # 最小時間制約（働く場合）
+                # ★修正: 最低時間制約をハード制約化★
+                # 保護シフトがある場合でも、最低勤務時間はチェックする
                 if min_slots > 0:
-                    is_working = model.NewBoolVar(f'is_working_{u}')
-                    model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
-                    model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
+                    # 保護シフトの場合、既に確定している時間数を計算
+                    if is_locked_user:
+                        locked_slots = sum(1 for t_idx in range(num_intervals) if user_locked_map[u][t_idx])
+                        
+                        # 保護シフトが既に最低時間を満たしている場合はOK
+                        if locked_slots >= min_slots:
+                            pass  # 制約不要
+                        else:
+                            # 保護シフトだけでは最低時間に満たない → 追加配置で補う必要がある
+                            # しかし保護シフトは変更不可なので、この場合は警告を出すべき
+                            print(f"WARNING: User {uid} のロックシフトが最低勤務時間({min_hours}h)未満です: {locked_slots * INTERVAL_MINUTES / 60}h")
+                    else:
+                        # 通常ユーザーの場合、最低勤務時間制約を適用
+                        is_working = model.NewBoolVar(f'is_working_{u}')
+                        model.Add(total_worked >= 1).OnlyEnforceIf(is_working)
+                        model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
+                        
+                        # ★ハード制約: 働く場合は「絶対に」最低時間以上
+                        model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
+                        model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
 
             # バランス制約（最大・最小労働時間の差を最小化）
             max_hours_var = model.NewIntVar(0, max_intervals, 'max_hours')
@@ -789,9 +811,10 @@ def auto_calendar():
             balance_penalty = max_hours_var - min_hours_var
 
             # ========================================================
-            # 12. 連続勤務制約（中抜け防止）★大幅緩和★
+            # 12. 連続勤務制約（中抜け防止）★完全な中抜け禁止版★
             # ========================================================
             for u in range(num_users):
+                # ★修正: 最大1ブロックのみ許可（= 中抜け完全禁止）
                 start_flags = []
                 s0 = model.NewBoolVar(f'start_{u}_0')
                 model.Add(s0 == shifts[u, 0])
@@ -803,12 +826,12 @@ def auto_calendar():
                     model.AddBoolOr([shifts[u, t].Not(), shifts[u, t-1]]).OnlyEnforceIf(st.Not())
                     start_flags.append(st)
                 
-                # ★修正: 最大5ブロックまで許可（役割が変わることを考慮）
-                # 保護シフトがある場合はさらに緩和
+                # ★修正: 最大1ブロック（中抜け完全禁止）
+                # 保護シフトがある場合のみ2ブロックまで許可（既存のロックを尊重）
                 if str(user_ids[u]) in locked_user_ids_set:
-                    model.Add(sum(start_flags) <= 6)
+                    model.Add(sum(start_flags) <= 2)
                 else:
-                    model.Add(sum(start_flags) <= 5)
+                    model.Add(sum(start_flags) <= 1)
 
             # ========================================================
             # 13. 希望シフト取得とログ出力
@@ -838,6 +861,7 @@ def auto_calendar():
 
             print(f"DEBUG: {target_date_str} - 希望シフト登録者数: {len(preference_rows)}")
             # ... 既存のログ出力 ...
+            
 
             # 希望外の時間帯は完全に禁止（保護シフト考慮版）
             for u_idx in range(num_users):
@@ -863,6 +887,8 @@ def auto_calendar():
                     for t in range(num_intervals):
                         if t not in pref_times:
                             model.Add(shifts[u_idx, t] == 0)
+
+            
             # ========================================================
             # 14. 目的関数（スコア計算）
             # ========================================================
