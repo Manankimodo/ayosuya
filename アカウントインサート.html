@@ -178,47 +178,6 @@
             background: #333;
         }
 
-        /* 役割選択のスタイル */
-        .role-select {
-            display: flex;
-            gap: 15px;
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .role-option {
-            flex: 1;
-        }
-
-        .role-option input[type="radio"] {
-            display: none;
-        }
-
-        .role-option label {
-            display: block;
-            padding: 12px 20px;
-            text-align: center;
-            background: #333;
-            border: 2px solid #555;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 16px;
-            color: #ccc;
-        }
-
-        .role-option input[type="radio"]:checked + label {
-            background: #ff3333;
-            border-color: #ff3333;
-            color: #fff;
-            font-weight: bold;
-        }
-
-        .role-option label:hover {
-            border-color: #ff3333;
-        }
-
         .btn {
             width: 100%;
             padding: 18px;
@@ -295,38 +254,10 @@
             background: #252525;
         }
 
-        /* 自分自身の行をハイライト */
-        tbody tr.self-row {
-            background: #2a2a1a;
-        }
-
-        tbody tr.self-row:hover {
-            background: #353525;
-        }
-
         td {
             padding: 15px 18px;
             font-size: 15px;
             color: #ccc;
-        }
-
-        /* 役割バッジ */
-        .role-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .role-badge.manager {
-            background: #ff3333;
-            color: #fff;
-        }
-
-        .role-badge.staff {
-            background: #555;
-            color: #fff;
         }
 
         /* 削除・編集ボタン */
@@ -348,12 +279,6 @@
         .btn-delete:hover {
             background: #c82333;
             transform: scale(1.05);
-        }
-
-        .btn-delete:disabled {
-            background: #666;
-            cursor: not-allowed;
-            opacity: 0.5;
         }
 
         .btn-edit {
@@ -386,11 +311,6 @@
 
             th, td {
                 padding: 12px 10px;
-            }
-
-            .role-select {
-                flex-direction: column;
-                gap: 10px;
             }
         }
     </style>
@@ -435,21 +355,6 @@
                 <input type="text" id="name" name="name" required placeholder="従業員の名前を入力">
             </div>
 
-            <!-- 役割選択 -->
-            <div class="form-group">
-                <label>役割 <span style="color: #ff3333;">*</span></label>
-                <div class="role-select">
-                    <div class="role-option">
-                        <input type="radio" id="role_staff" name="role" value="staff" checked>
-                        <label for="role_staff">👤 スタッフ</label>
-                    </div>
-                    <div class="role-option">
-                        <input type="radio" id="role_manager" name="role" value="manager">
-                        <label for="role_manager">👔 店長</label>
-                    </div>
-                </div>
-            </div>
-
             <div class="form-group">
                 <label>ポジション <span style="color: #ff3333;">*</span></label>
                 <div style="background: #2a2a2a; padding: 15px; border-radius: 8px;">
@@ -479,7 +384,6 @@
                         <tr>
                             <th>ログインID</th>
                             <th>名前</th>
-                            <th>役割</th>
                             <th>ポジション</th>
                             <th>店舗コード</th>
                             <th>操作</th>
@@ -487,20 +391,15 @@
                     </thead>
                     <tbody>
                         {% for account in accounts %}
-                        <tr {% if account.is_self %}class="self-row"{% endif %}>
-                            <td>{{ account.login_id }}{% if account.is_self %} <span style="color: #ff3333;">（あなた）</span>{% endif %}</td>
+                        <tr>
+                            <td>{{ account.login_id }}</td>
                             <td>{{ account.name }}</td>
-                            <td>
-                                <span class="role-badge {{ account.role }}">
-                                    {{ account.role_text }}
-                                </span>
-                            </td>
                             <td>{{ account.positions }}</td>
                             <td>{{ account.store_name or '未設定' }}</td>
                             <td>
-                                <a href="{{ url_for('insert.update', id=account.id) }}" class="btn-edit">編集</a>
+                                <a href="{{ url_for('insert.edit', id=account.id) }}" class="btn-edit">編集</a>
                                 <form method="POST" action="{{ url_for('insert.delete', id=account.id) }}" style="display:inline;" onsubmit="return confirm('本当に削除しますか?');">
-                                    <button type="submit" class="btn-delete" {% if account.is_self %}disabled title="自分自身は削除できません"{% endif %}>削除</button>
+                                    <button type="submit" class="btn-delete">削除</button>
                                 </form>
                             </td>
                         </tr>

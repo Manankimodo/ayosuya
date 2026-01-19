@@ -1,0 +1,14 @@
+<form method="POST">
+  <label>名前</label>
+  <input type="text" name="name" value="{{ account.name }}" required>
+
+  <label>パスワード（変更する場合のみ）</label>
+  <input type="text" name="password" placeholder="新しいパスワードを入力">
+
+  <!-- 店舗IDは非表示にして安全に送信 -->
+  <input type="hidden" name="store_id" value="{{ account.store_id }}">
+  </div>
+
+  <button type="submit">更新する</button>
+</form>
+<p class="back"><a href="{{ url_for('insert.insert') }}">← 一覧に戻る</a></p>

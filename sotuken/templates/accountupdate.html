@@ -1,14 +1,512 @@
-<form method="POST">
-  <label>名前</label>
-  <input type="text" name="name" value="{{ account.name }}" required>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>従業員情報編集</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  <label>パスワード（変更する場合のみ）</label>
-  <input type="text" name="password" placeholder="新しいパスワードを入力">
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
 
-  <!-- 店舗IDは非表示にして安全に送信 -->
-  <input type="hidden" name="store_id" value="{{ account.store_id }}">
-  </div>
+        .form-container {
+            max-width: 600px;
+            width: 100%;
+            background: #1a1a1a;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
 
-  <button type="submit">更新する</button>
-</form>
-<p class="back"><a href="{{ url_for('insert.insert') }}">← 一覧に戻る</a></p>
+        h2 {
+            color: #ff3333;
+            margin-bottom: 40px;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* フラッシュメッセージ */
+        .alert {
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .alert-success {
+            background-color: #28a745;
+            color: #fff;
+        }
+
+        .alert-danger {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        .alert-warning {
+            background-color: #ffc107;
+            color: #000;
+        }
+
+        /* 警告ボックス */
+        .warning-box {
+            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+            color: #fff;
+            padding: 18px 24px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+        }
+
+        /* 情報表示ボックス */
+        .info-box {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .info-item {
+            margin-bottom: 20px;
+        }
+
+        .info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            display: block;
+            color: #999;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .info-value {
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        /* フォーム */
+        .form-group {
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+            color: #ccc;
+        }
+
+        label .required {
+            color: #ff3333;
+            margin-left: 4px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 18px;
+            font-size: 18px;
+            border: 2px solid #333;
+            border-radius: 12px;
+            background: #2a2a2a;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #0078ff;
+            background: #333;
+            box-shadow: 0 0 0 3px rgba(0, 120, 255, 0.1);
+        }
+
+        input[type="text"]:disabled {
+            background: #1a1a1a;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        /* 役割表示（読み取り専用） */
+        .role-display {
+            background: #2a2a2a;
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .role-display.manager {
+            background: linear-gradient(135deg, #ff3333 0%, #cc0000 100%);
+        }
+
+        .role-display.staff {
+            background: #555;
+        }
+
+        /* 役割選択 */
+        .role-select {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .role-option {
+            position: relative;
+        }
+
+        .role-option input[type="radio"] {
+            display: none;
+        }
+
+        .role-option label {
+            display: block;
+            padding: 18px 24px;
+            text-align: center;
+            background: #2a2a2a;
+            border: 3px solid #333;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ccc;
+        }
+
+        .role-option input[type="radio"]:checked + label {
+            background: linear-gradient(135deg, #0078ff 0%, #0056b3 100%);
+            border-color: #0078ff;
+            color: #fff;
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(0, 120, 255, 0.4);
+        }
+
+        .role-option input[type="radio"]:disabled + label {
+            background: #1a1a1a;
+            border-color: #444;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .role-option label:hover:not([for*="_disabled"]) {
+            border-color: #0078ff;
+            transform: translateY(-2px);
+        }
+
+        /* ポジション選択 */
+        .positions-container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .position-item {
+            margin-bottom: 15px;
+        }
+
+        .position-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .position-item label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .position-item label:hover {
+            background: #333;
+        }
+
+        .position-item input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            margin-right: 15px;
+            cursor: pointer;
+            accent-color: #0078ff;
+        }
+
+        .position-item span {
+            font-size: 18px;
+            color: #fff;
+        }
+
+        /* ボタン */
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 40px;
+        }
+
+        .btn {
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #0078ff 0%, #0056b3 100%);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0, 120, 255, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 120, 255, 0.4);
+        }
+
+        .btn-secondary {
+            background: #555;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #666;
+            transform: translateY(-2px);
+        }
+
+        .back {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back a {
+            color: #0078ff;
+            text-decoration: none;
+            font-size: 16px;
+            transition: color 0.3s;
+        }
+
+        .back a:hover {
+            color: #66b3ff;
+        }
+
+        /* パスワードヘルプテキスト */
+        .help-text {
+            font-size: 14px;
+            color: #999;
+            margin-top: 8px;
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .form-container {
+                padding: 25px;
+            }
+
+            h2 {
+                font-size: 24px;
+            }
+
+            .role-select {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>✏️ 従業員情報編集</h2>
+
+        <!-- フラッシュメッセージ -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- 自分自身を編集する場合の警告 -->
+        {% if account.is_self %}
+        <div class="warning-box">
+            <span style="font-size: 24px;">⚠️</span>
+            <span>自分自身のアカウントを編集しています。店長権限は削除できません。</span>
+        </div>
+        {% endif %}
+
+        <!-- 基本情報表示 -->
+        <div class="info-box">
+            <div class="info-item">
+                <span class="info-label">ログインID</span>
+                <div class="info-value">{{ account.login_id }}</div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">店舗コード</span>
+                <div class="info-value">{{ account.store_name }}</div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">役割</span>
+                <div class="role-display {{ account.role }}">
+                    {% if account.role == 'manager' %}👔 店長{% else %}👤 スタッフ{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 編集フォーム -->
+        <form method="POST">
+            <div class="form-group">
+                <label for="name">
+                    名前<span class="required">*</span>
+                </label>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       value="{{ account.name }}" 
+                       required 
+                       placeholder="従業員の名前を入力">
+            </div>
+
+            <!-- パスワード変更 -->
+            <div class="form-group">
+                <label for="password">
+                    パスワード（変更する場合のみ）
+                </label>
+                <input type="text" 
+                       id="password" 
+                       name="password" 
+                       placeholder="新しいパスワードを入力">
+                <div class="help-text">
+                    ※ 空欄の場合は変更されません
+                </div>
+            </div>
+
+            <!-- 役割選択 -->
+            <div class="form-group">
+                <label>
+                    役割<span class="required">*</span>
+                </label>
+                {% if account.is_self %}
+                <p style="color: #999; font-size: 14px; margin-bottom: 15px;">
+                    ※ 自分自身の役割は変更できません
+                </p>
+                <div class="role-select">
+                    <div class="role-option">
+                        <input type="radio" 
+                               id="role_staff_disabled" 
+                               name="role" 
+                               value="staff" 
+                               {% if account.role == 'staff' %}checked{% endif %} 
+                               disabled>
+                        <label for="role_staff_disabled">👤 スタッフ</label>
+                    </div>
+                    <div class="role-option">
+                        <input type="radio" 
+                               id="role_manager_disabled" 
+                               name="role" 
+                               value="manager" 
+                               {% if account.role == 'manager' %}checked{% endif %} 
+                               disabled>
+                        <label for="role_manager_disabled">👔 店長</label>
+                    </div>
+                </div>
+                <!-- 隠しフィールドで現在の役割を送信 -->
+                <input type="hidden" name="role" value="{{ account.role }}">
+                {% else %}
+                <div class="role-select">
+                    <div class="role-option">
+                        <input type="radio" 
+                               id="role_staff" 
+                               name="role" 
+                               value="staff" 
+                               {% if account.role == 'staff' %}checked{% endif %}>
+                        <label for="role_staff">👤 スタッフ</label>
+                    </div>
+                    <div class="role-option">
+                        <input type="radio" 
+                               id="role_manager" 
+                               name="role" 
+                               value="manager" 
+                               {% if account.role == 'manager' %}checked{% endif %}>
+                        <label for="role_manager">👔 店長</label>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- ポジション選択 -->
+            <div class="form-group">
+                <label>
+                    ポジション<span class="required">*</span>
+                </label>
+                <div class="positions-container">
+                    {% for position in positions %}
+                    <div class="position-item">
+                        <label>
+                            <input type="checkbox" 
+                                   name="positions" 
+                                   value="{{ position.id }}" 
+                                   {% if position.id in selected_positions %}checked{% endif %}>
+                            <span>{{ position.name }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- 店舗IDは非表示にして安全に送信 -->
+            <input type="hidden" name="store_id" value="{{ account.store_id }}">
+
+            <!-- ボタン -->
+            <div class="button-group">
+                <button type="submit" class="btn btn-primary">
+                    💾 更新する
+                </button>
+                <a href="{{ url_for('insert.insert') }}" class="btn btn-secondary">
+                    キャンセル
+                </a>
+            </div>
+        </form>
+
+        <p class="back">
+            <a href="{{ url_for('insert.insert') }}">← 一覧に戻る</a>
+        </p>
+    </div>
+</body>
+</html>
