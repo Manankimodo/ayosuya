@@ -632,7 +632,7 @@ def auto_calendar():
             # ========================================================
             # 役割名とタイプのマッピング
             position_names = {}
-            position_types = {}  # ★新規追加
+            position_types = {}
 
             cursor.execute("SELECT id, name, priority_type FROM positions")
             for p in cursor.fetchall():
@@ -640,7 +640,7 @@ def auto_calendar():
                 if p.get('id') is not None and p.get('name') is not None:
                     pid = str(p['id'])
                     position_names[pid] = p['name']
-                    position_types[pid] = p.get('priority_type', 'normal')  # ★新規追加
+                    position_types[pid] = p.get('priority_type', 'normal')
 
             print(f"DEBUG: 取得した役割: {[(position_names[pid], position_types[pid]) for pid in position_names.keys()]}")
 
@@ -648,7 +648,7 @@ def auto_calendar():
             skill_holder_count = {}
             for pid in position_names.keys():
                 count = sum(1 for uid in user_ids if pid in user_skill_ids.get(uid, []))
-                skill_holder_count[pid] = count if count > 0 else 999  # 誰も持っていない場合は999
+                skill_holder_count[pid] = count if count > 0 else 999
 
             print(f"DEBUG: スキル保有者数: {[(position_names.get(pid), position_types.get(pid), cnt) for pid, cnt in skill_holder_count.items()]}")
 
@@ -702,15 +702,6 @@ def auto_calendar():
                 for t_idx, t_time in enumerate(time_intervals):
                     if l_start <= t_time < l_end:
                         user_locked_map[u_idx][t_idx] = True
-                        
-            # # 修正前は else で 0 を強制していましたが、
-            # # ロックされていない時間はAIが自由に配置できるように変更します
-            # for u_idx, locked_slots in user_locked_map.items():
-            #     for t_idx, is_locked in enumerate(locked_slots):
-            #         if is_locked:
-            #             # ロックされている時間帯だけ「必ず働く」ように固定
-            #             model.Add(shifts[u_idx, t_idx] == 1)
-            #         # else (ロックなし) の場合は、AIの計算に任せるため何もしない
 
             # ========================================================
             # 10. 需要充足制約
@@ -754,7 +745,7 @@ def auto_calendar():
                     model.Add(current_total_shifts <= total_req)
 
             # ========================================================
-            # 11. 労働時間制約（★最低勤務時間をハード制約化★）
+            # 11. 労働時間制約
             # ========================================================
             max_hours = float(settings['max_hours_per_day'])
             max_intervals = int((max_hours * 60) / INTERVAL_MINUTES)
@@ -766,36 +757,8 @@ def auto_calendar():
                 total_worked = sum(shifts[u, t] for t in range(num_intervals))
                 user_total_hours.append(total_worked)
                 
-                # ★修正: 保護シフトがあるユーザーもチェック対象に含める
-                uid = user_ids[u]
-                is_locked_user = str(uid) in locked_user_ids_set
-                
                 # 最大時間制約（ハード制約）
                 model.Add(total_worked <= max_intervals)
-                
-                # ★修正: 最低時間制約をハード制約化★
-                # 保護シフトがある場合でも、最低勤務時間はチェックする
-                if min_slots > 0:
-                    # 保護シフトの場合、既に確定している時間数を計算
-                    if is_locked_user:
-                        locked_slots = sum(1 for t_idx in range(num_intervals) if user_locked_map[u][t_idx])
-                        
-                        # 保護シフトが既に最低時間を満たしている場合はOK
-                        if locked_slots >= min_slots:
-                            pass  # 制約不要
-                        else:
-                            # 保護シフトだけでは最低時間に満たない → 追加配置で補う必要がある
-                            # しかし保護シフトは変更不可なので、この場合は警告を出すべき
-                            print(f"WARNING: User {uid} のロックシフトが最低勤務時間({min_hours}h)未満です: {locked_slots * INTERVAL_MINUTES / 60}h")
-                    else:
-                        # 通常ユーザーの場合、最低勤務時間制約を適用
-                        is_working = model.NewBoolVar(f'is_working_{u}')
-                        model.Add(total_worked >= 1).OnlyEnforceIf(is_working)
-                        model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
-                        
-                        # ★ハード制約: 働く場合は「絶対に」最低時間以上
-                        model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
-                        model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
 
             # バランス制約（最大・最小労働時間の差を最小化）
             max_hours_var = model.NewIntVar(0, max_intervals, 'max_hours')
@@ -811,10 +774,9 @@ def auto_calendar():
             balance_penalty = max_hours_var - min_hours_var
 
             # ========================================================
-            # 12. 連続勤務制約（中抜け防止）★完全な中抜け禁止版★
+            # 12. 連続勤務制約（中抜け防止）
             # ========================================================
             for u in range(num_users):
-                # ★修正: 最大1ブロックのみ許可（= 中抜け完全禁止）
                 start_flags = []
                 s0 = model.NewBoolVar(f'start_{u}_0')
                 model.Add(s0 == shifts[u, 0])
@@ -826,7 +788,6 @@ def auto_calendar():
                     model.AddBoolOr([shifts[u, t].Not(), shifts[u, t-1]]).OnlyEnforceIf(st.Not())
                     start_flags.append(st)
                 
-                # ★修正: 最大1ブロック（中抜け完全禁止）
                 # 保護シフトがある場合のみ2ブロックまで許可（既存のロックを尊重）
                 if str(user_ids[u]) in locked_user_ids_set:
                     model.Add(sum(start_flags) <= 2)
@@ -860,10 +821,8 @@ def auto_calendar():
                         user_pref_intervals[u_idx].append(t_idx)
 
             print(f"DEBUG: {target_date_str} - 希望シフト登録者数: {len(preference_rows)}")
-            # ... 既存のログ出力 ...
-            
 
-            # 希望外の時間帯は完全に禁止（保護シフト考慮版）
+            # ★修正: 希望外の時間帯は完全に禁止 + 最低勤務時間チェック
             for u_idx in range(num_users):
                 uid = user_ids[u_idx]
                 
@@ -882,13 +841,40 @@ def auto_calendar():
                     for t in range(num_intervals):
                         model.Add(shifts[u_idx, t] == 0)
                 else:
-                    # 希望時間帯以外は0に固定
                     pref_times = set(user_pref_intervals[u_idx])
-                    for t in range(num_intervals):
-                        if t not in pref_times:
+                    pref_duration = len(pref_times) * INTERVAL_MINUTES / 60  # 希望時間の長さ（時間）
+                    
+                    # ★追加: 希望時間が最低勤務時間より短い場合は配置しない
+                    if min_hours > 0 and pref_duration < min_hours:
+                        print(f"WARNING: User {uid} の希望時間({pref_duration:.1f}h)が最低勤務時間({min_hours}h)未満のため配置対象外")
+                        for t in range(num_intervals):
                             model.Add(shifts[u_idx, t] == 0)
+                    else:
+                        # 希望時間帯以外は0に固定
+                        for t in range(num_intervals):
+                            if t not in pref_times:
+                                model.Add(shifts[u_idx, t] == 0)
 
-            
+            # ★最低勤務時間制約を希望シフト処理の後に配置
+            if min_hours > 0:
+                for u in range(num_users):
+                    uid = user_ids[u]
+                    
+                    # 保護シフトやロック済みユーザーはスキップ
+                    if str(uid) in locked_user_ids_set:
+                        continue
+                    
+                    # 希望シフト未登録の場合はスキップ
+                    if u not in user_pref_intervals:
+                        continue
+                    
+                    total_worked = sum(shifts[u, t] for t in range(num_intervals))
+                    
+                    # 「働く場合は最低min_slots以上」という制約
+                    is_working = model.NewBoolVar(f'is_working_min_{u}')
+                    model.Add(total_worked > 0).OnlyEnforceIf(is_working)
+                    model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
+                    model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
             # ========================================================
             # 14. 目的関数（スコア計算）
             # ========================================================
@@ -907,6 +893,12 @@ def auto_calendar():
                 # ロック済みユーザーは計算対象外（既に確定しているため）
                 if uid_str in locked_user_ids_set:
                     continue
+                
+                # ★追加: 最低勤務時間を満たさないユーザーもスキップ
+                if u in user_pref_intervals:
+                    pref_duration = len(user_pref_intervals[u]) * INTERVAL_MINUTES / 60
+                    if min_hours > 0 and pref_duration < min_hours:
+                        continue
                 
                 s_val = safe_to_time(row['start_time'])
                 e_val = safe_to_time(row['end_time'])
@@ -942,13 +934,13 @@ def auto_calendar():
                     penalty = sum(shifts[u_idx, t] for t in range(num_intervals))
                     recent_work_penalty.append(penalty)
 
-            # 重み付け設定（大幅変更）
-            WEIGHT_DEMAND = 1000          # 需要充足を最優先
-            WEIGHT_START_TIME = 50        # 希望開始時間ボーナス（新規）
-            WEIGHT_COVERAGE = 30          # 希望時間帯カバー率（新規）
-            WEIGHT_OVERSTAFF = 20         # 過剰人員ペナルティ
-            WEIGHT_BALANCE = 3            # バランスペナルティ
-            WEIGHT_RECENT_WORK = 2        # 最近の勤務ペナルティ
+            # 重み付け設定
+            WEIGHT_DEMAND = 1000
+            WEIGHT_START_TIME = 50
+            WEIGHT_COVERAGE = 30
+            WEIGHT_OVERSTAFF = 20
+            WEIGHT_BALANCE = 3
+            WEIGHT_RECENT_WORK = 2
 
             # 目的関数定義
             model.Maximize(
@@ -994,10 +986,6 @@ def auto_calendar():
                 # ========================================================
                 # 17. 役割割り当てロジック（必須役割優先版）
                 # ========================================================
-                user_assigned_roles = {}
-                active_shortages = {}
-                shortage_list_day = []
-
                 for t_idx, t_time in enumerate(time_intervals):
                     t_str = t_time.strftime("%H:%M")
                     
@@ -1020,20 +1008,19 @@ def auto_calendar():
                     
                     # ========================================================
                     # ★3. 需要枠を優先度順にソート★
-                    # critical（必須） > normal（通常） > support（サポート）
                     # ========================================================
                     def slot_priority(pid):
                         ptype = position_types.get(pid, 'normal')
                         if ptype == 'critical':
-                            return 0  # 最優先
+                            return 0
                         elif ptype == 'normal':
                             return 1
-                        else:  # support
+                        else:
                             return 2
                     
                     open_slots.sort(key=slot_priority)
                     
-                    if len(open_slots) > 0 and len(open_slots) <= 10:  # スロット数が少ない場合のみ詳細出力
+                    if len(open_slots) > 0 and len(open_slots) <= 10:
                         slot_summary = [f'{position_names.get(pid, "?")}({position_types.get(pid, "?")})' for pid in open_slots]
                         print(f"DEBUG: {t_str} 需要枠（優先度順）: {slot_summary}")
                     
@@ -1046,17 +1033,14 @@ def auto_calendar():
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
                         
-                        # 保護ユーザーが埋められる枠を探す
                         available_slots = [(i, pid) for i, pid in enumerate(open_slots) if pid in skills]
                         
                         if available_slots:
-                            # 最初に見つかった枠を使う
                             slot_idx, selected_pid = available_slots[0]
                             assigned_pids[u_idx] = selected_pid
                             open_slots.pop(slot_idx)
                             print(f"DEBUG: 🔒保護ユーザー {uid} → {position_names.get(selected_pid)}")
                         else:
-                            # スキルに合う枠がない場合、最初のスキルを記録
                             assigned_pids[u_idx] = skills[0] if skills else "Staff"
                     
                     # ========================================================
@@ -1066,122 +1050,91 @@ def auto_calendar():
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
                         
-                        # 必須スキル（critical）を持っているか
                         has_critical_skill = any(position_types.get(s) == 'critical' for s in skills)
                         
-                        # 必須スキル保有者を最優先
                         if has_critical_skill:
                             priority_tier = 0
                         else:
                             priority_tier = 1
                         
-                        # スキル希少性（保有者が少ないほど優先）
                         min_rarity = min([skill_holder_count.get(s, 999) for s in skills]) if skills else 999
                         
-                        # (優先ティア, スキル数, 希少性, ユーザーID)
                         return (priority_tier, len(skills), min_rarity, u_idx)
                     
                     working_users.sort(key=user_priority)
                     
                     # ========================================================
-                    # ★6. 通常ユーザーの役割割り当て: 役割タイプ >>> 希少性 >> 緊急度★
+                    # ★6. 通常ユーザーの役割割り当て★
                     # ========================================================
                     for u_idx in working_users:
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
                         
-                        # このユーザーが埋められる枠があるか
                         available_slots = [(i, pid) for i, pid in enumerate(open_slots) if pid in skills]
                         
                         if available_slots:
-                            # --- スコアリング方式で最適な役割を選択 ---
-                            
-                            # 各役割の不足数をカウント（緊急度）
                             shortage_count = {}
                             for pid in open_slots:
                                 shortage_count[pid] = shortage_count.get(pid, 0) + 1
                             
-                            # 各スロットにスコアを付ける
                             slot_scores = []
                             for slot_idx, pid in available_slots:
-                                # 1. 役割タイプスコア（必須 > 通常 > サポート）
                                 ptype = position_types.get(pid, 'normal')
                                 if ptype == 'critical':
-                                    type_score = 1000  # ★圧倒的に優先
+                                    type_score = 1000
                                 elif ptype == 'normal':
                                     type_score = 100
-                                else:  # support
+                                else:
                                     type_score = 10
                                 
-                                # 2. スキル希少性スコア（保有者が少ないほど高い）
                                 rarity_score = 100 / max(skill_holder_count.get(pid, 1), 1)
-                                
-                                # 3. 緊急度スコア（不足数が多いほど高い）
                                 urgency_score = shortage_count.get(pid, 1) * 10
-                                
-                                # 4. 総合スコア（重み付け）
-                                # 役割タイプ >>> 希少性 >> 緊急度
                                 total_score = type_score + (rarity_score * 3) + (urgency_score * 2)
                                 
                                 slot_scores.append((slot_idx, pid, total_score))
                             
-                            # スコアが最も高い役割を選択
                             sorted_slots = sorted(slot_scores, key=lambda x: -x[2])
                             slot_idx, selected_pid, score = sorted_slots[0]
                             
                             assigned_pids[u_idx] = selected_pid
                             open_slots.pop(slot_idx)
                             
-                            # デバッグ出力（ユーザーが少ない場合のみ）
                             if len(working_users) <= 5:
                                 p_name = position_names.get(selected_pid, "不明")
                                 p_type = position_types.get(selected_pid, "normal")
                                 type_icon = {"critical": "⭐", "normal": "📋", "support": "🔧"}.get(p_type, "")
                                 print(f"    User {uid} → {type_icon}{p_name} (スコア: {score:.1f})")
-                        else:
-                            pass
 
                     # 7. 結果を記録
                     for u_idx, pid in assigned_pids.items():
                         if u_idx not in user_assigned_roles: 
                             user_assigned_roles[u_idx] = {}
                         
-                        # ★修正: この時間帯に実際に需要がある役割のみ記録
                         if t_str in demand_map and pid in [p for p in demand_map[t_str].keys()]:
                             user_assigned_roles[u_idx][t_idx] = position_names.get(pid, "Work")
-                        else:
-                            # この時間帯にこの役割の需要がない場合は記録しない
-                            # （次の時間帯で別の役割に割り当てられる可能性がある）
-                            pass
 
                     # ========================================================
-                    # 18. 不足データ生成（★保護シフト考慮版★）
+                    # 18. 不足データ生成
                     # ========================================================
-                    # この時点で open_slots に残っている = 誰も割り当てられなかった不足
                     remaining_open_slots = list(open_slots)
                     
                     print(f"DEBUG: {t_str} - 全需要: {len(demand_map.get(t_str, {}).values()) if t_str in demand_map else 0}, 配置済み: {len(assigned_pids)}, 残り不足: {len(remaining_open_slots)}")
                     
                     next_end_dt = (datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)).time()
                     
-                    # --- A. 継続中の不足を更新（既存の不足枠を維持） ---
+                    # A. 継続中の不足を更新
                     for key in list(active_shortages.keys()):
-                        # keyの形式: "position_id_index" (例: "2_0", "2_1")
                         pid = key.split('_')[0]
                         
-                        # まだこの役割の不足が続いているか確認
                         if pid in remaining_open_slots:
-                            # まだ不足が続いているので、終了時間を15分延ばす
                             active_shortages[key]['end_time'] = next_end_dt.strftime("%H:%M")
-                            remaining_open_slots.remove(pid)  # 1枠分消化
+                            remaining_open_slots.remove(pid)
                         else:
-                            # このスロットの不足は解消されたので、保存リストへ移動して削除
                             shortage_list_day.append(active_shortages[key])
                             del active_shortages[key]
                     
-                    # --- B. 新しく発生した不足を「独立したID」で作成 ---
+                    # B. 新しく発生した不足を作成
                     for pid in remaining_open_slots:
-                        # 空いている最小の連番を探す（キーの重複を避ける）
                         n = 0
                         while f"{pid}_{n}" in active_shortages:
                             n += 1
@@ -1189,14 +1142,12 @@ def auto_calendar():
                         unique_key = f"{pid}_{n}"
                         p_name = position_names.get(pid, "役割")
                         
-                        # 【重要】IDが重ならないように計算（例：役割2の1人目は-2001, 2人目は-2002）
                         try:
                             unique_neg_id = -1 * (int(pid) * 1000 + n + 1)
                         except (ValueError, TypeError) as e:
                             print(f"ERROR: pidの変換に失敗: pid={pid}, type={type(pid)}, error={e}")
                             unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                         
-                        # ★修正: 人数が複数の場合、(1), (2)などの番号を付ける
                         shortage_count_for_this_position = sum(1 for k in active_shortages.keys() if k.startswith(f"{pid}_"))
                         if shortage_count_for_this_position > 0 or remaining_open_slots.count(pid) > 1:
                             display_name = f"🚨 {p_name}不足 ({n+1})"
@@ -1211,75 +1162,15 @@ def auto_calendar():
                             "end_time": next_end_dt.strftime("%H:%M"), 
                             "type": display_name
                         }
-
-                    # ========================================================
-                    # 18. 不足データ生成（★個別スロット管理で人数分出す★）
-                    # ========================================================
-                    # 現在この時間枠で、誰も割り当てられず余っている「枠」をカウント
-                    # ★修正: リストで管理して、個別のスロットとして扱う
-                    remaining_open_slots = list(open_slots)  # 残っている枠のリスト
-
-                    next_end_dt = (datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)).time()
-
-                    # --- A. 継続中の不足を更新（既存の不足枠を維持） ---
-                    for key in list(active_shortages.keys()):
-                        # keyの形式: "position_id_index" (例: "2_0", "2_1")
-                        pid = key.split('_')[0]
-                        
-                        # まだこの役割の不足が続いているか確認
-                        if pid in remaining_open_slots:
-                            # まだ不足が続いているので、終了時間を15分延ばす
-                            active_shortages[key]['end_time'] = next_end_dt.strftime("%H:%M")
-                            remaining_open_slots.remove(pid)  # 1枠分消化
-                        else:
-                            # このスロットの不足は解消されたので、保存リストへ移動して削除
-                            shortage_list_day.append(active_shortages[key])
-                            del active_shortages[key]
-
-                    # --- B. 新しく発生した不足を「独立したID」で作成 ---
-                    # ★修正: 残っている枠を1つずつ処理
-                    for pid in remaining_open_slots:
-                        # 空いている最小の連番を探す（キーの重複を避ける）
-                        n = 0
-                        while f"{pid}_{n}" in active_shortages:
-                            n += 1
-                        
-                        unique_key = f"{pid}_{n}"
-                        p_name = position_names.get(pid, "役割")
-                        
-                        # 【重要】IDが重ならないように計算（例：役割2の1人目は-2001, 2人目は-2002）
-                        # これにより、グラフ上で別の行として認識されます
-                        try:
-                            unique_neg_id = -1 * (int(pid) * 1000 + n + 1)
-                        except (ValueError, TypeError) as e:
-                            print(f"ERROR: pidの変換に失敗: pid={pid}, type={type(pid)}, error={e}")
-                            unique_neg_id = -1 * (hash(str(pid)) % 1000000)
-                        
-                        # ★修正: 人数が複数の場合、(1), (2)などの番号を付ける
-                        shortage_count_for_this_position = sum(1 for k in active_shortages.keys() if k.startswith(f"{pid}_"))
-                        if shortage_count_for_this_position > 0:
-                            display_name = f"🚨 {p_name}不足 ({n+1})"
-                        else:
-                            display_name = f"🚨 {p_name}不足"
-                        
-                        active_shortages[unique_key] = {
-                            "user_id": unique_neg_id, 
-                            "user_name": display_name,
-                            "date": target_date_str,
-                            "start_time": t_time.strftime("%H:%M"),
-                            "end_time": next_end_dt.strftime("%H:%M"), 
-                            "type": display_name
-                        }
-                # ========================================================
+                
                 # 最終処理：閉店まで残った不足をすべて回収
-                # ========================================================
                 for item in active_shortages.values(): 
                     shortage_list_day.append(item)
                 
-                # 最後に、一括して全生成リストに追加
                 all_generated_shifts.extend(shortage_list_day)
+                
                 # ========================================================
-                # 19. シフトブロック生成（連続した同じ役割をまとめる）
+                # 19. シフトブロック生成
                 # ========================================================
                 for u_idx, roles_map in user_assigned_roles.items():
                     user_id = user_ids[u_idx]
@@ -1295,7 +1186,6 @@ def auto_calendar():
                         t_time = time_intervals[t_idx]
                         t_str = t_time.strftime("%H:%M")
                         
-                        # ★追加: この時間帯にこの役割の需要があるか確認
                         has_demand_for_this_role = False
                         if t_str in demand_map:
                             for pid, count in demand_map[t_str].items():
@@ -1303,7 +1193,7 @@ def auto_calendar():
                                     has_demand_for_this_role = True
                                     break
                         
-                        if role_name and has_demand_for_this_role:  # ★修正: 需要がある場合のみ
+                        if role_name and has_demand_for_this_role:
                             if current_block_start is None:
                                 current_block_start = t_time
                                 current_role = role_name
@@ -1357,7 +1247,6 @@ def auto_calendar():
                     if t_str not in demand_map:
                         continue
                     
-                    # 保護シフトでカバーされている分を計算
                     locked_count_by_position = {}
                     for ls in locked_shifts_data:
                         l_start = safe_to_time(ls['start_time'])
@@ -1368,14 +1257,11 @@ def auto_calendar():
                                 for pid in user_skill_ids[uid]:
                                     locked_count_by_position[pid] = locked_count_by_position.get(pid, 0) + 1
                     
-                    # 不足分を計算
                     for pid, required_count in demand_map[t_str].items():
                         locked = locked_count_by_position.get(pid, 0)
                         shortage = max(0, required_count - locked)
                         
-                        # ★修正: shortage数だけループ（人数分のバーを生成）
                         for i in range(shortage):
-                            # 空いている最小の連番を探す
                             n = 0
                             while f"{pid}_{n}" in active_shortages:
                                 n += 1
@@ -1383,7 +1269,6 @@ def auto_calendar():
                             key = f"{pid}_{n}"
                             next_end_dt = datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)
                             
-                            # keyが既に存在する場合は終了時間を延長
                             if key in active_shortages:
                                 active_shortages[key]['end_time'] = next_end_dt.time().strftime("%H:%M")
                             else:
@@ -1395,7 +1280,6 @@ def auto_calendar():
                                     print(f"ERROR: pidの変換に失敗(失敗時): pid={pid}, type={type(pid)}, error={e}")
                                     unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                                 
-                                # ★修正: 複数人の場合は番号を付ける
                                 if shortage > 1:
                                     unique_name = f"🚨 {p_name}不足 ({n+1})"
                                 else:
@@ -1528,7 +1412,6 @@ def auto_calendar():
                                settings=error_settings, 
                                shifts=[], 
                                message=f"❌ エラーが発生しました: {str(e)}")
-
 @makeshift_bp.route("/toggle_lock", methods=["POST"])
 def toggle_lock():
     data = request.json
