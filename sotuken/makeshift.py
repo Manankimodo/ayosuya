@@ -855,7 +855,26 @@ def auto_calendar():
                             if t not in pref_times:
                                 model.Add(shifts[u_idx, t] == 0)
 
-            
+            # ★最低勤務時間制約を希望シフト処理の後に配置
+            if min_hours > 0:
+                for u in range(num_users):
+                    uid = user_ids[u]
+                    
+                    # 保護シフトやロック済みユーザーはスキップ
+                    if str(uid) in locked_user_ids_set:
+                        continue
+                    
+                    # 希望シフト未登録の場合はスキップ
+                    if u not in user_pref_intervals:
+                        continue
+                    
+                    total_worked = sum(shifts[u, t] for t in range(num_intervals))
+                    
+                    # 「働く場合は最低min_slots以上」という制約
+                    is_working = model.NewBoolVar(f'is_working_min_{u}')
+                    model.Add(total_worked > 0).OnlyEnforceIf(is_working)
+                    model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
+                    model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
             # ========================================================
             # 14. 目的関数（スコア計算）
             # ========================================================
