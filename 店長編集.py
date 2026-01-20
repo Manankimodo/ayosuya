@@ -46,7 +46,6 @@ def insert():
         try:
             name = request.form.get("name", "").strip()
             positions = request.form.getlist("positions")  # 複数選択されたポジション
-            role = request.form.get("role", "staff")  # 🆕 役割を選択可能に
             
             if not name:
                 flash("名前を入力してください", "danger")
@@ -54,11 +53,6 @@ def insert():
             
             if not positions:
                 flash("ポジションを1つ以上選択してください", "danger")
-                return redirect(url_for("insert.insert"))
-            
-            # 🆕 役割のバリデーション
-            if role not in ['staff', 'manager']:
-                flash("無効な役割です", "danger")
                 return redirect(url_for("insert.insert"))
 
             # 🔹 セッションから店舗IDを取得
@@ -79,6 +73,7 @@ def insert():
             # 🔹 自動生成
             login_id = generate_login_id(cursor)  # 6桁英数字のID生成
             password = generate_password()        # 8桁英数字のパスワード生成
+            role = "staff"
 
             # アカウントを登録
             cursor.execute("""
@@ -98,8 +93,7 @@ def insert():
 
             conn.commit()
 
-            role_text = "店長" if role == "manager" else "スタッフ"
-            flash(f"✅ 登録完了！ ({role_text}) ログインID: {login_id} / パスワード: {password}", "success")
+            flash(f"✅ 登録完了！ ログインID: {login_id} / パスワード: {password}", "success")
 
         except mysql.connector.Error as e:
             conn.rollback()
@@ -134,15 +128,13 @@ def insert():
         if manager_info:
             store_id = manager_info["store_id"]
             
-            # 🆕 従業員一覧とポジションを取得（staffとmanager両方）
+            # 従業員一覧とポジションを取得
             cursor.execute("""
                 SELECT a.id, a.login_id, a.name, a.role, a.store_id, s.store_code
                 FROM account a
                 LEFT JOIN store s ON a.store_id = s.id
-                WHERE a.store_id = %s
-                ORDER BY 
-                    CASE WHEN a.role = 'manager' THEN 0 ELSE 1 END,
-                    a.id DESC
+                WHERE a.store_id = %s AND a.role = 'staff'
+                ORDER BY a.id DESC
             """, (store_id,))
             
             accounts = cursor.fetchall()
@@ -150,10 +142,6 @@ def insert():
             # 各従業員のポジションを取得
             for account in accounts:
                 account['store_name'] = account.get('store_code') or '未設定'
-                account['role_text'] = '店長' if account['role'] == 'manager' else 'スタッフ'
-                
-                # 🆕 自分自身かどうかを判定
-                account['is_self'] = (account['id'] == user_id)
                 
                 # ポジションを取得
                 cursor.execute("""
@@ -179,9 +167,12 @@ def insert():
     return render_template("accountinsert.html", accounts=accounts, positions=positions)
 
 
-@insert_bp.route("/update/<int:id>", methods=["GET", "POST"])
-def update(id):
-    # 🔴 認証チェック（既存通り）
+# ===============================
+# 🔴 編集機能
+# ===============================
+@insert_bp.route("/edit/<int:id>", methods=["GET", "POST"])
+def edit(id):
+    # 🔴 認証チェック
     if session.get("role") != "manager":
         flash("アクセス権限がありません", "danger")
         return redirect(url_for("login.login"))
@@ -190,7 +181,7 @@ def update(id):
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # 店長の店舗IDを取得（既存通り）
+        # 店長の店舗IDを取得
         user_id = session.get("user_id")
         cursor.execute("SELECT store_id FROM account WHERE id = %s", (user_id,))
         manager_info = cursor.fetchone()
@@ -202,74 +193,50 @@ def update(id):
         store_id = manager_info["store_id"]
         
         if request.method == "POST":
-            # フォームから情報を取得（既存通り）
+            # フォームから新しい名前とポジションを取得
             new_name = request.form.get("name", "").strip()
-            new_password = request.form.get("password", "").strip()
-            positions = request.form.getlist("positions")
-            new_role = request.form.get("role", "staff")
+            positions = request.form.getlist("positions")  # チェックされたポジションのリスト
             
-            # バリデーション（既存通り）
+            print(f"DEBUG 編集: 名前={new_name}, ポジション={positions}")  # デバッグ用
+            
             if not new_name:
                 flash("名前を入力してください", "danger")
-                return redirect(url_for("insert.update", id=id))
+                return redirect(url_for("insert.edit", id=id))
             
             if not positions:
                 flash("ポジションを1つ以上選択してください", "danger")
-                return redirect(url_for("insert.update", id=id))
+                return redirect(url_for("insert.edit", id=id))
             
-            if new_role not in ['staff', 'manager']:
-                flash("無効な役割です", "danger")
-                return redirect(url_for("insert.update", id=id))
+            # アカウント情報を更新
+            cursor.execute("""
+                UPDATE account 
+                SET name = %s
+                WHERE id = %s AND store_id = %s AND role = 'staff'
+            """, (new_name, id, store_id))
             
-            if id == user_id and new_role != 'manager':
-                flash("⚠️ 自分自身の店長権限は削除できません", "danger")
-                return redirect(url_for("insert.update", id=id))
-
-            # --- 🔍 【修正ポイント1】更新前に「対象が存在するか」を確認 ---
-            cursor.execute("SELECT id FROM account WHERE id = %s AND store_id = %s", (id, store_id))
-            if not cursor.fetchone():
-                flash("更新対象が見つかりませんでした", "warning")
-                return redirect(url_for("insert.insert"))
-
-            # --- 🛠️ 【修正ポイント2】アカウント情報の更新（rowcount判定を削除） ---
-            if new_password:
-                cursor.execute("""
-                    UPDATE account 
-                    SET name = %s, password = %s, role = %s
-                    WHERE id = %s AND store_id = %s
-                """, (new_name, new_password, new_role, id, store_id))
-            else:
-                cursor.execute("""
-                    UPDATE account 
-                    SET name = %s, role = %s
-                    WHERE id = %s AND store_id = %s
-                """, (new_name, new_role, id, store_id))
-            
-            # 既存のポジションを全て削除（既存通り）
+            # 既存のポジションを全て削除（チェックを外したものも含む）
             cursor.execute("DELETE FROM user_positions WHERE user_id = %s", (id,))
+            print(f"DEBUG 削除件数: {cursor.rowcount}")  # デバッグ用
             
-            # 新しいポジションを追加（既存通り）
+            # 新しくチェックされたポジションを追加
             for position_id in positions:
                 cursor.execute("""
                     INSERT INTO user_positions (user_id, position_id)
                     VALUES (%s, %s)
                 """, (id, int(position_id)))
+                print(f"DEBUG 追加: user_id={id}, position_id={position_id}")  # デバッグ用
             
             conn.commit()
-            
-            if new_password:
-                flash("✏️ 従業員情報とパスワードを更新しました！", "success")
-            else:
-                flash("✏️ 従業員情報を更新しました！", "success")
+            flash("✏️ 従業員情報を更新しました！", "success")
             
             return redirect(url_for("insert.insert"))
         
-        # --- GETメソッドの処理（既存通り） ---
+        # GET: 編集対象の従業員情報とポジションを取得
         cursor.execute("""
-            SELECT a.id, a.login_id, a.name, a.role, a.store_id, s.store_code
+            SELECT a.id, a.login_id, a.name, a.role, s.store_code
             FROM account a
             LEFT JOIN store s ON a.store_id = s.id
-            WHERE a.id = %s AND a.store_id = %s
+            WHERE a.id = %s AND a.store_id = %s AND a.role = 'staff'
         """, (id, store_id))
         
         account = cursor.fetchone()
@@ -279,23 +246,25 @@ def update(id):
             return redirect(url_for("insert.insert"))
         
         account['store_name'] = account.get('store_code') or '未設定'
-        account['role_text'] = '店長' if account['role'] == 'manager' else 'スタッフ'
-        account['is_self'] = (account['id'] == user_id)
         
+        # ポジション一覧を取得
         cursor.execute("SELECT * FROM positions ORDER BY id")
         all_positions = cursor.fetchall()
         
-        cursor.execute("SELECT position_id FROM user_positions WHERE user_id = %s", (id,))
+        # 現在選択されているポジションIDを取得
+        cursor.execute("""
+            SELECT position_id FROM user_positions WHERE user_id = %s
+        """, (id,))
         selected_position_ids = [row['position_id'] for row in cursor.fetchall()]
         
-        return render_template("accountupdate.html", 
+        return render_template("accountedit.html", 
                              account=account, 
                              positions=all_positions,
                              selected_positions=selected_position_ids)
         
     except Exception as e:
-        print(f"更新エラー: {e}")
-        flash("更新エラーが発生しました", "danger")
+        print(f"編集エラー: {e}")
+        flash("編集エラーが発生しました", "danger")
         return redirect(url_for("insert.insert"))
     finally:
         cursor.close()
@@ -327,18 +296,13 @@ def delete(id):
         
         store_id = manager_info["store_id"]
         
-        # 🆕 自分自身を削除しようとしていないかチェック
-        if id == user_id:
-            flash("⚠️ 自分自身のアカウントは削除できません", "danger")
-            return redirect(url_for("insert.insert"))
-        
         # user_positionsから削除
         cursor.execute("DELETE FROM user_positions WHERE user_id = %s", (id,))
         
-        # 🆕 同じ店舗のアカウントを削除（staffとmanager両方）
+        # 同じ店舗の従業員のみ削除可能
         cursor.execute("""
             DELETE FROM account 
-            WHERE id = %s AND store_id = %s
+            WHERE id = %s AND store_id = %s AND role = 'staff'
         """, (id, store_id))
         
         if cursor.rowcount > 0:
