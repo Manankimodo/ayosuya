@@ -869,7 +869,6 @@ def auto_calendar():
                 
                 # 保護シフトがある場合
                 if str(uid) in locked_user_ids_set:
-                    # 保護シフトの時間帯のみ1に固定、それ以外は0
                     for t_idx, is_locked in enumerate(user_locked_map[u_idx]):
                         if is_locked:
                             model.Add(shifts[u_idx, t_idx] == 1)
@@ -882,11 +881,19 @@ def auto_calendar():
                     for t in range(num_intervals):
                         model.Add(shifts[u_idx, t] == 0)
                 else:
-                    # 希望時間帯以外は0に固定
                     pref_times = set(user_pref_intervals[u_idx])
-                    for t in range(num_intervals):
-                        if t not in pref_times:
+                    pref_duration = len(pref_times) * INTERVAL_MINUTES / 60  # 希望時間の長さ（時間）
+                    
+                    # ★追加: 希望時間が最低勤務時間より短い場合は配置しない
+                    if min_hours > 0 and pref_duration < min_hours:
+                        print(f"WARNING: User {uid} の希望時間({pref_duration}h)が最低勤務時間({min_hours}h)未満のため配置対象外")
+                        for t in range(num_intervals):
                             model.Add(shifts[u_idx, t] == 0)
+                    else:
+                        # 希望時間帯以外は0に固定
+                        for t in range(num_intervals):
+                            if t not in pref_times:
+                                model.Add(shifts[u_idx, t] == 0)
 
             
             # ========================================================
@@ -1270,7 +1277,7 @@ def auto_calendar():
                             "end_time": next_end_dt.strftime("%H:%M"), 
                             "type": display_name
                         }
-                # ========================================================
+                                    # ========================================================
                 # 最終処理：閉店まで残った不足をすべて回収
                 # ========================================================
                 for item in active_shortages.values(): 
