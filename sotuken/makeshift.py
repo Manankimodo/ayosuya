@@ -984,7 +984,7 @@ def auto_calendar():
                 shortage_list_day = []
 
                 # ========================================================
-                # 17. 役割割り当てロジック（必須役割優先版）
+                # 17. 役割割り当てロジック（必須役割優先版）★ロック対応修正版★
                 # ========================================================
                 for t_idx, t_time in enumerate(time_intervals):
                     t_str = t_time.strftime("%H:%M")
@@ -1007,7 +1007,35 @@ def auto_calendar():
                                 open_slots.append(pid)
                     
                     # ========================================================
-                    # ★3. 需要枠を優先度順にソート★
+                    # ★3. ロックされたシフトの役割を事前に差し引く★
+                    # ========================================================
+                    locked_positions_count = {}  # ★追加: ロック済み人数を記録
+                    
+                    for ls in locked_shifts_data:
+                        l_start = safe_to_time(ls['start_time'])
+                        l_end = safe_to_time(ls['end_time'])
+                        
+                        if l_start <= t_time < l_end:
+                            locked_role_name = ls.get('type', '')
+                            
+                            # 役割名からposition_idを逆引き
+                            locked_pid = None
+                            for pid, pname in position_names.items():
+                                if pname == locked_role_name:
+                                    locked_pid = pid
+                                    break
+                            
+                            if locked_pid:
+                                # ★追加: ロック済み人数をカウント
+                                locked_positions_count[locked_pid] = locked_positions_count.get(locked_pid, 0) + 1
+                                
+                                # open_slotsから1つ差し引く
+                                if locked_pid in open_slots:
+                                    open_slots.remove(locked_pid)
+                                    print(f"DEBUG: 🔒ロックシフト {ls['user_id']} の役割 '{locked_role_name}' を需要から差し引き")
+                    
+                    # ========================================================
+                    # 4. 需要枠を優先度順にソート
                     # ========================================================
                     def slot_priority(pid):
                         ptype = position_types.get(pid, 'normal')
@@ -1022,29 +1050,16 @@ def auto_calendar():
                     
                     if len(open_slots) > 0 and len(open_slots) <= 10:
                         slot_summary = [f'{position_names.get(pid, "?")}({position_types.get(pid, "?")})' for pid in open_slots]
-                        print(f"DEBUG: {t_str} 需要枠（優先度順）: {slot_summary}")
+                        print(f"DEBUG: {t_str} 需要枠（ロック差し引き後）: {slot_summary}")
                     
                     # ========================================================
-                    # ★4. 保護ユーザーの役割を先に割り当て★
+                    # 5. 保護ユーザーの役割割り当て（スキップ）
                     # ========================================================
                     assigned_pids = {}
-                    
-                    for u_idx in locked_users_in_this_slot:
-                        uid = user_ids[u_idx]
-                        skills = user_skill_ids.get(uid, [])
-                        
-                        available_slots = [(i, pid) for i, pid in enumerate(open_slots) if pid in skills]
-                        
-                        if available_slots:
-                            slot_idx, selected_pid = available_slots[0]
-                            assigned_pids[u_idx] = selected_pid
-                            open_slots.pop(slot_idx)
-                            print(f"DEBUG: 🔒保護ユーザー {uid} → {position_names.get(selected_pid)}")
-                        else:
-                            assigned_pids[u_idx] = skills[0] if skills else "Staff"
+                    # ロックユーザーは既に役割確定済みなので何もしない
                     
                     # ========================================================
-                    # ★5. ユーザーのソート: 必須スキル保有者を優先★
+                    # 6. ユーザーのソート: 必須スキル保有者を優先
                     # ========================================================
                     def user_priority(u_idx):
                         uid = user_ids[u_idx]
@@ -1064,7 +1079,7 @@ def auto_calendar():
                     working_users.sort(key=user_priority)
                     
                     # ========================================================
-                    # ★6. 通常ユーザーの役割割り当て★
+                    # 7. 通常ユーザーの役割割り当て
                     # ========================================================
                     for u_idx in working_users:
                         uid = user_ids[u_idx]
@@ -1105,7 +1120,7 @@ def auto_calendar():
                                 type_icon = {"critical": "⭐", "normal": "📋", "support": "🔧"}.get(p_type, "")
                                 print(f"    User {uid} → {type_icon}{p_name} (スコア: {score:.1f})")
 
-                    # 7. 結果を記録
+                    # 8. 結果を記録
                     for u_idx, pid in assigned_pids.items():
                         if u_idx not in user_assigned_roles: 
                             user_assigned_roles[u_idx] = {}
@@ -1114,11 +1129,11 @@ def auto_calendar():
                             user_assigned_roles[u_idx][t_idx] = position_names.get(pid, "Work")
 
                     # ========================================================
-                    # 18. 不足データ生成
+                    # 18. 不足データ生成（★UI改善版★）
                     # ========================================================
                     remaining_open_slots = list(open_slots)
                     
-                    print(f"DEBUG: {t_str} - 全需要: {len(demand_map.get(t_str, {}).values()) if t_str in demand_map else 0}, 配置済み: {len(assigned_pids)}, 残り不足: {len(remaining_open_slots)}")
+                    print(f"DEBUG: {t_str} - 全需要: {sum(demand_map.get(t_str, {}).values())}, 配置済み: {len(assigned_pids)}, ロック済み: {sum(locked_positions_count.values())}, 残り不足: {len(remaining_open_slots)}")
                     
                     next_end_dt = (datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)).time()
                     
@@ -1133,7 +1148,7 @@ def auto_calendar():
                             shortage_list_day.append(active_shortages[key])
                             del active_shortages[key]
                     
-                    # B. 新しく発生した不足を作成
+                    # B. 新しく発生した不足を作成（★UI改善★）
                     for pid in remaining_open_slots:
                         n = 0
                         while f"{pid}_{n}" in active_shortages:
@@ -1148,11 +1163,24 @@ def auto_calendar():
                             print(f"ERROR: pidの変換に失敗: pid={pid}, type={type(pid)}, error={e}")
                             unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                         
+                        # ★改善: ロック済み人数を表示名に含める
+                        locked_count = locked_positions_count.get(pid, 0)
+                        total_required = demand_map.get(t_str, {}).get(pid, 0)
+                        
                         shortage_count_for_this_position = sum(1 for k in active_shortages.keys() if k.startswith(f"{pid}_"))
-                        if shortage_count_for_this_position > 0 or remaining_open_slots.count(pid) > 1:
-                            display_name = f"🚨 {p_name}不足 ({n+1})"
+                        
+                        if locked_count > 0:
+                            # ロック済みの人がいる場合
+                            if shortage_count_for_this_position > 0 or remaining_open_slots.count(pid) > 1:
+                                display_name = f"🚨 {p_name}不足 ({locked_count}/{total_required}人確保) ({n+1})"
+                            else:
+                                display_name = f"🚨 {p_name}不足 ({locked_count}/{total_required}人確保)"
                         else:
-                            display_name = f"🚨 {p_name}不足"
+                            # ロック済みの人がいない場合（従来通り）
+                            if shortage_count_for_this_position > 0 or remaining_open_slots.count(pid) > 1:
+                                display_name = f"🚨 {p_name}不足 ({n+1})"
+                            else:
+                                display_name = f"🚨 {p_name}不足"
                         
                         active_shortages[unique_key] = {
                             "user_id": unique_neg_id, 
@@ -1233,7 +1261,7 @@ def auto_calendar():
                         })
             
             # ========================================================
-            # 20. 最適化失敗時の処理
+            # 20. 最適化失敗時の処理（★UI改善版★）
             # ========================================================
             else:
                 print(f"WARNING: {target_date_str} - 最適化失敗。全時間帯を不足として記録します。")
@@ -1247,15 +1275,17 @@ def auto_calendar():
                     if t_str not in demand_map:
                         continue
                     
+                    # ★追加: ロック済み人数を計算
                     locked_count_by_position = {}
                     for ls in locked_shifts_data:
                         l_start = safe_to_time(ls['start_time'])
                         l_end = safe_to_time(ls['end_time'])
                         if l_start <= t_time < l_end:
-                            uid = str(ls['user_id'])
-                            if uid in user_skill_ids:
-                                for pid in user_skill_ids[uid]:
+                            locked_role_name = ls.get('type', '')
+                            for pid, pname in position_names.items():
+                                if pname == locked_role_name:
                                     locked_count_by_position[pid] = locked_count_by_position.get(pid, 0) + 1
+                                    break
                     
                     for pid, required_count in demand_map[t_str].items():
                         locked = locked_count_by_position.get(pid, 0)
@@ -1280,10 +1310,17 @@ def auto_calendar():
                                     print(f"ERROR: pidの変換に失敗(失敗時): pid={pid}, type={type(pid)}, error={e}")
                                     unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                                 
-                                if shortage > 1:
-                                    unique_name = f"🚨 {p_name}不足 ({n+1})"
+                                # ★改善: ロック済み人数を表示
+                                if locked > 0:
+                                    if shortage > 1:
+                                        unique_name = f"🚨 {p_name}不足 ({locked}/{required_count}人確保) ({n+1})"
+                                    else:
+                                        unique_name = f"🚨 {p_name}不足 ({locked}/{required_count}人確保)"
                                 else:
-                                    unique_name = f"🚨 {p_name}不足"
+                                    if shortage > 1:
+                                        unique_name = f"🚨 {p_name}不足 ({n+1})"
+                                    else:
+                                        unique_name = f"🚨 {p_name}不足"
                                 
                                 active_shortages[key] = {
                                     "user_id": unique_neg_id,
@@ -1303,7 +1340,6 @@ def auto_calendar():
                     dates_with_shortage.add(target_date_str)
                 
                 all_generated_shifts.extend(shortage_list_day)
-
         # ========================================================
         # 21. DB保存
         # ========================================================
