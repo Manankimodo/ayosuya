@@ -886,16 +886,7 @@ def auto_calendar():
                 uid = user_ids[u_idx]
                 
                 if str(uid) in locked_user_ids_set:
-<<<<<<< HEAD
-                    # 保護シフトの時間帯のみ1に固定、それ以外は0
-                    for t_idx, is_locked in enumerate(user_locked_map[u_idx]):
-                        if is_locked:
-                            model.Add(shifts[u_idx, t_idx] == 1)
-                        else:
-                            model.Add(shifts[u_idx, t_idx] == 0)
-=======
                     # ★保護ユーザーは既に固定済み（user_locked_mapで設定済み）
->>>>>>> b76f319f3be17847da451c93d2128ffd71ef12e4
                     continue
                 
                 if u_idx not in user_pref_intervals:
@@ -935,76 +926,9 @@ def auto_calendar():
             # 14. 目的関数（スコア計算）
             # ========================================================
 
-<<<<<<< HEAD
-            # 希望開始時間ボーナス
-=======
->>>>>>> b76f319f3be17847da451c93d2128ffd71ef12e4
             start_time_bonus = []
             # 希望時間帯の充足率ボーナス
             coverage_bonus = []
-<<<<<<< HEAD
-
-            for row in preference_rows:
-                uid_str = str(row['ID'])
-                if uid_str not in user_map:
-                    continue
-                u = user_map[uid_str]
-                
-                # ロック済みユーザーは計算対象外（既に確定しているため）
-                if uid_str in locked_user_ids_set:
-                    continue
-                
-                # ★追加: 最低勤務時間を満たさないユーザーもスキップ
-                if u in user_pref_intervals:
-                    pref_duration = len(user_pref_intervals[u]) * INTERVAL_MINUTES / 60
-                    if min_hours > 0 and pref_duration < min_hours:
-                        continue
-                
-                s_val = safe_to_time(row['start_time'])
-                e_val = safe_to_time(row['end_time'])
-                
-                # 希望開始時間に最も近い時間帯を特定
-                start_intervals = []
-                for t, t_val in enumerate(time_intervals):
-                    if s_val <= t_val < e_val:
-                        start_intervals.append(t)
-                
-                if start_intervals:
-                    # 希望開始時刻ちょうどから始まるボーナス
-                    first_interval = start_intervals[0]
-                    start_time_bonus.append(shifts[u, first_interval])
-                    
-                    # 希望時間帯全体をできるだけ埋めるボーナス
-                    for t in start_intervals:
-                        coverage_bonus.append(shifts[u, t])
-
-            # --- 最近の勤務日数ペナルティ ---
-            recent_work_penalty = []
-            cursor.execute("""
-                SELECT user_id, COUNT(DISTINCT date) as work_days
-                FROM shift_table
-                WHERE date BETWEEN %s AND %s AND CAST(user_id AS SIGNED) > 0
-                GROUP BY user_id
-            """, (target_date_obj - timedelta(days=6), target_date_obj - timedelta(days=1)))
-
-            recent_work_days = {str(row['user_id']): row['work_days'] for row in cursor.fetchall()}
-
-            for u_idx, user_id in enumerate(user_ids):
-                if recent_work_days.get(user_id, 0) >= 5:
-                    penalty = sum(shifts[u_idx, t] for t in range(num_intervals))
-                    recent_work_penalty.append(penalty)
-
-            # 重み付け設定
-            WEIGHT_DEMAND = 1000
-            WEIGHT_START_TIME = 50
-            WEIGHT_COVERAGE = 30
-            WEIGHT_OVERSTAFF = 20
-            WEIGHT_BALANCE = 3
-            WEIGHT_RECENT_WORK = 2
-
-            # 目的関数定義
-            model.Maximize(
-=======
             
             for u_idx in range(num_users):
                 if u_idx not in user_pref_intervals:
@@ -1157,7 +1081,6 @@ def auto_calendar():
 
             model.Maximize(
                 sum(shortage_fill_bonus) * WEIGHT_SHORTAGE_FILL +
->>>>>>> b76f319f3be17847da451c93d2128ffd71ef12e4
                 sum(demand_fulfillment) * WEIGHT_DEMAND +
                 sum(start_time_bonus) * WEIGHT_START_TIME +
                 sum(coverage_bonus) * WEIGHT_COVERAGE -
@@ -1165,8 +1088,6 @@ def auto_calendar():
                 balance_penalty * WEIGHT_BALANCE -
                 sum(recent_work_penalty) * WEIGHT_RECENT_WORK
             )
-<<<<<<< HEAD
-=======
             
             # ========================================================
             # 15. ソルバー実行
@@ -1175,7 +1096,6 @@ def auto_calendar():
             solver.parameters.num_search_workers = 4
             solver.parameters.random_seed = 42
             solver.parameters.max_time_in_seconds = 90.0  # ★不足埋めのため時間延長
->>>>>>> b76f319f3be17847da451c93d2128ffd71ef12e4
 
             solver = cp_model.CpSolver()
             solver.parameters.num_search_workers = 1
