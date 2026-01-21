@@ -357,6 +357,7 @@ PREFERENCE_REWARD_WEIGHT = 1000
 def auto_calendar():
     from datetime import time, datetime, timedelta 
     from ortools.sat.python import cp_model
+    from flask import request, render_template
     import traceback
 
     conn = get_db_connection()
@@ -375,6 +376,7 @@ def auto_calendar():
             if hasattr(val, 'total_seconds'):
                 total_seconds = int(val.total_seconds())
                 h, m = divmod(total_seconds, 3600)
+                m = m // 60
                 return f"{h:02d}:{m:02d}"
             s = str(val)
             return s[:5] if ':' in s else "00:00"
@@ -490,7 +492,6 @@ def auto_calendar():
         position_names = {}
         cursor.execute("SELECT id, name FROM positions")
         for p in cursor.fetchall():
-            # 安全性チェック追加
             if p.get('id') is not None and p.get('name') is not None:
                 position_names[str(p['id'])] = p['name']
 
@@ -499,13 +500,12 @@ def auto_calendar():
         # ユーザーのスキル（役割）取得
         user_skill_ids = {}
         cursor.execute("SELECT user_id, position_id FROM user_positions")
-        for row in cursor.fetchall():
-            # 安全性チェック追加
-            if row.get('user_id') is None or row.get('position_id') is None:
-                print(f"WARNING: user_positions に null データ: {row}")
+        for row_skill in cursor.fetchall():
+            if row_skill.get('user_id') is None or row_skill.get('position_id') is None:
+                print(f"WARNING: user_positions に null データ: {row_skill}")
                 continue
-            uid = str(row['user_id'])
-            pid = str(row['position_id'])
+            uid = str(row_skill['user_id'])
+            pid = str(row_skill['position_id'])
             if uid not in user_skill_ids: 
                 user_skill_ids[uid] = []
             user_skill_ids[uid].append(pid)
@@ -514,18 +514,17 @@ def auto_calendar():
         demand_weekday = {}
         demand_weekend = {}
         cursor.execute("SELECT time_slot, position_id, required_count, day_type FROM shift_demand")
-        for row in cursor.fetchall():
-            # 安全性チェック追加
-            if row.get('time_slot') is None or row.get('position_id') is None:
-                print(f"WARNING: shift_demand に null データ: {row}")
+        for row_demand in cursor.fetchall():
+            if row_demand.get('time_slot') is None or row_demand.get('position_id') is None:
+                print(f"WARNING: shift_demand に null データ: {row_demand}")
                 continue
-            t_str = safe_to_time(row['time_slot']).strftime("%H:%M")
-            pid = str(row['position_id'])
-            day_type = row.get('day_type', 'weekday')
+            t_str = safe_to_time(row_demand['time_slot']).strftime("%H:%M")
+            pid = str(row_demand['position_id'])
+            day_type = row_demand.get('day_type', 'weekday')
             target_map = demand_weekend if day_type == 'holiday' else demand_weekday
             if t_str not in target_map: 
                 target_map[t_str] = {}
-            target_map[t_str][pid] = row['required_count']
+            target_map[t_str][pid] = row_demand['required_count']
         
         print(f"DEBUG: 平日需要データ数: {len(demand_weekday)}, 休日需要データ数: {len(demand_weekend)}")
 
@@ -542,7 +541,7 @@ def auto_calendar():
             AND MONTH(date) = %s 
             ORDER BY date
         """, (target_year, target_month))
-        target_dates = [row['date'] for row in cursor.fetchall()]
+        target_dates = [row_date['date'] for row_date in cursor.fetchall()]
 
         if not target_dates:
             conn.close()
@@ -555,7 +554,7 @@ def auto_calendar():
         placeholders = ','.join(['%s'] * len(dates_list))
 
         # ========================================================
-        # 6. 削除処理
+        # 6. 削除処理（★不足埋め再計算モード追加★）
         # ========================================================
         if mode == 'reset':
             # 完全リセット
@@ -567,6 +566,19 @@ def auto_calendar():
             sql = f"UPDATE shift_table SET is_locked = 0 WHERE date IN ({placeholders}) AND CAST(user_id AS SIGNED) > 0"
             cursor.execute(sql, tuple(dates_list))
             print(f"DEBUG: 全保護解除 - 更新件数: {cursor.rowcount}")
+        elif mode == 'refill':
+            # ★新規追加: 不足埋め再計算モード★
+            # 保護されていないシフトと不足データのみ削除（保護済みは残す）
+            sql = f"""
+                DELETE FROM shift_table 
+                WHERE date IN ({placeholders})
+                AND (
+                    (CAST(user_id AS SIGNED) > 0 AND is_locked = 0)
+                    OR CAST(user_id AS SIGNED) < 0
+                )
+            """
+            cursor.execute(sql, tuple(dates_list))
+            print(f"DEBUG: 不足埋め再計算 - 削除件数: {cursor.rowcount}")
         else:
             # 通常削除（保護されていないシフトと不足データのみ）
             sql = f"""
@@ -628,7 +640,7 @@ def auto_calendar():
             print(f"DEBUG: {target_date_str}({day_type_str}) - 需要時間帯数: {len(demand_map)}, 総需要: {total_demand}")
             
             # ========================================================
-            # 8. グローバルスキル希少性の計算（★役割タイプ追加★）
+            # 8. グローバルスキル希少性の計算
             # ========================================================
             # 役割名とタイプのマッピング
             position_names = {}
@@ -636,7 +648,6 @@ def auto_calendar():
 
             cursor.execute("SELECT id, name, priority_type FROM positions")
             for p in cursor.fetchall():
-                # 安全性チェック追加
                 if p.get('id') is not None and p.get('name') is not None:
                     pid = str(p['id'])
                     position_names[pid] = p['name']
@@ -677,6 +688,40 @@ def auto_calendar():
             locked_user_ids_set = set()
             for ls in locked_shifts_data:
                 locked_user_ids_set.add(str(ls['user_id']))
+            
+            # ========================================================
+            # ★追加: 保護されたシフトで埋まっている需要を計算★
+            # ========================================================
+            # 各時間帯・役割ごとに、保護シフトで埋まっている人数を記録
+            locked_filled_demand = {}
+            for t_idx, t_time in enumerate(time_intervals):
+                t_str = t_time.strftime("%H:%M")
+                locked_filled_demand[t_str] = {}
+                
+                for ls in locked_shifts_data:
+                    l_start = safe_to_time(ls['start_time'])
+                    l_end = safe_to_time(ls['end_time'])
+                    
+                    if l_start <= t_time < l_end:
+                        locked_role_name = ls.get('type', '')
+                        
+                        # 役割名からposition_idを逆引き
+                        locked_pid = None
+                        for pid, pname in position_names.items():
+                            if pname == locked_role_name:
+                                locked_pid = pid
+                                break
+                        
+                        if locked_pid:
+                            if locked_pid not in locked_filled_demand[t_str]:
+                                locked_filled_demand[t_str][locked_pid] = 0
+                            locked_filled_demand[t_str][locked_pid] += 1
+            
+            print(f"DEBUG: {target_date_str} - 保護シフトによる需要充足状況:")
+            for t_str, filled in locked_filled_demand.items():
+                if filled:
+                    print(f"  {t_str}: {[(position_names.get(pid), count) for pid, count in filled.items()]}")
+            
             # ========================================================
             # 9. CP-SAT モデル構築
             # ========================================================
@@ -702,9 +747,10 @@ def auto_calendar():
                 for t_idx, t_time in enumerate(time_intervals):
                     if l_start <= t_time < l_end:
                         user_locked_map[u_idx][t_idx] = True
+                        model.Add(shifts[u_idx, t_idx] == 1)  # ★保護シフトは固定
 
             # ========================================================
-            # 10. 需要充足制約
+            # 10. 需要充足制約（★保護シフト考慮版★）
             # ========================================================
             demand_fulfillment = []
             over_staff_penalty = []
@@ -715,33 +761,49 @@ def auto_calendar():
                 if t_str in demand_map:
                     current_demand = demand_map[t_str]
                     
-                    for pid, count in current_demand.items():
-                        # このスキルを持つユーザーのみ
+                    for pid, required_count in current_demand.items():
+                        # ★修正: 保護シフトで埋まっている分を差し引いた残り需要を計算
+                        locked_filled = locked_filled_demand.get(t_str, {}).get(pid, 0)
+                        remaining_demand = max(0, required_count - locked_filled)
+                        
+                        if remaining_demand == 0:
+                            # 既に需要が満たされている場合、新規配置不要
+                            print(f"DEBUG: {t_str} {position_names.get(pid)} - 需要充足済み ({locked_filled}/{required_count})")
+                            continue
+                        
+                        # このスキルを持つユーザー（保護されていない人のみ）
                         capable = [shifts[u, t_idx] for u in range(num_users) 
-                                   if pid in user_skill_ids.get(user_ids[u], [])]
+                                   if pid in user_skill_ids.get(user_ids[u], [])
+                                   and str(user_ids[u]) not in locked_user_ids_set]
                         
                         if capable:
                             actual_count = sum(capable)
-                            model.Add(actual_count <= count)
                             
-                            # 需要充足度
-                            capped_count = model.NewIntVar(0, count, f'capped_{t_str}_{pid}')
+                            # ★修正: 残り需要に対する制約
+                            model.Add(actual_count <= remaining_demand)
+                            
+                            # 需要充足度（残り需要に対して）
+                            capped_count = model.NewIntVar(0, remaining_demand, f'capped_{t_idx}_{pid}')
                             model.Add(capped_count <= actual_count)
-                            model.Add(capped_count <= count)
+                            model.Add(capped_count <= remaining_demand)
                             demand_fulfillment.append(capped_count)
 
                             # 過剰人員ペナルティ
-                            excess_count = model.NewIntVar(0, 2, f'excess_{t_str}_{pid}')
+                            excess_count = model.NewIntVar(0, 2, f'excess_{t_idx}_{pid}')
                             model.Add(excess_count == actual_count - capped_count)
                             over_staff_penalty.append(excess_count)
 
-                # 総人数上限制約
+                # ★修正: 総人数上限制約（保護シフト含めた全体）
                 total_req = sum(demand_map[t_str].values()) if t_str in demand_map else 0
                 current_total_shifts = sum(shifts[u, t_idx] for u in range(num_users))
                 
                 if total_req == 0:
-                    model.Add(current_total_shifts == 0)
+                    # 保護されていないユーザーは配置しない
+                    for u in range(num_users):
+                        if str(user_ids[u]) not in locked_user_ids_set:
+                            model.Add(shifts[u, t_idx] == 0)
                 else:
+                    # 保護シフトを含めた総数が需要を超えないように
                     model.Add(current_total_shifts <= total_req)
 
             # ========================================================
@@ -756,17 +818,14 @@ def auto_calendar():
             for u in range(num_users):
                 total_worked = sum(shifts[u, t] for t in range(num_intervals))
                 user_total_hours.append(total_worked)
-                
-                # 最大時間制約（ハード制約）
                 model.Add(total_worked <= max_intervals)
 
-            # バランス制約（最大・最小労働時間の差を最小化）
             max_hours_var = model.NewIntVar(0, max_intervals, 'max_hours')
             min_hours_var = model.NewIntVar(0, max_intervals, 'min_hours')
 
             for total in user_total_hours:
                 model.Add(max_hours_var >= total)
-                is_working_user = model.NewBoolVar(f'is_working_check')
+                is_working_user = model.NewBoolVar(f'is_working_check_{id(total)}')
                 model.Add(total > 0).OnlyEnforceIf(is_working_user)
                 model.Add(total == 0).OnlyEnforceIf(is_working_user.Not())
                 model.Add(min_hours_var <= total).OnlyEnforceIf(is_working_user)
@@ -788,7 +847,6 @@ def auto_calendar():
                     model.AddBoolOr([shifts[u, t].Not(), shifts[u, t-1]]).OnlyEnforceIf(st.Not())
                     start_flags.append(st)
                 
-                # 保護シフトがある場合のみ2ブロックまで許可（既存のロックを尊重）
                 if str(user_ids[u]) in locked_user_ids_set:
                     model.Add(sum(start_flags) <= 2)
                 else:
@@ -804,116 +862,151 @@ def auto_calendar():
             """, (target_date_str,))
             preference_rows = cursor.fetchall()
 
-            # ★デバッグ追加★
-            print(f"DEBUG: {target_date_str} - ¥1¥1¥1¥1¥1¥希望シフト登録者数: {len(preference_rows)}")
-            for row in preference_rows:
-                print(f"  - User {row['ID']}: {safe_to_time(row['start_time']).strftime('%H:%M')} - {safe_to_time(row['end_time']).strftime('%H:%M')}")
+            print(f"DEBUG: {target_date_str} - 希望シフト登録者数: {len(preference_rows)}")
+            for row_pref in preference_rows:
+                print(f"  - User {row_pref['ID']}: {safe_to_time(row_pref['start_time']).strftime('%H:%M')} - {safe_to_time(row_pref['end_time']).strftime('%H:%M')}")
 
             # 希望時間帯マップを作成
             user_pref_intervals = {}
-            for row in preference_rows:
-                uid_str = str(row['ID'])
+            for row_pref in preference_rows:
+                uid_str = str(row_pref['ID'])
                 if uid_str not in user_map:
                     continue
                 u_idx = user_map[uid_str]
                 
-                s_val = safe_to_time(row['start_time'])
-                e_val = safe_to_time(row['end_time'])
+                s_val = safe_to_time(row_pref['start_time'])
+                e_val = safe_to_time(row_pref['end_time'])
                 
                 user_pref_intervals[u_idx] = []
                 for t_idx, t_val in enumerate(time_intervals):
                     if s_val <= t_val < e_val:
                         user_pref_intervals[u_idx].append(t_idx)
 
-            print(f"DEBUG: {target_date_str} - 希望シフト登録者数: {len(preference_rows)}")
-
-            # ★修正: 希望外の時間帯は完全に禁止 + 最低勤務時間チェック
             for u_idx in range(num_users):
                 uid = user_ids[u_idx]
                 
-                # 保護シフトがある場合
                 if str(uid) in locked_user_ids_set:
-                    # ★修正: ロックされた時間帯は固定、それ以外は希望に従う
-                    for t_idx, is_locked in enumerate(user_locked_map[u_idx]):
-                        if is_locked:
-                            model.Add(shifts[u_idx, t_idx] == 1)
-                    
-                    # ★新規追加: ロック時間以外で、希望時間外の部分のみ0に固定
-                    if u_idx in user_pref_intervals:
-                        pref_times = set(user_pref_intervals[u_idx])
-                        for t in range(num_intervals):
-                            # ロックされていない かつ 希望時間外 → 0に固定
-                            if not user_locked_map[u_idx][t] and t not in pref_times:
-                                model.Add(shifts[u_idx, t] == 0)
-                    else:
-                        # 希望シフト未登録の場合、ロック以外は0
-                        for t in range(num_intervals):
-                            if not user_locked_map[u_idx][t]:
-                                model.Add(shifts[u_idx, t] == 0)
-                    
-                    continue  # ★重要: ここでcontinue
+                    # ★保護ユーザーは既に固定済み（user_locked_mapで設定済み）
+                    continue
                 
-                # 希望シフト未登録の場合は全て0
                 if u_idx not in user_pref_intervals:
                     for t in range(num_intervals):
                         model.Add(shifts[u_idx, t] == 0)
                 else:
                     pref_times = set(user_pref_intervals[u_idx])
-                    pref_duration = len(pref_times) * INTERVAL_MINUTES / 60  # 希望時間の長さ（時間）
+                    pref_duration = len(pref_times) * INTERVAL_MINUTES / 60
                     
-                    # ★追加: 希望時間が最低勤務時間より短い場合は配置しない
                     if min_hours > 0 and pref_duration < min_hours:
                         print(f"WARNING: User {uid} の希望時間({pref_duration:.1f}h)が最低勤務時間({min_hours}h)未満のため配置対象外")
                         for t in range(num_intervals):
                             model.Add(shifts[u_idx, t] == 0)
                     else:
-                        # 希望時間帯以外は0に固定
                         for t in range(num_intervals):
                             if t not in pref_times:
                                 model.Add(shifts[u_idx, t] == 0)
 
-            # ★最低勤務時間制約を希望シフト処理の後に配置
             if min_hours > 0:
                 for u in range(num_users):
                     uid = user_ids[u]
                     
-                    # 保護シフトやロック済みユーザーはスキップ
                     if str(uid) in locked_user_ids_set:
                         continue
                     
-                    # 希望シフト未登録の場合はスキップ
                     if u not in user_pref_intervals:
                         continue
                     
                     total_worked = sum(shifts[u, t] for t in range(num_intervals))
                     
-                    # 「働く場合は最低min_slots以上」という制約
                     is_working = model.NewBoolVar(f'is_working_min_{u}')
                     model.Add(total_worked > 0).OnlyEnforceIf(is_working)
                     model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
                     model.Add(total_worked >= min_slots).OnlyEnforceIf(is_working)
+            
             # ========================================================
-            # 14. 目的関数（スコア計算）★大幅改善版★
+            # 14. 目的関数（スコア計算）
             # ========================================================
 
-            # --- 1. 希望開始時間ボーナス ---
             start_time_bonus = []
             coverage_bonus = []
-            # （既存のコードそのまま）
+            
+            for u_idx in range(num_users):
+                if u_idx not in user_pref_intervals:
+                    continue
+                
+                uid = user_ids[u_idx]
+                if str(uid) in locked_user_ids_set:
+                    continue
+                
+                pref_times = user_pref_intervals[u_idx]
+                if not pref_times:
+                    continue
+                
+                first_pref_t = min(pref_times)
+                if first_pref_t < num_intervals:
+                    start_time_bonus.append(shifts[u_idx, first_pref_t])
+                
+                for t_idx in pref_times:
+                    coverage_bonus.append(shifts[u_idx, t_idx])
 
-            # --- 2. 働く人数を最大化 ---
             working_users_count = []
-            # （既存のコードそのまま）
+            for u in range(num_users):
+                uid = user_ids[u]
+                if str(uid) in locked_user_ids_set:
+                    continue
+                
+                is_working = model.NewBoolVar(f'is_working_{u}')
+                total_worked = sum(shifts[u, t] for t in range(num_intervals))
+                model.Add(total_worked > 0).OnlyEnforceIf(is_working)
+                model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
+                working_users_count.append(is_working)
 
-            # --- 3. スキル多様性ボーナス ---
             skill_diversity_bonus = []
-            # （既存のコードそのまま）
+            for t_idx, t_time in enumerate(time_intervals):
+                t_str = t_time.strftime("%H:%M")
+                
+                if t_str in demand_map:
+                    required_skills = set(demand_map[t_str].keys())
+                    
+                    for pid in required_skills:
+                        # ★修正: 保護シフトで既に埋まっている場合はスキップ
+                        locked_filled = locked_filled_demand.get(t_str, {}).get(pid, 0)
+                        required_count = demand_map[t_str].get(pid, 0)
+                        
+                        if locked_filled >= required_count:
+                            continue
+                        
+                        has_skill = model.NewBoolVar(f'has_skill_{t_idx}_{pid}')
+                        capable_users = [shifts[u, t_idx] for u in range(num_users)
+                                       if pid in user_skill_ids.get(user_ids[u], [])
+                                       and str(user_ids[u]) not in locked_user_ids_set]
+                        
+                        if capable_users:
+                            model.Add(sum(capable_users) > 0).OnlyEnforceIf(has_skill)
+                            model.Add(sum(capable_users) == 0).OnlyEnforceIf(has_skill.Not())
+                            skill_diversity_bonus.append(has_skill)
 
-            # --- 4. 希少スキル優先配置ボーナス ---
             rare_skill_bonus = []
-            # （既存のコードそのまま）
+            for u in range(num_users):
+                uid = user_ids[u]
+                if str(uid) in locked_user_ids_set:
+                    continue
+                
+                skills = user_skill_ids.get(uid, [])
+                if not skills:
+                    continue
+                
+                min_count = min([skill_holder_count.get(s, 999) for s in skills])
+                
+                if min_count < 5:
+                    total_worked = sum(shifts[u, t] for t in range(num_intervals))
+                    rarity_weight = 6 - min_count
+                    for rw_idx in range(rarity_weight):
+                        is_working_rare = model.NewBoolVar(f'rare_working_{u}_{rw_idx}')
+                        model.Add(total_worked > 0).OnlyEnforceIf(is_working_rare)
+                        model.Add(total_worked == 0).OnlyEnforceIf(is_working_rare.Not())
+                        rare_skill_bonus.append(is_working_rare)
 
-            # --- 5. ★新規追加: 不足解消ボーナス（最重要）---
+            # ★修正: 不足解消ボーナス（保護シフト考慮版）
             shortage_fill_bonus = []
 
             for t_idx, t_time in enumerate(time_intervals):
@@ -921,46 +1014,72 @@ def auto_calendar():
                 
                 if t_str in demand_map:
                     for pid, required_count in demand_map[t_str].items():
-                        # このスキルを持つユーザーのみ（ロック除く）
+                        # 保護シフトで埋まっている分を差し引く
+                        locked_filled = locked_filled_demand.get(t_str, {}).get(pid, 0)
+                        remaining_demand = max(0, required_count - locked_filled)
+                        
+                        if remaining_demand == 0:
+                            continue
+                        
                         capable_users = [shifts[u, t_idx] for u in range(num_users) 
                                     if pid in user_skill_ids.get(user_ids[u], [])
                                     and str(user_ids[u]) not in locked_user_ids_set]
                         
                         if capable_users:
-                            # この時間帯・役割で配置された人数
                             actual_count = sum(capable_users)
                             
-                            # 需要を満たすごとにボーナス（線形）
-                            # 例: 2人必要 → 1人配置で+1ボーナス、2人配置で+2ボーナス
-                            for i in range(required_count):
-                                fill_var = model.NewBoolVar(f'fill_{t_str}_{pid}_{i}')
+                            # 残り需要を満たすごとにボーナス
+                            for i in range(remaining_demand):
+                                fill_var = model.NewBoolVar(f'fill_{t_idx}_{pid}_{i}')
                                 model.Add(actual_count >= i + 1).OnlyEnforceIf(fill_var)
                                 model.Add(actual_count < i + 1).OnlyEnforceIf(fill_var.Not())
                                 shortage_fill_bonus.append(fill_var)
 
-            # --- 6. 最近の勤務日数ペナルティ ---
             recent_work_penalty = []
-            # （既存のコードそのまま）
+            
+            past_week_start = (target_date_obj - timedelta(days=7)).strftime("%Y-%m-%d")
+            cursor.execute("""
+                SELECT user_id, COUNT(DISTINCT date) as work_days
+                FROM shift_table
+                WHERE date >= %s AND date < %s
+                AND CAST(user_id AS SIGNED) > 0
+                GROUP BY user_id
+            """, (past_week_start, target_date_str))
+            
+            recent_work_count = {}
+            for row_recent in cursor.fetchall():
+                recent_work_count[str(row_recent['user_id'])] = row_recent['work_days']
+            
+            for u in range(num_users):
+                uid = user_ids[u]
+                if str(uid) in locked_user_ids_set:
+                    continue
+                
+                past_days = recent_work_count.get(uid, 0)
+                
+                if past_days > 0:
+                    is_working = model.NewBoolVar(f'recent_work_{u}')
+                    total_worked = sum(shifts[u, t] for t in range(num_intervals))
+                    model.Add(total_worked > 0).OnlyEnforceIf(is_working)
+                    model.Add(total_worked == 0).OnlyEnforceIf(is_working.Not())
+                    
+                    for _ in range(past_days):
+                        recent_work_penalty.append(is_working)
 
-            # ========================================================
-            # ★重み付け設定（大幅調整）
-            # ========================================================
-            WEIGHT_SHORTAGE_FILL = 15000  # ★新規追加: 不足解消（需要充足より優先）
-            WEIGHT_DEMAND = 10000         # 需要充足（最優先）
-            WEIGHT_DISTRIBUTE = 500       # 人数分散
-            WEIGHT_BALANCE = 200          # バランス
-            WEIGHT_RARE_SKILL = 150       # 希少スキル優先
-            WEIGHT_START_TIME = 100       # 希望開始時間
-            WEIGHT_COVERAGE = 80          # 希望時間帯カバー
-            WEIGHT_SKILL_DIVERSITY = 50   # スキル多様性
-            WEIGHT_OVERSTAFF = 30         # 過剰人員ペナルティ
-            WEIGHT_RECENT_WORK = 20       # 最近の勤務ペナルティ
+            # ★重み付け（不足解消をさらに強化）
+            WEIGHT_SHORTAGE_FILL = 20000  # ★さらに増加
+            WEIGHT_DEMAND = 10000
+            WEIGHT_DISTRIBUTE = 500
+            WEIGHT_BALANCE = 200
+            WEIGHT_RARE_SKILL = 150
+            WEIGHT_START_TIME = 100
+            WEIGHT_COVERAGE = 80
+            WEIGHT_SKILL_DIVERSITY = 50
+            WEIGHT_OVERSTAFF = 30
+            WEIGHT_RECENT_WORK = 20
 
-            # ========================================================
-            # 目的関数定義
-            # ========================================================
             model.Maximize(
-                sum(shortage_fill_bonus) * WEIGHT_SHORTAGE_FILL +  # ★新規追加
+                sum(shortage_fill_bonus) * WEIGHT_SHORTAGE_FILL +
                 sum(demand_fulfillment) * WEIGHT_DEMAND +
                 sum(working_users_count) * WEIGHT_DISTRIBUTE +
                 sum(rare_skill_bonus) * WEIGHT_RARE_SKILL +
@@ -971,10 +1090,14 @@ def auto_calendar():
                 balance_penalty * WEIGHT_BALANCE -
                 sum(recent_work_penalty) * WEIGHT_RECENT_WORK
             )
+            
+            # ========================================================
+            # 15. ソルバー実行
+            # ========================================================
             solver = cp_model.CpSolver()
-            solver.parameters.num_search_workers = 4  # ★修正: 1→4（マルチスレッド化）
+            solver.parameters.num_search_workers = 4
             solver.parameters.random_seed = 42
-            solver.parameters.max_time_in_seconds = 60.0  # ★修正: 30→60秒（より良い解を探索）
+            solver.parameters.max_time_in_seconds = 90.0  # ★不足埋めのため時間延長
 
             status = solver.Solve(model)
             status_names = {
@@ -1003,32 +1126,24 @@ def auto_calendar():
                 shortage_list_day = []
 
                 # ========================================================
-                # 17. 役割割り当てロジック（必須役割優先版）★ロック対応修正版★
+                # 17. 役割割り当てロジック（保護シフト考慮版）
                 # ========================================================
                 for t_idx, t_time in enumerate(time_intervals):
                     t_str = t_time.strftime("%H:%M")
                     
-                    # 1. 勤務が決まったユーザーの抽出
                     working_users = []
-                    locked_users_in_this_slot = []
                     for u_idx in range(num_users):
                         if solver.Value(shifts[u_idx, t_idx]) == 1:
-                            if user_ids[u_idx] in locked_user_ids_set:
-                                locked_users_in_this_slot.append(u_idx)
-                            else:
+                            if user_ids[u_idx] not in locked_user_ids_set:
                                 working_users.append(u_idx)
                     
-                    # 2. 需要枠（管理者の設定）をリスト化
                     open_slots = []
                     if t_str in demand_map:
                         for pid, count in demand_map[t_str].items():
                             for _ in range(count): 
                                 open_slots.append(pid)
                     
-                    # ========================================================
-                    # ★3. ロックされたシフトの役割を事前に差し引く★
-                    # ========================================================
-                    locked_positions_count = {}  # ★追加: ロック済み人数を記録
+                    locked_positions_count = {}
                     
                     for ls in locked_shifts_data:
                         l_start = safe_to_time(ls['start_time'])
@@ -1037,7 +1152,6 @@ def auto_calendar():
                         if l_start <= t_time < l_end:
                             locked_role_name = ls.get('type', '')
                             
-                            # 役割名からposition_idを逆引き
                             locked_pid = None
                             for pid, pname in position_names.items():
                                 if pname == locked_role_name:
@@ -1045,17 +1159,11 @@ def auto_calendar():
                                     break
                             
                             if locked_pid:
-                                # ★追加: ロック済み人数をカウント
                                 locked_positions_count[locked_pid] = locked_positions_count.get(locked_pid, 0) + 1
                                 
-                                # open_slotsから1つ差し引く
                                 if locked_pid in open_slots:
                                     open_slots.remove(locked_pid)
-                                    print(f"DEBUG: 🔒ロックシフト {ls['user_id']} の役割 '{locked_role_name}' を需要から差し引き")
                     
-                    # ========================================================
-                    # 4. 需要枠を優先度順にソート
-                    # ========================================================
                     def slot_priority(pid):
                         ptype = position_types.get(pid, 'normal')
                         if ptype == 'critical':
@@ -1067,19 +1175,8 @@ def auto_calendar():
                     
                     open_slots.sort(key=slot_priority)
                     
-                    if len(open_slots) > 0 and len(open_slots) <= 10:
-                        slot_summary = [f'{position_names.get(pid, "?")}({position_types.get(pid, "?")})' for pid in open_slots]
-                        print(f"DEBUG: {t_str} 需要枠（ロック差し引き後）: {slot_summary}")
-                    
-                    # ========================================================
-                    # 5. 保護ユーザーの役割割り当て（スキップ）
-                    # ========================================================
                     assigned_pids = {}
-                    # ロックユーザーは既に役割確定済みなので何もしない
                     
-                    # ========================================================
-                    # 6. ユーザーのソート: 必須スキル保有者を優先
-                    # ========================================================
                     def user_priority(u_idx):
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
@@ -1093,13 +1190,10 @@ def auto_calendar():
                         
                         min_rarity = min([skill_holder_count.get(s, 999) for s in skills]) if skills else 999
                         
-                        return (priority_tier, len(skills), min_rarity, u_idx)
+                        return (priority_tier, -len(skills), min_rarity, u_idx)
                     
                     working_users.sort(key=user_priority)
                     
-                    # ========================================================
-                    # 7. 通常ユーザーの役割割り当て
-                    # ========================================================
                     for u_idx in working_users:
                         uid = user_ids[u_idx]
                         skills = user_skill_ids.get(uid, [])
@@ -1132,14 +1226,7 @@ def auto_calendar():
                             
                             assigned_pids[u_idx] = selected_pid
                             open_slots.pop(slot_idx)
-                            
-                            if len(working_users) <= 5:
-                                p_name = position_names.get(selected_pid, "不明")
-                                p_type = position_types.get(selected_pid, "normal")
-                                type_icon = {"critical": "⭐", "normal": "📋", "support": "🔧"}.get(p_type, "")
-                                print(f"    User {uid} → {type_icon}{p_name} (スコア: {score:.1f})")
 
-                    # 8. 結果を記録
                     for u_idx, pid in assigned_pids.items():
                         if u_idx not in user_assigned_roles: 
                             user_assigned_roles[u_idx] = {}
@@ -1148,7 +1235,7 @@ def auto_calendar():
                             user_assigned_roles[u_idx][t_idx] = position_names.get(pid, "Work")
 
                     # ========================================================
-                    # 18. 不足データ生成（★UI改善版★）
+                    # 18. 不足データ生成
                     # ========================================================
                     remaining_open_slots = list(open_slots)
                     
@@ -1156,7 +1243,6 @@ def auto_calendar():
                     
                     next_end_dt = (datetime.combine(base_date, t_time) + timedelta(minutes=INTERVAL_MINUTES)).time()
                     
-                    # A. 継続中の不足を更新
                     for key in list(active_shortages.keys()):
                         pid = key.split('_')[0]
                         
@@ -1167,7 +1253,6 @@ def auto_calendar():
                             shortage_list_day.append(active_shortages[key])
                             del active_shortages[key]
                     
-                    # B. 新しく発生した不足を作成（★UI改善★）
                     for pid in remaining_open_slots:
                         n = 0
                         while f"{pid}_{n}" in active_shortages:
@@ -1182,20 +1267,17 @@ def auto_calendar():
                             print(f"ERROR: pidの変換に失敗: pid={pid}, type={type(pid)}, error={e}")
                             unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                         
-                        # ★改善: ロック済み人数を表示名に含める
                         locked_count = locked_positions_count.get(pid, 0)
                         total_required = demand_map.get(t_str, {}).get(pid, 0)
                         
                         shortage_count_for_this_position = sum(1 for k in active_shortages.keys() if k.startswith(f"{pid}_"))
                         
                         if locked_count > 0:
-                            # ロック済みの人がいる場合
                             if shortage_count_for_this_position > 0 or remaining_open_slots.count(pid) > 1:
                                 display_name = f"🚨 {p_name}不足 ({locked_count}/{total_required}人確保) ({n+1})"
                             else:
                                 display_name = f"🚨 {p_name}不足 ({locked_count}/{total_required}人確保)"
                         else:
-                            # ロック済みの人がいない場合（従来通り）
                             if shortage_count_for_this_position > 0 or remaining_open_slots.count(pid) > 1:
                                 display_name = f"🚨 {p_name}不足 ({n+1})"
                             else:
@@ -1210,14 +1292,13 @@ def auto_calendar():
                             "type": display_name
                         }
                 
-                # 最終処理：閉店まで残った不足をすべて回収
                 for item in active_shortages.values(): 
                     shortage_list_day.append(item)
                 
                 all_generated_shifts.extend(shortage_list_day)
                 
                 # ========================================================
-                # 19. シフトブロック生成
+                # 19. シフトブロック生成（保護シフトは除外）
                 # ========================================================
                 for u_idx, roles_map in user_assigned_roles.items():
                     user_id = user_ids[u_idx]
@@ -1280,7 +1361,7 @@ def auto_calendar():
                         })
             
             # ========================================================
-            # 20. 最適化失敗時の処理（★UI改善版★）
+            # 20. 最適化失敗時の処理
             # ========================================================
             else:
                 print(f"WARNING: {target_date_str} - 最適化失敗。全時間帯を不足として記録します。")
@@ -1294,7 +1375,6 @@ def auto_calendar():
                     if t_str not in demand_map:
                         continue
                     
-                    # ★追加: ロック済み人数を計算
                     locked_count_by_position = {}
                     for ls in locked_shifts_data:
                         l_start = safe_to_time(ls['start_time'])
@@ -1329,7 +1409,6 @@ def auto_calendar():
                                     print(f"ERROR: pidの変換に失敗(失敗時): pid={pid}, type={type(pid)}, error={e}")
                                     unique_neg_id = -1 * (hash(str(pid)) % 1000000)
                                 
-                                # ★改善: ロック済み人数を表示
                                 if locked > 0:
                                     if shortage > 1:
                                         unique_name = f"🚨 {p_name}不足 ({locked}/{required_count}人確保) ({n+1})"
@@ -1359,6 +1438,7 @@ def auto_calendar():
                     dates_with_shortage.add(target_date_str)
                 
                 all_generated_shifts.extend(shortage_list_day)
+        
         # ========================================================
         # 21. DB保存
         # ========================================================
@@ -1452,7 +1532,10 @@ def auto_calendar():
         locked_shifts = len([s for s in final_display_shifts if int(s['user_id']) > 0 and s.get('is_locked') == 1])
         shortage_count = len([s for s in final_display_shifts if int(s['user_id']) < 0])
         
-        message = f"✅ {target_month}月シフト作成完了: {total_shifts}件 | 🔒保護済み: {locked_shifts}件 | 🚨不足: {shortage_count}件"
+        if mode == 'refill':
+            message = f"🔄 {target_month}月シフト再計算完了: {total_shifts}件 | 🔒保護済み: {locked_shifts}件 | 🚨残り不足: {shortage_count}件"
+        else:
+            message = f"✅ {target_month}月シフト作成完了: {total_shifts}件 | 🔒保護済み: {locked_shifts}件 | 🚨不足: {shortage_count}件"
         
         return render_template("auto_calendar.html", 
                                settings=settings, 
