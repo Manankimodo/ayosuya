@@ -927,6 +927,7 @@ def auto_calendar():
             # ========================================================
 
             start_time_bonus = []
+            # 希望時間帯の充足率ボーナス
             coverage_bonus = []
             
             for u_idx in range(num_users):
@@ -1081,11 +1082,8 @@ def auto_calendar():
             model.Maximize(
                 sum(shortage_fill_bonus) * WEIGHT_SHORTAGE_FILL +
                 sum(demand_fulfillment) * WEIGHT_DEMAND +
-                sum(working_users_count) * WEIGHT_DISTRIBUTE +
-                sum(rare_skill_bonus) * WEIGHT_RARE_SKILL +
                 sum(start_time_bonus) * WEIGHT_START_TIME +
-                sum(coverage_bonus) * WEIGHT_COVERAGE +
-                sum(skill_diversity_bonus) * WEIGHT_SKILL_DIVERSITY -
+                sum(coverage_bonus) * WEIGHT_COVERAGE -
                 sum(over_staff_penalty) * WEIGHT_OVERSTAFF -
                 balance_penalty * WEIGHT_BALANCE -
                 sum(recent_work_penalty) * WEIGHT_RECENT_WORK
@@ -1099,6 +1097,11 @@ def auto_calendar():
             solver.parameters.random_seed = 42
             solver.parameters.max_time_in_seconds = 90.0  # ★不足埋めのため時間延長
 
+            solver = cp_model.CpSolver()
+            solver.parameters.num_search_workers = 1
+            solver.parameters.random_seed = 42
+            solver.parameters.max_time_in_seconds = 30.0
+            
             status = solver.Solve(model)
             status_names = {
                 cp_model.OPTIMAL: "OPTIMAL",
