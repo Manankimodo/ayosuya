@@ -341,7 +341,7 @@ def sinsei(date):
             work = request.form.get("work")
             start_time = request.form.get("start_time")
             end_time = request.form.get("end_time")
-            save_action = request.form.get("save_action", "return")  # 🆕 保存後のアクション
+            save_action = request.form.get("save_action", "return")
 
             # バリデーション (出勤希望の場合のみ)
             if work == "1" and start_time and end_time and min_hours > 0:
@@ -378,24 +378,48 @@ def sinsei(date):
                 if start_time and len(start_time) == 5: start_time += ":00"
                 if end_time and len(end_time) == 5: end_time += ":00"
 
-            # データベース保存処理
+            # ---------------------------------------------------
+            # ★★★ 提出日時の記録処理（重要）★★★
+            # ---------------------------------------------------
+            # 既存データをチェック
             check_sql = text("SELECT COUNT(*) FROM calendar WHERE ID = :user_id AND date = :date")
             result = db.session.execute(check_sql, {"user_id": user_id, "date": date}).scalar()
 
             if result > 0:
-                update_sql = text("UPDATE calendar SET work = :work, start_time = :start_time, end_time = :end_time WHERE ID = :user_id AND date = :date")
-                db.session.execute(update_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
+                # 🔹 更新時: submitted_at は変更しない（初回提出日時を保持）
+                update_sql = text("""
+                    UPDATE calendar 
+                    SET work = :work, start_time = :start_time, end_time = :end_time 
+                    WHERE ID = :user_id AND date = :date
+                """)
+                db.session.execute(update_sql, {
+                    "user_id": user_id, 
+                    "date": date, 
+                    "work": work, 
+                    "start_time": start_time, 
+                    "end_time": end_time
+                })
                 msg = f"{date} の希望を更新しました。"
             else:
-                insert_sql = text("INSERT INTO calendar (ID, date, work, start_time, end_time) VALUES (:user_id, :date, :work, :start_time, :end_time)")
-                db.session.execute(insert_sql, {"user_id": user_id, "date": date, "work": work, "start_time": start_time, "end_time": end_time})
+                # 🔹 新規登録時: submitted_at に現在時刻を記録
+                insert_sql = text("""
+                    INSERT INTO calendar (ID, date, work, start_time, end_time, submitted_at) 
+                    VALUES (:user_id, :date, :work, :start_time, :end_time, NOW())
+                """)
+                db.session.execute(insert_sql, {
+                    "user_id": user_id, 
+                    "date": date, 
+                    "work": work, 
+                    "start_time": start_time, 
+                    "end_time": end_time
+                })
                 msg = f"{date} の希望を提出しました。"
 
             db.session.commit()
             
             flash(msg, "success")
             
-            # 🆕 保存後のリダイレクト先を選択
+            # 保存後のリダイレクト先を選択
             if save_action == "next" and not next_date_locked:
                 return redirect(url_for("calendar.sinsei", date=next_date))
             else:
@@ -413,7 +437,6 @@ def sinsei(date):
                             is_locked=is_locked, 
                             deadline_day=deadline_day,
                             current_data=current_data,
-                            # 🆕 日付ナビゲーション用のデータ
                             prev_date=prev_date,
                             next_date=next_date,
                             prev_date_locked=prev_date_locked,
