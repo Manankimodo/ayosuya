@@ -1532,63 +1532,39 @@ def add_demand():
     
     return redirect(url_for('makeshift.settings') + '#demand-section')
 # ==========================================
-# 4. 需要をリセット（全削除）する処理（修正版）
+# 4. 需要をリセット（全削除）する処理-----------------------------------------------------------------------------------------
 # ==========================================
 @makeshift_bp.route("/settings/demand/reset", methods=["POST"])
 def reset_demand():
-    """全ての需要設定をリセット（平日・土日祝両方）"""
-    
+    # ★追加: ログイン確認
     if "user_id" not in session:
-        return jsonify({"success": False, "message": "ログインが必要です"}), 401
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
+        # ★追加: store_id取得
         user_id = session["user_id"]
-        
-        # ユーザーの店舗IDを取得
         cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
         user_data = cursor.fetchone()
         store_id = user_data["store_id"] if user_data else None
         
         if not store_id:
-            return jsonify({"success": False, "message": "店舗情報が見つかりません"}), 400
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
         
-        # ★デバッグログ追加
-        print(f"🔍 Reset ALL request - store_id: {store_id}")
-        
-        # 削除前のレコード数を確認
-        cursor.execute("""
-            SELECT COUNT(*) as count 
-            FROM shift_demand 
-            WHERE store_id = %s
-        """, (store_id,))
-        before_count = cursor.fetchone()["count"]
-        print(f"📊 削除前のレコード数（全体）: {before_count}")
-        
-        # 全削除を実行
+        # ★修正: store_idで絞り込み
         cursor.execute("DELETE FROM shift_demand WHERE store_id = %s", (store_id,))
-        
-        deleted_count = cursor.rowcount
         conn.commit()
-        
-        print(f"✅ 削除されたレコード数: {deleted_count}")
-        
-        # ★修正：JavaScriptが期待する形式でJSONを返す
-        return jsonify({
-            "success": True, 
-            "message": f"全ての設定を削除しました（{deleted_count}件）",
-            "deleted_count": deleted_count
-        })
-        
+        flash("🗑 設定をすべてリセットしました", "warning")
     except Exception as e:
         conn.rollback()
-        print(f"❌ エラー発生: {str(e)}")
-        return jsonify({"success": False, "message": f"エラー: {str(e)}"}), 500
+        print(f"Reset Error: {e}")
     finally:
-        cursor.close()
         conn.close()
+    return redirect(url_for('makeshift.settings'))
 # ==========================================
 # 4.5 需要をリセット（全削除）する処理-----------------------------------------------------------------------------------------
 # ==========================================
@@ -1638,78 +1614,45 @@ def delete_demand():
 # ==========================================
 # 4.8曜日タイプ別の需要リセット処理（新規追加）-----------------------------------------------------------------------------------------
 # ==========================================
-# ==========================================
-# 4.8曜日タイプ別の需要リセット処理（修正版）
-# ==========================================
 @makeshift_bp.route("/settings/demand/reset_by_type", methods=["POST"])
 def reset_demand_by_type():
-    """平日または土日祝の需要設定をリセットする"""
-    
+    # ログイン確認
     if "user_id" not in session:
-        return jsonify({"success": False, "message": "ログインが必要です"}), 401
+        flash("ログインが必要です", "danger")
+        return redirect(url_for("login.login"))
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
+        # store_id取得
         user_id = session["user_id"]
-        
-        # ユーザーの店舗IDを取得
         cursor.execute("SELECT store_id FROM account WHERE ID = %s", (user_id,))
         user_data = cursor.fetchone()
         store_id = user_data["store_id"] if user_data else None
         
         if not store_id:
-            return jsonify({"success": False, "message": "店舗情報が見つかりません"}), 400
+            flash("❌ 店舗情報が紐付いていません。", "danger")
+            return redirect(url_for("makeshift.settings"))
         
-        # フォームから day_type を取得
         day_type = request.form.get("day_type", "weekday")
         
-        # ★デバッグログ追加
-        print(f"🔍 Reset request - store_id: {store_id}, day_type: {day_type}")
-        
-        # 削除前のレコード数を確認
-        cursor.execute("""
-            SELECT COUNT(*) as count 
-            FROM shift_demand 
-            WHERE store_id = %s AND day_type = %s
-        """, (store_id, day_type))
-        before_count = cursor.fetchone()["count"]
-        print(f"📊 削除前のレコード数: {before_count}")
-        
-        # 実際に削除を実行
+        # day_typeで絞り込んで削除
         cursor.execute("""
             DELETE FROM shift_demand 
             WHERE store_id = %s AND day_type = %s
         """, (store_id, day_type))
         
-        deleted_count = cursor.rowcount  # 削除された行数
         conn.commit()
-        
-        print(f"✅ 削除されたレコード数: {deleted_count}")
-        
-        # 削除後の確認
-        cursor.execute("""
-            SELECT COUNT(*) as count 
-            FROM shift_demand 
-            WHERE store_id = %s AND day_type = %s
-        """, (store_id, day_type))
-        after_count = cursor.fetchone()["count"]
-        print(f"📊 削除後のレコード数: {after_count}")
-        
-        return jsonify({
-            "success": True, 
-            "message": f"{day_type}の設定を{deleted_count}件削除しました",
-            "deleted_count": deleted_count
-        })
-
+        day_type_label = "平日" if day_type == "weekday" else "土日祝"
+        flash(f"🗑 {day_type_label}の設定をリセットしました", "warning")
     except Exception as e:
         conn.rollback()
-        print(f"❌ エラー発生: {str(e)}")
-        return jsonify({"success": False, "message": f"エラー: {str(e)}"}), 500
+        print(f"Reset By Type Error: {e}")
     finally:
-        cursor.close()
         conn.close()
+    return redirect(url_for('makeshift.settings') + '#demand-section')
+
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash, jsonify
 import mysql.connector
 from datetime import datetime, timedelta, time
