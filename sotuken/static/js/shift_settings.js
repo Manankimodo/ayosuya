@@ -346,11 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * 2. 需要リセット処理（平日/土日祝 別）
+ * 2. 需要リセット処理（平日/土日祝 別）- デバッグ版
  */
 async function handleResetDemand(event, dayType) {
     event.preventDefault(); 
-    event.stopPropagation(); // ★追加：イベント伝播を停止
+    event.stopPropagation();
 
     const confirmMsg = dayType === 'weekday' ? '平日の設定を全て削除しますか？' : '土日祝の設定を全て削除しますか？';
     if (!confirm(confirmMsg)) return;
@@ -358,43 +358,77 @@ async function handleResetDemand(event, dayType) {
     const form = event.target;
     const url = form.action;
 
+    console.log('🚀 リセット開始');
+    console.log('📤 URL:', url);
+    console.log('📤 dayType:', dayType);
+
     try {
-        // ★修正：FormDataをそのまま送信
         const response = await fetch(url, {
             method: 'POST',
-            body: new FormData(form) // Content-Typeヘッダーを自動設定
+            body: new FormData(form)
         });
 
+        console.log('📥 Response status:', response.status);
+        console.log('📥 Response headers:', response.headers.get('content-type'));
+
+        // ★重要：レスポンスを先にテキストとして取得
+        const responseText = await response.text();
+        console.log('📥 Response (first 500 chars):', responseText.substring(0, 500));
+
         if (response.ok) {
-            const result = await response.json();
+            // JSONパース前にチェック
+            let result;
+            try {
+                result = JSON.parse(responseText);
+                console.log('✅ Parsed JSON:', result);
+            } catch (e) {
+                console.error('❌ JSON parse error:', e);
+                console.error('❌ Full response:', responseText);
+                alert('サーバーから不正な応答がありました。\n\nブラウザのコンソール（F12）を開いて、\n赤いエラーメッセージをスクリーンショットしてください。');
+                return;
+            }
             
             if (result.success) {
-                // 画面更新処理
-                const tableSection = form.closest('div[style*="background"]'); // より具体的なセレクタ
-                const tbody = tableSection ? tableSection.querySelector('tbody') : null;
-                if (tbody) {
-                    const emptyMsg = dayType === 'weekday' ? '平日' : '土日祝';
-                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#aaa;">${emptyMsg}の設定がありません</td></tr>`;
+                console.log('✅ 削除成功');
+                
+                const parentDiv = form.closest('div[style*="background"]');
+                console.log('🔍 Parent div found:', !!parentDiv);
+                
+                if (parentDiv) {
+                    const tbody = parentDiv.querySelector('tbody');
+                    const h4 = parentDiv.querySelector('h4');
+                    
+                    console.log('🔍 tbody found:', !!tbody);
+                    console.log('🔍 h4 found:', !!h4);
+                    
+                    if (tbody) {
+                        const emptyMsg = dayType === 'weekday' ? '平日' : '土日祝';
+                        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#aaa;">${emptyMsg}の設定がありません</td></tr>`;
+                        console.log('✅ Table updated');
+                    }
+                    
+                    if (h4) {
+                        const oldText = h4.textContent;
+                        h4.textContent = h4.textContent.replace(/\(\d+ 件\)/, '(0 件)');
+                        console.log('✅ Title updated:', oldText, '→', h4.textContent);
+                    }
                 }
                 
-                const title = tableSection ? tableSection.querySelector('h4') : null;
-                if (title) {
-                    title.textContent = title.textContent.replace(/\(\d+ 件\)/, '(0 件)');
-                }
-                
-                alert(result.message || 'リセットしました'); // ★ユーザーへのフィードバック追加
+                alert(result.message || 'リセットしました');
                 console.log(`✅ ${dayType} reset successful`);
             } else {
+                console.error('❌ Server returned success=false');
                 alert('エラー: ' + (result.message || 'リセットに失敗しました。'));
             }
         } else {
-            const errorText = await response.text();
-            console.error('Server error:', errorText);
-            alert('サーバー通信エラーが発生しました。');
+            console.error('❌ HTTP error:', response.status);
+            console.error('❌ Response:', responseText);
+            alert(`サーバーエラー (${response.status})\n\nコンソール（F12）でエラー内容を確認してください。`);
         }
     } catch (error) {
-        console.error('Error:', error);
-        alert('通信エラーが発生しました: ' + error.message);
+        console.error('❌ Fetch error:', error);
+        console.error('❌ Error stack:', error.stack);
+        alert('通信エラー: ' + error.message + '\n\nコンソール（F12）で詳細を確認してください。');
     }
 }
 
