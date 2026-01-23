@@ -462,11 +462,33 @@ def my_confirmed_shift():
     if "user_id" not in session:
         return redirect(url_for("login.login"))
     
-    # タイムゾーンなしの現在時刻を保存
     from datetime import datetime
-    session["last_viewed_at"] = datetime.now()
+    from sqlalchemy import text
     
     user_id = session["user_id"]
+    
+    # ✅ ユーザーの店舗IDを取得
+    sql_store = text("SELECT store_id FROM account WHERE ID = :user_id")
+    user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
+    store_id = user_data[0] if user_data else None
+    
+    if store_id:
+        # ✅ すべての公開済みシフトを既読にする
+        sql_publish = text("""
+            SELECT target_month 
+            FROM shift_publish_status 
+            WHERE store_id = :store_id AND is_published = 1
+        """)
+        published_shifts = db.session.execute(sql_publish, {"store_id": store_id}).fetchall()
+        
+        now = datetime.now()
+        for shift in published_shifts:
+            target_month = shift[0]
+            session[f"last_viewed_at_{target_month}"] = now
+        
+        session.modified = True
+        print(f"✅ すべての公開済みシフトを既読にしました: {[s[0] for s in published_shifts]}")
+    
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
 # ==========================
 # 🔹 店長のヘルプ希望申請 (変更なし)

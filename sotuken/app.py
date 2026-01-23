@@ -47,54 +47,55 @@ from flask import session
 @app.context_processor
 def inject_has_new_shift():
     user_id = session.get("user_id")
-    print(f"🔍 DEBUG 1: user_id = {user_id}")  # ← 追加
+    print(f"🔍 DEBUG 1: user_id = {user_id}")
     
     if not user_id:
-        print("🔍 DEBUG 2: user_id がないので False を返す")  # ← 追加
+        print("🔍 DEBUG 2: user_id がないので False を返す")
         return dict(has_new_shift=False)
 
     # 1. ユーザーの店舗IDを取得
     sql_store = text("SELECT store_id FROM account WHERE ID = :user_id")
     user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
     store_id = user_data[0] if user_data else None
-    print(f"🔍 DEBUG 3: store_id = {store_id}")  # ← 追加
+    print(f"🔍 DEBUG 3: store_id = {store_id}")
 
-    # 2. 現在の月を自動取得
-    target_month = datetime.now().strftime("%Y-%m")
-    print(f"🔍 DEBUG 4: target_month = {target_month}")  # ← 追加
-    
+    # ✅ 2. すべての公開済みシフトを取得
     sql_publish = text("""
-        SELECT is_published, updated_at FROM shift_publish_status 
-        WHERE store_id = :store_id AND target_month = :target_month
+        SELECT target_month, updated_at 
+        FROM shift_publish_status 
+        WHERE store_id = :store_id AND is_published = 1
     """)
-    publish_res = db.session.execute(sql_publish, {
-        "store_id": store_id, 
-        "target_month": target_month
-    }).fetchone()
+    published_shifts = db.session.execute(sql_publish, {"store_id": store_id}).fetchall()
     
-    print(f"🔍 DEBUG 5: publish_res = {publish_res}")  # ← 追加
+    print(f"🔍 DEBUG 4: published_shifts = {published_shifts}")
 
     has_new_shift = False
-    if publish_res and publish_res[0] == 1:
-        db_updated_at = publish_res[1]
+    
+    # ✅ 3. 各公開済みシフトについて、未読かどうかチェック
+    for shift in published_shifts:
+        target_month = shift[0]  # 例: '2026-03'
+        db_updated_at = shift[1]
+        
         if db_updated_at and db_updated_at.tzinfo is not None:
             db_updated_at = db_updated_at.replace(tzinfo=None)
-            
-        last_viewed_at = session.get("last_viewed_at")
-        if last_viewed_at and hasattr(last_viewed_at, 'replace'):
-             if last_viewed_at.tzinfo is not None:
-                last_viewed_at = last_viewed_at.replace(tzinfo=None)
-
-        print(f"🔍 DEBUG 6: db_updated_at = {db_updated_at}")  # ← 追加
-        print(f"🔍 DEBUG 7: last_viewed_at = {last_viewed_at}")  # ← 追加
         
+        # 月ごとの最終閲覧時刻を取得
+        last_viewed_at = session.get(f"last_viewed_at_{target_month}")
+        if last_viewed_at and hasattr(last_viewed_at, 'replace'):
+            if last_viewed_at.tzinfo is not None:
+                last_viewed_at = last_viewed_at.replace(tzinfo=None)
+        
+        print(f"🔍 DEBUG 5: 月={target_month}, 更新={db_updated_at}, 閲覧={last_viewed_at}")
+        
+        # まだ見ていない、または更新後に見ていない
         if not last_viewed_at or db_updated_at > last_viewed_at:
             has_new_shift = True
+            print(f"🔍 DEBUG 6: {target_month} が未読です")
+            break  # 1つでも未読があればバッジ表示
 
-    print(f"🔍 DEBUG 8: has_new_shift = {has_new_shift}")  # ← 追加
-    print("=" * 50)  # ← 追加
+    print(f"🔍 DEBUG 7: has_new_shift = {has_new_shift}")
+    print("=" * 50)
     return dict(has_new_shift=has_new_shift)
- 
 # --- Blueprintの読み込み ---
 from login import login_bp
 from calendar_page import calendar_bp
