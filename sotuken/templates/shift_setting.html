@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-    <meta charset="utf-8">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
-    <title>設定画面</title>
+  <meta charset="utf-8">
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
+      <title>設定画面</title>
 </head>
-
 <body>
     <div class="menu-icon" id="menuIcon">☰</div>
 
@@ -25,712 +23,636 @@
     <!-- オーバーレイ -->
     <div class="overlay" id="overlay"></div>
 
-    <div class="container">
-        <h1>🛠 シフト自動生成設定</h1>
+  <div class="container">
+    <h1>🛠 シフト自動生成設定</h1>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div style="margin-bottom: 20px;">
-                    {% for category, msg in messages %}
-                        <div class="flash-message flash-{{ category }}">
-                            {{ msg }}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-
-        <!-- 基本設定カード -->
-        <div class="basic-settings-card">
-            <h2>⚙️ 基本設定</h2>
-            <form method="POST" action="{{ url_for('makeshift.settings') }}">
-                <div class="settings-grid">
-                    <div class="setting-item" style="grid-column: 1 / -1; background: #272727; padding: 10px; border-radius: 5px;">
-                        <label style="color: #ffffff;">📅 シフト提出の締め切り日 (毎月)</label>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span>毎月</span>
-                            <input type="number" name="deadline_day" value="{{ settings.deadline_day }}" min="1" max="28" required style="width: 80px; font-weight: bold;">
-                            <span>日 に自動締め切り</span>
-                        </div>
-                        <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">※この日を過ぎると、スタッフはシフトを変更できなくなります。</small>
-                    </div>
-
-                    <div class="setting-item">
-                        <label>🕐 開始時間</label>
-                        <input type="time" name="start_time" value="{{ settings.start_time }}" min="00:00" max="23:59" required>
-                    </div>
-
-                    <div class="setting-item">
-                        <label>🕙 終了時間</label>
-                        <input type="time" name="end_time" value="{{ settings.end_time }}" min="00:00" max="23:59" required>
-                    </div>
-
-                    <div class="setting-item">
-                        <label>👥 時間帯最大人数 <span style="font-size:0.8em; opacity:0.8;">(重要)</span></label>
-                        <input type="number" name="max_people_per_shift" value="{{ settings.max_people_per_shift }}" min="1" max="100" required>
-                        <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">下記の必要人数設定の上限値</small>
-                    </div>
-
-                    <div class="setting-item">
-                        <label>⏱️ 時間間隔(分)</label>
-                        <input type="text" value="15分(固定)" disabled style="cursor: not-allowed; opacity: 0.7;">
-                        <input type="hidden" name="interval_minutes" value="15">
-                    </div>
-
-                    <div class="setting-item">
-                        <label>⏰ 1日最低勤務時間</label>
-                        <input type="number" name="min_hours_per_day" value="{{ settings.min_hours_per_day }}" min="0" max="24" step="0.5" required>
-                        <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">スタッフが希望を出す際の最低時間</small>
-                    </div>
-
-                    <div class="setting-item">
-                        <label>📅 1日最大勤務時間</label>
-                        <input type="number" name="max_hours_per_day" value="{{ settings.max_hours_per_day }}" min="1" max="24" step="0.5" required>
-                    </div>
-                </div>
-
-                <input type="hidden" name="break_minutes" value="{{ settings.break_minutes }}">
-                <input type="hidden" name="auto_mode" value="{{ settings.auto_mode }}">
-
-                <div style="text-align: right;">
-                    <button type="submit" class="save-btn">💾 基本設定を保存</button>
-                </div>
-            </form>
-        </div>
-
-        <h2 id="demand-section" style="margin-top: 40px;">📊 時間帯・ポジション・必要人数設定</h2>
-
-        <div class="tab-container">
-            <button type="button" class="tab-btn tab-weekday active" id="btn-weekday" onclick="switchTab('weekday')">🏢 平日の設定</button>
-            <button type="button" class="tab-btn tab-holiday" id="btn-holiday" onclick="switchTab('holiday')">🎉 土日祝の設定</button>
-        </div>
-
-        <p style="text-align:center; color:#666; margin-bottom:20px;">
-            <span id="desc-weekday">平日(月〜金)の設定です。</span>
-            <span id="desc-holiday" style="display:none; color:#d32f2f; font-weight:bold;">土日・祝日の設定です。忙しい時間を設定しましょう。</span>
-        </p>
-
-        <!-- 平日エリア -->
-        <div id="area-weekday" class="demand-area">
-            <div class="time-zone-grid">
-                <!-- 朝・開店準備 -->
-                <div class="zone-card zone-morning">
-                    <div class="zone-title">☀️ 朝・開店準備</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="weekday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="09:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="11:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}" {% if pos.id == 2 %}selected{% endif %}>{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="1">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#4caf50;">＋ 平日の朝を追加</button>
-                    </form>
-                </div>
-
-                <!-- 昼・ランチピーク -->
-                <div class="zone-card zone-lunch">
-                    <div class="zone-title">🍔 昼・ランチピーク</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="weekday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="11:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="14:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}">{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="3">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#ff9800;">＋ 平日の昼を追加</button>
-                    </form>
-                </div>
-
-                <!-- 15時・スナック -->
-                <div class="zone-card zone-idle">
-                    <div class="zone-title">☕️ 15時・スナック</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="weekday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="14:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="17:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}">{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="1">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#9e9e9e;">＋ 平日のスナックを追加</button>
-                    </form>
-                </div>
-
-                <!-- 夜・ディナー -->
-                <div class="zone-card zone-night">
-                    <div class="zone-title">🍻 夜・ディナー</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="weekday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="17:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="23:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}">{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="4">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#3f51b5;">＋ 平日の夜を追加</button>
-                    </form>
-                </div>
-
-                <!-- 役割の追加・管理 -->
-                <div class="zone-card zone-position" style="border-top: 4px solid #9c27b0;">
-                    <div class="zone-title">👥 役割の追加・管理</div>
-
-                    <!-- 役割追加フォーム -->
-                    <form method="POST" action="{{ url_for('makeshift.add_position') }}" style="margin-bottom: 15px;">
-                        <div class="form-row">
-                            <label style="font-size: 0.8em;">新しい役割名</label>
-                            <input type="text" name="name" placeholder="例: 洗い場" required style="padding: 8px; font-size: 0.9em;">
-                        </div>
-
-                        <div class="form-row">
-                            <label style="font-size: 0.8em;">役割タイプ</label>
-                            <select name="priority_type" style="padding: 8px; font-size: 0.9em; border: 1px solid #ddd; border-radius: 4px;">
-                                <option value="normal">📋 通常(ホール・キッチンなど)</option>
-                                <option value="critical">⭐ 必須(開店・閉店・責任者)</option>
-                                <option value="support">🔧 サポート(洗い場など)</option>
-                            </select>
-                        </div>
-
-                        <button type="submit" class="add-btn" style="border-color: #9c27b0 !important; color: #9c27b0 !important; margin-top: 10px; padding: 5px;">＋ 役割を追加</button>
-                    </form>
-
-                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
-
-                    <div style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
-                            <tbody>
-                                {% for pos in positions %}
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 8px 0;">
-                                            <form class="inline-edit-form" action="{{ url_for('makeshift.update_position', position_id=pos.id) }}" method="POST" style="display: flex; flex-direction: column; gap: 5px;">
-                                                <div style="display: flex; gap: 5px; align-items: center;">
-                                                    {% if pos.priority_type == 'critical' %}
-                                                        <span style="font-size: 0.9em;">⭐</span>
-                                                    {% elif pos.priority_type == 'support' %}
-                                                        <span style="font-size: 0.9em;">🔧</span>
-                                                    {% else %}
-                                                        <span style="font-size: 0.9em;">📋</span>
-                                                    {% endif %}
-                                                    <input type="text" name="name" value="{{ pos.name }}" required style="padding: 3px 6px; font-size: 0.9em; height: 28px; flex: 1;">
-                                                </div>
-                                                <div style="display: flex; gap: 5px;">
-                                                    <select name="priority_type" style="padding: 3px 6px; font-size: 0.85em; height: 28px; flex: 1; border: 1px solid #ddd; border-radius: 3px;">
-                                                        <option value="normal" {% if pos.priority_type == 'normal' %}selected{% endif %}>📋 通常</option>
-                                                        <option value="critical" {% if pos.priority_type == 'critical' %}selected{% endif %}>⭐ 必須</option>
-                                                        <option value="support" {% if pos.priority_type == 'support' %}selected{% endif %}>🔧 サポート</option>
-                                                    </select>
-                                                    <button type="submit" style="background: var(--accent-color); color: white; border: none; border-radius: 3px; padding: 0 8px; cursor: pointer; font-size: 0.7em;">更新</button>
-                                                </div>
-                                            </form>
-                                        </td>
-                                        <td style="text-align: right; width: 30px; vertical-align: top; padding-top: 8px;">
-                                            <form action="{{ url_for('makeshift.delete_position', position_id=pos.id) }}" method="POST" onsubmit="return confirm('この役割を削除しますか?');">
-                                                <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 1.1em;">×</button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin-bottom: 20px;">
+          {% for category, msg in messages %}
+            <div class="flash-message flash-{{ category }}">
+              {{ msg }}
             </div>
+          {% endfor %}
         </div>
+      {% endif %}
+    {% endwith %}
 
-        <!-- 土日祝エリア -->
-        <div id="area-holiday" class="demand-area" style="display:none;">
-            <div class="time-zone-grid">
-                <!-- 朝・開店準備 (休日) -->
-                <div class="zone-card zone-morning">
-                    <div class="zone-title">☀️ 朝・開店準備 (休日)</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="holiday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="09:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="11:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}" {% if pos.id == 2 %}selected{% endif %}>{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="2">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#4caf50;">＋ 休日の朝を追加</button>
-                    </form>
-                </div>
-
-                <!-- 昼・ランチピーク (休日) -->
-                <div class="zone-card zone-lunch">
-                    <div class="zone-title">🍔 昼・ランチピーク (休日)</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="holiday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="11:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="14:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}">{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="4">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#ff9800;">＋ 休日の昼を追加</button>
-                    </form>
-                </div>
-
-                <!-- 15時・スナック (休日) -->
-                <div class="zone-card zone-idle">
-                    <div class="zone-title">☕️ 15時・スナック (休日)</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="holiday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="14:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="17:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}">{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="2">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#9e9e9e;">＋ 休日の休憩を追加</button>
-                    </form>
-                </div>
-
-                <!-- 夜・ディナー (休日) -->
-                <div class="zone-card zone-night">
-                    <div class="zone-title">🍻 夜・ディナー (休日)</div>
-                    <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
-                        <input type="hidden" name="day_type" value="holiday">
-                        <div style="display:flex; gap:10px;">
-                            <div class="form-row" style="flex:1;">
-                                <label>開始</label>
-                                <input type="time" name="start_time" value="17:00">
-                            </div>
-                            <div class="form-row" style="flex:1;">
-                                <label>終了</label>
-                                <input type="time" name="end_time" value="23:00">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>役割</label>
-                            <select name="position_id">
-                                {% for pos in positions %}
-                                    <option value="{{ pos.id }}">{{ pos.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>人数</label>
-                            <input type="number" name="required_count" min="0" value="5">
-                        </div>
-                        <button type="submit" class="add-btn" style="background:#3f51b5;">＋ 休日の夜を追加</button>
-                    </form>
-                </div>
-
-                <!-- 役割の追加・管理 (休日) -->
-                <div class="zone-card zone-position" style="border-top: 4px solid #9c27b0;">
-                    <div class="zone-title">👥 役割の追加・管理</div>
-
-                    <form method="POST" action="{{ url_for('makeshift.add_position') }}" style="margin-bottom: 15px;">
-                        <div class="form-row">
-                            <label style="font-size: 0.8em;">新しい役割名</label>
-                            <input type="text" name="name" placeholder="例: 洗い場" required style="padding: 8px; font-size: 0.9em;">
-                        </div>
-
-                        <div class="form-row">
-                            <label style="font-size: 0.8em;">役割タイプ</label>
-                            <select name="priority_type" style="padding: 8px; font-size: 0.9em; border: 1px solid #ddd; border-radius: 4px;">
-                                <option value="normal">📋 通常(ホール・キッチンなど)</option>
-                                <option value="critical">⭐ 必須(開店・閉店・責任者)</option>
-                                <option value="support">🔧 サポート(洗い場など)</option>
-                            </select>
-                        </div>
-
-                        <button type="submit" class="add-btn" style="border-color: #9c27b0 !important; color: #9c27b0 !important; margin-top: 10px; padding: 5px;">＋ 役割を追加</button>
-                    </form>
-
-                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
-
-                    <div style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
-                            <tbody>
-                                {% for pos in positions %}
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 8px 0;">
-                                            <form class="inline-edit-form" action="{{ url_for('makeshift.update_position', position_id=pos.id) }}" method="POST" style="display: flex; flex-direction: column; gap: 5px;">
-                                                <div style="display: flex; gap: 5px; align-items: center;">
-                                                    {% if pos.priority_type == 'critical' %}
-                                                        <span style="font-size: 0.9em;">⭐</span>
-                                                    {% elif pos.priority_type == 'support' %}
-                                                        <span style="font-size: 0.9em;">🔧</span>
-                                                    {% else %}
-                                                        <span style="font-size: 0.9em;">📋</span>
-                                                    {% endif %}
-                                                    <input type="text" name="name" value="{{ pos.name }}" required style="padding: 3px 6px; font-size: 0.9em; height: 28px; flex: 1;">
-                                                </div>
-                                                <div style="display: flex; gap: 5px;">
-                                                    <select name="priority_type" style="padding: 3px 6px; font-size: 0.85em; height: 28px; flex: 1; border: 1px solid #ddd; border-radius: 3px;">
-                                                        <option value="normal" {% if pos.priority_type == 'normal' %}selected{% endif %}>📋 通常</option>
-                                                        <option value="critical" {% if pos.priority_type == 'critical' %}selected{% endif %}>⭐ 必須</option>
-                                                        <option value="support" {% if pos.priority_type == 'support' %}selected{% endif %}>🔧 サポート</option>
-                                                    </select>
-                                                    <button type="submit" style="background: var(--accent-color); color: white; border: none; border-radius: 3px; padding: 0 8px; cursor: pointer; font-size: 0.7em;">更新</button>
-                                                </div>
-                                            </form>
-                                        </td>
-                                        <td style="text-align: right; width: 30px; vertical-align: top; padding-top: 8px;">
-                                            <form action="{{ url_for('makeshift.delete_position', position_id=pos.id) }}" method="POST" onsubmit="return confirm('この役割を削除しますか?');">
-                                                <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 1.1em;">×</button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+    <!-- 基本設定カード -->
+    <div class="basic-settings-card">
+      <h2>⚙️ 基本設定</h2>
+      <form method="POST" action="{{ url_for('makeshift.settings') }}">
+        <div class="settings-grid">
+          
+          <div class="setting-item" style="grid-column: 1 / -1; background: #272727; padding: 10px; border-radius: 5px;">
+            <label style="color: #ffffff;">📅 シフト提出の締め切り日 (毎月)</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span>毎月</span>
+                <input type="number" name="deadline_day" value="{{ settings.deadline_day }}" min="1" max="28" required style="width: 80px; font-weight: bold;">
+                <span>日 に自動締め切り</span>
             </div>
+            <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">※この日を過ぎると、スタッフはシフトを変更できなくなります。</small>
+          </div>
+          <div class="setting-item">
+            <label>🕐 開始時間</label>
+            <input type="time" name="start_time" value="{{ settings.start_time }}" min="00:00" max="23:59" required>
+          </div>
+          <div class="setting-item">
+            <label>🕙 終了時間</label>
+            <input type="time" name="end_time" value="{{ settings.end_time }}" min="00:00" max="23:59" required>
+          </div>
+          <div class="setting-item">
+            <label>👥 時間帯最大人数 <span style="font-size:0.8em; opacity:0.8;">(重要)</span></label>
+            <input type="number" name="max_people_per_shift" value="{{ settings.max_people_per_shift }}" min="1" max="100" required>
+            <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">下記の必要人数設定の上限値</small>
+          </div>
+          
+          <div class="setting-item">
+            <label>⏱️ 時間間隔（分）</label>
+            <input type="text" value="15分（固定）" disabled style="cursor: not-allowed; opacity: 0.7;">
+            <input type="hidden" name="interval_minutes" value="15">
+          </div>
+
+          <div class="setting-item">
+            <label>⏰ 1日最低勤務時間</label>
+            <input type="number" name="min_hours_per_day" value="{{ settings.min_hours_per_day }}" min="0" max="24" step="0.5" required>
+            <small style="display:block; margin-top:5px; font-size:0.75em; opacity:0.8;">スタッフが希望を出す際の最低時間</small>
+          </div>
+
+          <div class="setting-item">
+            <label>📅 1日最大勤務時間</label>
+            <input type="number" name="max_hours_per_day" value="{{ settings.max_hours_per_day }}" min="1" max="24" step="0.5" required>
+          </div>
         </div>
-
-        <!-- 現在保存されている設定一覧 -->
-        <div class="demand-list">
-            <h3>📊 現在保存されている設定一覧</h3>
-
-            <!-- 平日の設定一覧 -->
-            <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0; color:#3f51b5;">🏢 平日の設定 ({{ weekday_demands|length }} 件)</h4>
-                    <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;">
-                        <input type="hidden" name="day_type" value="weekday">
-                        <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;" onclick="return confirm('平日の設定を全て削除しますか?')">🗑 平日をリセット</button>
-                    </form>
-                </div>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width: 100px;">時間帯</th>
-                                <th>役割</th>
-                                <th style="width: 100px;">必要人数</th>
-                                <th style="width: 80px; text-align: center;">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for d in weekday_demands %}
-                                <tr>
-                                    <td>{{ d.time_slot }}</td>
-                                    <td>
-                                        {% if 'キッチン' in d.position_name %}
-                                            <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
-                                        {% elif 'ホール' in d.position_name %}
-                                            <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
-                                        {% else %}
-                                            {{ d.position_name }}
-                                        {% endif %}
-                                    </td>
-                                    <td><b>{{ d.required_count }}</b> 名</td>
-                                    <td style="text-align: center;">
-                                        <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
-                                            <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
-                                            <input type="hidden" name="position_id" value="{{ d.position_id }}">
-                                            <input type="hidden" name="day_type" value="weekday">
-                                            <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか?')">削除</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            {% else %}
-                                <tr>
-                                    <td colspan="4" style="text-align:center; color:#aaa;">平日の設定がありません</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 土日祝の設定一覧 -->
-            <div style="background:#fff3e0; padding:15px; border-radius:8px; margin-bottom:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0; color:#d32f2f;">🎉 土日祝の設定 ({{ holiday_demands|length }} 件)</h4>
-                    <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;">
-                        <input type="hidden" name="day_type" value="holiday">
-                        <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;" onclick="return confirm('土日祝の設定を全て削除しますか?')">🗑 土日祝をリセット</button>
-                    </form>
-                </div>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width: 100px;">時間帯</th>
-                                <th>役割</th>
-                                <th style="width: 100px;">必要人数</th>
-                                <th style="width: 80px; text-align: center;">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for d in holiday_demands %}
-                                <tr>
-                                    <td>{{ d.time_slot }}</td>
-                                    <td>
-                                        {% if 'キッチン' in d.position_name %}
-                                            <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
-                                        {% elif 'ホール' in d.position_name %}
-                                            <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
-                                        {% else %}
-                                            {{ d.position_name }}
-                                        {% endif %}
-                                    </td>
-                                    <td><b>{{ d.required_count }}</b> 名</td>
-                                    <td style="text-align: center;">
-                                        <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
-                                            <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
-                                            <input type="hidden" name="position_id" value="{{ d.position_id }}">
-                                            <input type="hidden" name="day_type" value="holiday">
-                                            <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか?')">削除</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            {% else %}
-                                <tr>
-                                    <td colspan="4" style="text-align:center; color:#aaa;">土日祝の設定がありません</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 全体リセットボタン -->
-            <div style="text-align:right;">
-                <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0; display:inline;">
-                    <button type="submit" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="return confirm('平日・土日祝の全ての設定を削除してリセットしますか?')">🗑 全て削除してリセット</button>
-                </form>
-            </div>
+        
+        <input type="hidden" name="break_minutes" value="{{ settings.break_minutes }}">
+        <input type="hidden" name="auto_mode" value="{{ settings.auto_mode }}">
+        
+        <div style="text-align: right;">
+          <button type="submit" class="save-btn">💾 基本設定を保存</button>
         </div>
-
-        <!-- 特別営業時間の設定 -->
-        <div style="background:#fff; padding:20px; border-radius:8px; margin-top:30px;">
-            <h3>📅 特別営業時間の設定</h3>
-            <p style="color:#666; margin-bottom:20px;">工事・イベントなど、特定の日の営業時間を個別に設定できます。</p>
-
-            <form id="special-hours-add-form" action="{{ url_for('makeshift.add_special_hours') }}" method="POST" style="background:#f5f5f5; padding:20px; border-radius:8px;">
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:15px;">
-                    <div>
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">📆 日付</label>
-                        <input type="date" name="date" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">🕐 開始時間</label>
-                        <input type="time" name="start_time" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">🕙 終了時間</label>
-                        <input type="time" name="end_time" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">📝 理由</label>
-                        <input type="text" name="reason" placeholder="例: 工事" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    </div>
-                </div>
-                <button type="submit" style="background:#4caf50; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">➕ 特別時間を追加</button>
-            </form>
-
-            <div style="margin-top:20px;">
-                <h4>現在の特別設定</h4>
-                <table id="special-hours-table" style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr style="background:#f9f9f9;">
-                            <th style="padding:10px; text-align:left;">日付</th>
-                            <th style="padding:10px; text-align:left;">開始時間</th>
-                            <th style="padding:10px; text-align:left;">終了時間</th>
-                            <th style="padding:10px; text-align:left;">理由</th>
-                            <th style="padding:10px; text-align:center;">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for sh in special_hours %}
-                            <tr style="border-bottom:1px solid #eee;">
-                                <td style="padding:10px;">{{ sh.date }}</td>
-                                <td style="padding:10px;">{{ sh.start_time }}</td>
-                                <td style="padding:10px;">{{ sh.end_time }}</td>
-                                <td style="padding:10px;">{{ sh.reason or '-' }}</td>
-                                <td style="padding:10px; text-align:center;">
-                                    <form class="delete-special-hours-form" action="{{ url_for('makeshift.delete_special_hours') }}" method="POST" style="display:inline;">
-                                        <input type="hidden" name="date" value="{{ sh.date }}">
-                                        <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">削除</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        {% else %}
-                            <tr>
-                                <td colspan="5" style="text-align:center; padding:20px; color:#aaa;">特別設定なし</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+      </form>
     </div>
 
+    <h2 id="demand-section" style="margin-top: 40px;">📊 時間帯・ポジション・必要人数設定</h2>
+    
+    <div class="tab-container">
+        <button type="button" class="tab-btn tab-weekday active" id="btn-weekday" onclick="switchTab('weekday')">🏢 平日の設定</button>
+        <button type="button" class="tab-btn tab-holiday" id="btn-holiday" onclick="switchTab('holiday')">🎉 土日祝の設定</button>
+    </div>
+
+    <p style="text-align:center; color:#666; margin-bottom:20px;">
+        <span id="desc-weekday">平日（月〜金）の設定です。</span>
+        <span id="desc-holiday" style="display:none; color:#d32f2f; font-weight:bold;">土日・祝日の設定です。忙しい時間を設定しましょう。</span>
+    </p>
+
+
+    <div id="area-weekday" class="demand-area">
+        <div class="time-zone-grid">
+
+            <div class="zone-card zone-morning">
+                <div class="zone-title">☀️ 朝・開店準備</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="weekday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="09:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="11:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}" {% if pos.id == 2 %}selected{% endif %}>{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="1"></div>
+                    <button type="submit" class="add-btn" style="background:#4caf50;">＋ 平日の朝を追加</button>
+                </form>
+            </div>
+
+            <div class="zone-card zone-lunch">
+                <div class="zone-title">🍔 昼・ランチピーク</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="weekday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="11:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="14:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}">{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="3"></div>
+                    <button type="submit" class="add-btn" style="background:#ff9800;">＋ 平日の昼を追加</button>
+                </form>
+            </div>
+
+            <div class="zone-card zone-idle">
+                <div class="zone-title">☕️ 15時・スナック</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="weekday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="14:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="17:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}">{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="1"></div>
+                    <button type="submit" class="add-btn" style="background:#9e9e9e;">＋ 平日のスナックを追加</button>
+                </form>
+            </div>
+
+            <div class="zone-card zone-night">
+                <div class="zone-title">🍻 夜・ディナー</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="weekday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="17:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="23:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}">{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="4"></div>
+                    <button type="submit" class="add-btn" style="background:#3f51b5;">＋ 平日の夜を追加</button>
+                </form>
+            </div>
+            <div class="zone-card zone-position" style="border-top: 4px solid #9c27b0;">
+              <div class="zone-title">👥 役割の追加・管理</div>
+          
+              <!-- 役割追加フォーム（修正版） -->
+              <form method="POST" action="{{ url_for('makeshift.add_position') }}" style="margin-bottom: 15px;">
+                  <div class="form-row">
+                      <label style="font-size: 0.8em;">新しい役割名</label>
+                      <input type="text" name="name" placeholder="例: 洗い場" required style="padding: 8px; font-size: 0.9em;">
+                  </div>
+                  
+                  <!-- ★追加: 役割タイプ選択 -->
+                  <div class="form-row">
+                      <label style="font-size: 0.8em;">役割タイプ</label>
+                      <select name="priority_type" style="padding: 8px; font-size: 0.9em; border: 1px solid #ddd; border-radius: 4px;">
+                          <option value="normal">📋 通常（ホール・キッチンなど）</option>
+                          <option value="critical">⭐ 必須（開店・閉店・責任者）</option>
+                          <option value="support">🔧 サポート（洗い場など）</option>
+                      </select>
+                  </div>
+                  
+                  <button type="submit" class="add-btn" style="border-color: #9c27b0 !important; color: #9c27b0 !important; margin-top: 10px; padding: 5px;">＋ 役割を追加</button>
+              </form>
+          
+              <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+          
+              <div style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                      <tbody>
+                          {% for pos in positions %}
+                          <tr style="border-bottom: 1px solid var(--border-color);">
+                              <td style="padding: 8px 0;">
+                                  <form class="inline-edit-form" action="{{ url_for('makeshift.update_position', position_id=pos.id) }}" method="POST" style="display: flex; flex-direction: column; gap: 5px;">
+                                      <!-- 役割名入力 -->
+                                      <div style="display: flex; gap: 5px; align-items: center;">
+                                          {% if pos.priority_type == 'critical' %}
+                                              <span style="font-size: 0.9em;">⭐</span>
+                                          {% elif pos.priority_type == 'support' %}
+                                              <span style="font-size: 0.9em;">🔧</span>
+                                          {% else %}
+                                              <span style="font-size: 0.9em;">📋</span>
+                                          {% endif %}
+                                          <input type="text" name="name" value="{{ pos.name }}" required style="padding: 3px 6px; font-size: 0.9em; height: 28px; flex: 1;">
+                                      </div>
+                                      <!-- 役割タイプ選択 -->
+                                      <div style="display: flex; gap: 5px;">
+                                          <select name="priority_type" style="padding: 3px 6px; font-size: 0.85em; height: 28px; flex: 1; border: 1px solid #ddd; border-radius: 3px;">
+                                              <option value="normal" {% if pos.priority_type == 'normal' %}selected{% endif %}>📋 通常</option>
+                                              <option value="critical" {% if pos.priority_type == 'critical' %}selected{% endif %}>⭐ 必須</option>
+                                              <option value="support" {% if pos.priority_type == 'support' %}selected{% endif %}>🔧 サポート</option>
+                                          </select>
+                                          <button type="submit" style="background: var(--accent-color); color: white; border: none; border-radius: 3px; padding: 0 8px; cursor: pointer; font-size: 0.7em;">更新</button>
+                                      </div>
+                                  </form>
+                              </td>
+                              <td style="text-align: right; width: 30px; vertical-align: top; padding-top: 8px;">
+                                  <form action="{{ url_for('makeshift.delete_position', position_id=pos.id) }}" method="POST" onsubmit="return confirm('この役割を削除しますか？');">
+                                      <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 1.1em;">×</button>
+                                  </form>
+                              </td>
+                          </tr>
+                          {% endfor %}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+        </div>
+    </div>
     <script>
-        function switchTab(type) {
-            // エリアの表示・非表示
-            document.getElementById('area-weekday').style.display = (type === 'weekday') ? 'block' : 'none';
-            document.getElementById('area-holiday').style.display = (type === 'holiday') ? 'block' : 'none';
+      function switchTab(type) {
+          // エリアの表示・非表示
+          document.getElementById('area-weekday').style.display = (type === 'weekday') ? 'block' : 'none';
+          document.getElementById('area-holiday').style.display = (type === 'holiday') ? 'block' : 'none';
+      
+          // 説明文の切り替え
+          document.getElementById('desc-weekday').style.display = (type === 'weekday') ? 'inline' : 'none';
+          document.getElementById('desc-holiday').style.display = (type === 'holiday') ? 'inline' : 'none';
+      
+          // ボタンのアクティブ状態切り替え
+          const btnW = document.getElementById('btn-weekday');
+          const btnH = document.getElementById('btn-holiday');
+          
+          if (type === 'weekday') {
+              btnW.classList.add('active');
+              btnH.classList.remove('active');
+          } else {
+              btnH.classList.add('active');
+              btnW.classList.remove('active');
+          }
+      
+          // タブの状態を保存
+          sessionStorage.setItem('activeTab', type);
+      }
 
-            // 説明文の切り替え
-            document.getElementById('desc-weekday').style.display = (type === 'weekday') ? 'inline' : 'none';
-            document.getElementById('desc-holiday').style.display = (type === 'holiday') ? 'inline' : 'none';
+      document.addEventListener('DOMContentLoaded', function() {
+          const menuIcon = document.getElementById('menuIcon');
+          const sideMenu = document.getElementById('sideMenu');
+          const closeBtn = document.getElementById('closeBtn');
 
-            // ボタンのアクティブ状態切り替え
-            const btnW = document.getElementById('btn-weekday');
-            const btnH = document.getElementById('btn-holiday');
+          // 1. ハンバーガーメニューを開く
+          if (menuIcon && sideMenu) {
+              menuIcon.addEventListener('click', function() {
+                  sideMenu.classList.add('active');
+              });
+          }
 
-            if (type === 'weekday') {
-                btnW.classList.add('active');
-                btnH.classList.remove('active');
-            } else {
-                btnH.classList.add('active');
-                btnW.classList.remove('active');
-            }
+          // 2. 閉じるボタンでメニューを閉じる
+          if (closeBtn && sideMenu) {
+              closeBtn.addEventListener('click', function() {
+                  sideMenu.classList.remove('active');
+              });
+          }
 
-            // タブの状態を保存
-            sessionStorage.setItem('activeTab', type);
-        }
+          // 3. メニュー内のリンクをクリックしたら閉じる
+          if (sideMenu) {
+              sideMenu.querySelectorAll('a').forEach(link => {
+                  link.addEventListener('click', function() {
+                      sideMenu.classList.remove('active');
+                  });
+              });
+          }
+      });
+      </script>
+      
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const menuIcon = document.getElementById('menuIcon');
-            const sideMenu = document.getElementById('sideMenu');
-            const closeBtn = document.getElementById('closeBtn');
 
-            // 1. ハンバーガーメニューを開く
-            if (menuIcon && sideMenu) {
-                menuIcon.addEventListener('click', function() {
-                    sideMenu.classList.add('active');
-                });
-            }
+    <div id="area-holiday" class="demand-area" style="display:none;">
+        <div class="time-zone-grid">
 
-            // 2. 閉じるボタンでメニューを閉じる
-            if (closeBtn && sideMenu) {
-                closeBtn.addEventListener('click', function() {
-                    sideMenu.classList.remove('active');
-                });
-            }
+            <div class="zone-card zone-morning">
+                <div class="zone-title">☀️ 朝・開店準備 (休日)</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="holiday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="09:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="11:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}" {% if pos.id == 2 %}selected{% endif %}>{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="2"></div>
+                    <button type="submit" class="add-btn" style="background:#4caf50;">＋ 休日の朝を追加</button>
+                </form>
+            </div>
 
-            // 3. メニュー内のリンクをクリックしたら閉じる
-            if (sideMenu) {
-                sideMenu.querySelectorAll('a').forEach(link => {
-                    link.addEventListener('click', function() {
-                        sideMenu.classList.remove('active');
-                    });
-                });
-            }
-        });
-    </script>
-    <script src="{{ url_for('static', filename='js/shift_settings.js') }}"></script>
+            <div class="zone-card zone-lunch">
+                <div class="zone-title">🍔 昼・ランチピーク (休日)</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="holiday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="11:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="14:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}">{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="4"></div>
+                    <button type="submit" class="add-btn" style="background:#ff9800;">＋ 休日の昼を追加</button>
+                </form>
+            </div>
+
+            <div class="zone-card zone-idle">
+                <div class="zone-title">☕️ 15時・スナック (休日)</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="holiday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="14:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="17:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}">{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="2"></div>
+                    <button type="submit" class="add-btn" style="background:#9e9e9e;">＋ 休日の休憩を追加</button>
+                </form>
+            </div>
+
+            <div class="zone-card zone-night">
+                <div class="zone-title">🍻 夜・ディナー (休日)</div>
+                <form action="{{ url_for('makeshift.add_demand') }}" method="POST">
+                    <input type="hidden" name="day_type" value="holiday">
+                    <div style="display:flex; gap:10px;">
+                        <div class="form-row" style="flex:1;"><label>開始</label><input type="time" name="start_time" value="17:00"></div>
+                        <div class="form-row" style="flex:1;"><label>終了</label><input type="time" name="end_time" value="23:00"></div>
+                    </div>
+                    <div class="form-row">
+                        <label>役割</label>
+                        <select name="position_id">
+                            {% for pos in positions %}
+                            <option value="{{ pos.id }}">{{ pos.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>人数</label><input type="number" name="required_count" min="0" value="5"></div>
+                    <button type="submit" class="add-btn" style="background:#3f51b5;">＋ 休日の夜を追加</button>
+                </form>
+            </div>
+            <div class="zone-card zone-position" style="border-top: 4px solid #9c27b0;">
+              <div class="zone-title">👥 役割の追加・管理</div>
+          
+              <!-- 役割追加フォーム（修正版） -->
+              <form method="POST" action="{{ url_for('makeshift.add_position') }}" style="margin-bottom: 15px;">
+                  <div class="form-row">
+                      <label style="font-size: 0.8em;">新しい役割名</label>
+                      <input type="text" name="name" placeholder="例: 洗い場" required style="padding: 8px; font-size: 0.9em;">
+                  </div>
+                  
+                  <!-- ★追加: 役割タイプ選択 -->
+                  <div class="form-row">
+                      <label style="font-size: 0.8em;">役割タイプ</label>
+                      <select name="priority_type" style="padding: 8px; font-size: 0.9em; border: 1px solid #ddd; border-radius: 4px;">
+                          <option value="normal">📋 通常（ホール・キッチンなど）</option>
+                          <option value="critical">⭐ 必須（開店・閉店・責任者）</option>
+                          <option value="support">🔧 サポート（洗い場など）</option>
+                      </select>
+                  </div>
+                  
+                  <button type="submit" class="add-btn" style="border-color: #9c27b0 !important; color: #9c27b0 !important; margin-top: 10px; padding: 5px;">＋ 役割を追加</button>
+              </form>
+          
+              <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+          
+              <div style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                      <tbody>
+                          {% for pos in positions %}
+                          <tr style="border-bottom: 1px solid var(--border-color);">
+                              <td style="padding: 8px 0;">
+                                  <form class="inline-edit-form" action="{{ url_for('makeshift.update_position', position_id=pos.id) }}" method="POST" style="display: flex; flex-direction: column; gap: 5px;">
+                                      <!-- 役割名入力 -->
+                                      <div style="display: flex; gap: 5px; align-items: center;">
+                                          {% if pos.priority_type == 'critical' %}
+                                              <span style="font-size: 0.9em;">⭐</span>
+                                          {% elif pos.priority_type == 'support' %}
+                                              <span style="font-size: 0.9em;">🔧</span>
+                                          {% else %}
+                                              <span style="font-size: 0.9em;">📋</span>
+                                          {% endif %}
+                                          <input type="text" name="name" value="{{ pos.name }}" required style="padding: 3px 6px; font-size: 0.9em; height: 28px; flex: 1;">
+                                      </div>
+                                      <!-- 役割タイプ選択 -->
+                                      <div style="display: flex; gap: 5px;">
+                                          <select name="priority_type" style="padding: 3px 6px; font-size: 0.85em; height: 28px; flex: 1; border: 1px solid #ddd; border-radius: 3px;">
+                                              <option value="normal" {% if pos.priority_type == 'normal' %}selected{% endif %}>📋 通常</option>
+                                              <option value="critical" {% if pos.priority_type == 'critical' %}selected{% endif %}>⭐ 必須</option>
+                                              <option value="support" {% if pos.priority_type == 'support' %}selected{% endif %}>🔧 サポート</option>
+                                          </select>
+                                          <button type="submit" style="background: var(--accent-color); color: white; border: none; border-radius: 3px; padding: 0 8px; cursor: pointer; font-size: 0.7em;">更新</button>
+                                      </div>
+                                  </form>
+                              </td>
+                              <td style="text-align: right; width: 30px; vertical-align: top; padding-top: 8px;">
+                                  <form action="{{ url_for('makeshift.delete_position', position_id=pos.id) }}" method="POST" onsubmit="return confirm('この役割を削除しますか？');">
+                                      <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 1.1em;">×</button>
+                                  </form>
+                              </td>
+                          </tr>
+                          {% endfor %}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+        </div>
+    </div>
+        
+
+    <div class="demand-list">
+      <h3>📊 現在保存されている設定一覧</h3>
+      
+      <!-- 平日の設定一覧 -->
+      <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0; color:#3f51b5;">🏢 平日の設定 ({{ weekday_demands|length }} 件)</h4>
+
+        <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;" 
+              onsubmit="handleResetDemand(event, 'weekday')"> 
+            <input type="hidden" name="day_type" value="weekday">
+            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;">
+                🗑 平日をリセット
+            </button>
+        </form>
+
+        </div>
+        <div style="max-height: 300px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 100px;">時間帯</th>
+                <th>役割</th>
+                <th style="width: 100px;">必要人数</th>
+                <th style="width: 80px; text-align: center;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in weekday_demands %}
+              <tr>
+                <td>{{ d.time_slot }}</td>
+                <td>
+                  {% if 'キッチン' in d.position_name %}
+                    <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
+                  {% elif 'ホール' in d.position_name %}
+                    <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
+                  {% else %}
+                    {{ d.position_name }}
+                  {% endif %}
+                </td>
+                <td><b>{{ d.required_count }}</b> 名</td>
+                <td style="text-align: center;">
+                  <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
+                    <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
+                    <input type="hidden" name="position_id" value="{{ d.position_id }}">
+                    <input type="hidden" name="day_type" value="weekday">
+                    <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか？')">削除</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" style="text-align:center; color:#aaa;">平日の設定がありません</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    
+      <!-- 土日祝の設定一覧 -->
+      <div style="background:#fff3e0; padding:15px; border-radius:8px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0; color:#d32f2f;">🎉 土日祝の設定 ({{ holiday_demands|length }} 件)</h4>
+
+        <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;" 
+              onsubmit="handleResetDemand(event, 'holiday')"> 
+            <input type="hidden" name="day_type" value="holiday">
+            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;">
+                🗑 土日祝をリセット
+            </button>
+        </form>
+
+        </div>
+        <div style="max-height: 300px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 100px;">時間帯</th>
+                <th>役割</th>
+                <th style="width: 100px;">必要人数</th>
+                <th style="width: 80px; text-align: center;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in holiday_demands %}
+              <tr>
+                <td>{{ d.time_slot }}</td>
+                <td>
+                  {% if 'キッチン' in d.position_name %}
+                    <span style="color:#d32f2f; font-weight:bold;">🍳 {{ d.position_name }}</span>
+                  {% elif 'ホール' in d.position_name %}
+                    <span style="color:#1976d2; font-weight:bold;">🛎️ {{ d.position_name }}</span>
+                  {% else %}
+                    {{ d.position_name }}
+                  {% endif %}
+                </td>
+                <td><b>{{ d.required_count }}</b> 名</td>
+                <td style="text-align: center;">
+                  <form action="{{ url_for('makeshift.delete_demand') }}" method="POST" style="display:inline; margin:0;">
+                    <input type="hidden" name="time_slot" value="{{ d.time_slot }}">
+                    <input type="hidden" name="position_id" value="{{ d.position_id }}">
+                    <input type="hidden" name="day_type" value="holiday">
+                    <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:0.85em;" onclick="return confirm('この設定を削除しますか？')">削除</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" style="text-align:center; color:#aaa;">土日祝の設定がありません</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    
+        <div style="text-align:right;">
+          <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0; display:inline;"
+                onsubmit="handleResetAll(event)">
+            <button type="submit" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;">
+              🗑 全て削除してリセット
+            </button>
+          </form>
+        </div>
+    </div>
+    <div style="background:#fff; padding:20px; border-radius:8px; margin-top:30px;">
+      <h3>📅 特別営業時間の設定</h3>
+<p style="color:#666; margin-bottom:20px;">工事・イベントなど、特定の日の営業時間を個別に設定できます。</p>
+
+<form id="special-hours-add-form" action="{{ url_for('makeshift.add_special_hours') }}" method="POST" style="background:#f5f5f5; padding:20px; border-radius:8px;">
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:15px;">
+    <div>
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">📆 日付</label>
+      <input type="date" name="date" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
+    <div>
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">🕐 開始時間</label>
+      <input type="time" name="start_time" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
+    <div>
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">🕙 終了時間</label>
+      <input type="time" name="end_time" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
+    <div>
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">📝 理由</label>
+      <input type="text" name="reason" placeholder="例: 工事" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
+  </div>
+  <button type="submit" style="background:#4caf50; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">➕ 特別時間を追加</button>
+</form>
+
+<div style="margin-top:20px;">
+  <h4>現在の特別設定</h4>
+  <table id="special-hours-table" style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f9f9f9;">
+        <th style="padding:10px; text-align:left;">日付</th>
+        <th style="padding:10px; text-align:left;">開始時間</th>
+        <th style="padding:10px; text-align:left;">終了時間</th>
+        <th style="padding:10px; text-align:left;">理由</th>
+        <th style="padding:10px; text-align:center;">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sh in special_hours %}
+      <tr style="border-bottom:1px solid #eee;">
+        <td style="padding:10px;">{{ sh.date }}</td>
+        <td style="padding:10px;">{{ sh.start_time }}</td>
+        <td style="padding:10px;">{{ sh.end_time }}</td>
+        <td style="padding:10px;">{{ sh.reason or '-' }}</td>
+        <td style="padding:10px; text-align:center;">
+          <form class="delete-special-hours-form" action="{{ url_for('makeshift.delete_special_hours') }}" method="POST" style="display:inline;">
+            <input type="hidden" name="date" value="{{ sh.date }}">
+            <button type="submit" style="background:#ff5252; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">削除</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" style="text-align:center; padding:20px; color:#aaa;">特別設定なし</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+  <script src="{{ url_for('static', filename='js/shift_settings.js') }}"></script>
 </body>
-
 </html>
