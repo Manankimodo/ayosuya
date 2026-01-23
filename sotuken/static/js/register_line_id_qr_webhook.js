@@ -140,10 +140,27 @@ function goHome() {
 }
 
 function skipRegistration() {
-  console.log("⏭️ LINE ID登録をスキップしました");
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    registrationInProgress = false;
+  const config = window.LINE_CONFIG;
+  const role = config.userRole || '';
+  const selRole = config.selectedRole || '';
+  
+  // 登録成功時(goHome)と同じロジックで判定用ロールを決定
+  const effectiveRole = selRole || role;
+
+  // 管理者判定（大文字小文字を区別せず、manager/admin系をチェック）
+  const isManager = ['manager', 'admin', 'administrator'].includes(effectiveRole.toLowerCase());
+
+  if (isManager) {
+    console.log("✅ 管理者としてキャンセル遷移:", config.managerHomeUrl);
+    window.location.href = config.managerHomeUrl;
+  } else {
+    // 従業員の場合
+    if (config.calendarUrl) {
+      console.log("✅ 従業員としてキャンセル遷移:", config.calendarUrl);
+      window.location.href = config.calendarUrl;
+    } else {
+      console.warn("⚠️ カレンダーURL不明のためルートへ");
+      window.location.href = '/calendar';
+    }
   }
-  goHome();
 }
