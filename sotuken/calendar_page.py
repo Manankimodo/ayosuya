@@ -466,11 +466,13 @@ def my_confirmed_shift():
     from sqlalchemy import text
     
     user_id = session["user_id"]
+    print(f"🔍 確定シフト画面: user_id = {user_id}")  # ← 追加
     
     # ✅ ユーザーの店舗IDを取得
     sql_store = text("SELECT store_id FROM account WHERE ID = :user_id")
     user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
     store_id = user_data[0] if user_data else None
+    print(f"🔍 確定シフト画面: store_id = {store_id}")  # ← 追加
     
     if store_id:
         # ✅ すべての公開済みシフトを既読にする
@@ -480,14 +482,17 @@ def my_confirmed_shift():
             WHERE store_id = :store_id AND is_published = 1
         """)
         published_shifts = db.session.execute(sql_publish, {"store_id": store_id}).fetchall()
+        print(f"🔍 確定シフト画面: published_shifts = {published_shifts}")  # ← 追加
         
         now = datetime.now()
         for shift in published_shifts:
             target_month = shift[0]
             session[f"last_viewed_at_{target_month}"] = now
+            print(f"🔍 セッションに保存: last_viewed_at_{target_month} = {now}")  # ← 追加
         
         session.modified = True
         print(f"✅ すべての公開済みシフトを既読にしました: {[s[0] for s in published_shifts]}")
+        print(f"🔍 セッション全体: {dict(session)}")  # ← 追加
     
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
 # ==========================
