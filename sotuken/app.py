@@ -46,18 +46,23 @@ from flask import session
 
 @app.context_processor
 def inject_has_new_shift():
-    # ログインしていない場合は判定しない
     user_id = session.get("user_id")
+    print(f"🔍 DEBUG 1: user_id = {user_id}")  # ← 追加
+    
     if not user_id:
+        print("🔍 DEBUG 2: user_id がないので False を返す")  # ← 追加
         return dict(has_new_shift=False)
 
     # 1. ユーザーの店舗IDを取得
     sql_store = text("SELECT store_id FROM account WHERE ID = :user_id")
     user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
     store_id = user_data[0] if user_data else None
+    print(f"🔍 DEBUG 3: store_id = {store_id}")  # ← 追加
 
-    # 2. 公開状態を確認（2026-02 または現在の月）
-    target_month = "2026-02" 
+    # 2. 現在の月を自動取得
+    target_month = datetime.now().strftime("%Y-%m")
+    print(f"🔍 DEBUG 4: target_month = {target_month}")  # ← 追加
+    
     sql_publish = text("""
         SELECT is_published, updated_at FROM shift_publish_status 
         WHERE store_id = :store_id AND target_month = :target_month
@@ -66,24 +71,28 @@ def inject_has_new_shift():
         "store_id": store_id, 
         "target_month": target_month
     }).fetchone()
+    
+    print(f"🔍 DEBUG 5: publish_res = {publish_res}")  # ← 追加
 
     has_new_shift = False
     if publish_res and publish_res[0] == 1:
-        # DBの更新時間（タイムゾーン除去）
         db_updated_at = publish_res[1]
         if db_updated_at and db_updated_at.tzinfo is not None:
             db_updated_at = db_updated_at.replace(tzinfo=None)
             
-        # セッションの閲覧時間（タイムゾーン除去）
         last_viewed_at = session.get("last_viewed_at")
         if last_viewed_at and hasattr(last_viewed_at, 'replace'):
              if last_viewed_at.tzinfo is not None:
                 last_viewed_at = last_viewed_at.replace(tzinfo=None)
 
-        # 判定：まだ見ていない、もしくは更新された
+        print(f"🔍 DEBUG 6: db_updated_at = {db_updated_at}")  # ← 追加
+        print(f"🔍 DEBUG 7: last_viewed_at = {last_viewed_at}")  # ← 追加
+        
         if not last_viewed_at or db_updated_at > last_viewed_at:
             has_new_shift = True
 
+    print(f"🔍 DEBUG 8: has_new_shift = {has_new_shift}")  # ← 追加
+    print("=" * 50)  # ← 追加
     return dict(has_new_shift=has_new_shift)
  
 # --- Blueprintの読み込み ---
