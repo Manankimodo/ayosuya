@@ -312,3 +312,139 @@ document.addEventListener('input', function(e) {
 });
 
 console.log("🚀 バリデーション監視システムが起動しました");
+
+/**
+ * 1. ページの状態（スクロール位置・タブ）の保存と復元
+ */
+window.addEventListener('beforeunload', () => {
+    // 現在のスクロール位置を保存
+    sessionStorage.setItem('scrollPosition', window.scrollY);
+    
+    // 現在アクティブなタブを保存（要素が存在する場合のみ）
+    const holidayBtn = document.getElementById('btn-holiday');
+    if (holidayBtn) {
+        const activeTab = holidayBtn.classList.contains('active') ? 'holiday' : 'weekday';
+        sessionStorage.setItem('activeTab', activeTab);
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    // タブの復元
+    const savedTab = sessionStorage.getItem('activeTab');
+    if (savedTab && typeof window.switchTab === 'function') {
+        window.switchTab(savedTab); 
+    }
+
+    // スクロール位置の復元
+    const scrollPosition = sessionStorage.getItem('scrollPosition');
+    if (scrollPosition) {
+        setTimeout(() => {
+            window.scrollTo(0, parseInt(scrollPosition));
+            sessionStorage.removeItem('scrollPosition');
+        }, 10);
+    }
+});
+
+/**
+ * 2. 需要リセット処理（平日/土日祝 別）
+ */
+async function handleResetDemand(event, dayType) {
+    event.preventDefault(); 
+    event.stopPropagation(); // ★追加：イベント伝播を停止
+
+    const confirmMsg = dayType === 'weekday' ? '平日の設定を全て削除しますか？' : '土日祝の設定を全て削除しますか？';
+    if (!confirm(confirmMsg)) return;
+
+    const form = event.target;
+    const url = form.action;
+
+    try {
+        // ★修正：FormDataをそのまま送信
+        const response = await fetch(url, {
+            method: 'POST',
+            body: new FormData(form) // Content-Typeヘッダーを自動設定
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (result.success) {
+                // 画面更新処理
+                const tableSection = form.closest('div[style*="background"]'); // より具体的なセレクタ
+                const tbody = tableSection ? tableSection.querySelector('tbody') : null;
+                if (tbody) {
+                    const emptyMsg = dayType === 'weekday' ? '平日' : '土日祝';
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#aaa;">${emptyMsg}の設定がありません</td></tr>`;
+                }
+                
+                const title = tableSection ? tableSection.querySelector('h4') : null;
+                if (title) {
+                    title.textContent = title.textContent.replace(/\(\d+ 件\)/, '(0 件)');
+                }
+                
+                alert(result.message || 'リセットしました'); // ★ユーザーへのフィードバック追加
+                console.log(`✅ ${dayType} reset successful`);
+            } else {
+                alert('エラー: ' + (result.message || 'リセットに失敗しました。'));
+            }
+        } else {
+            const errorText = await response.text();
+            console.error('Server error:', errorText);
+            alert('サーバー通信エラーが発生しました。');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('通信エラーが発生しました: ' + error.message);
+    }
+}
+
+/**
+ * 3. 全ての設定リセット（修正版）
+ */
+async function handleResetAll(event) {
+    event.preventDefault();
+    event.stopPropagation(); // ★追加
+
+    if (!confirm('平日・土日祝の全ての設定を削除してリセットしますか？')) return;
+
+    const form = event.target;
+    const url = form.action;
+
+    try {
+        // ★修正：FormDataをそのまま送信（他の関数と統一）
+        const response = await fetch(url, {
+            method: 'POST',
+            body: new FormData(form) // Content-Typeを自動設定
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+
+            if (result.success) {
+                // 画面内の全ての需要リストをリセット表示にする
+                const sections = document.querySelectorAll('.demand-list > div[style*="background"]');
+                sections.forEach(section => {
+                    const h4 = section.querySelector('h4');
+                    const tbody = section.querySelector('tbody');
+                    if (tbody && h4) {
+                        const typeName = h4.textContent.includes('平日') ? '平日' : '土日祝';
+                        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#aaa;">${typeName}の設定がありません</td></tr>`;
+                        h4.textContent = h4.textContent.replace(/\(\d+ 件\)/, '(0 件)');
+                    }
+                });
+                
+                alert(result.message || '全てリセットしました'); // ★フィードバック追加
+                console.log('✅ All demands reset successful');
+            } else {
+                alert('エラー: ' + (result.message || '全てのリセットに失敗しました。'));
+            }
+        } else {
+            const errorText = await response.text();
+            console.error('Server error:', errorText);
+            alert('サーバー通信エラーが発生しました。');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('通信エラーが発生しました: ' + error.message);
+    }
+}
