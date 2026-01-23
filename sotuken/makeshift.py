@@ -623,6 +623,11 @@ def auto_calendar():
             total_demand = sum(sum(d.values()) for d in demand_map.values())
             print(f"DEBUG: {target_date_str}({day_type_str}) - 需要時間帯数: {len(demand_map)}, 総需要: {total_demand}")
             
+            # ★追加: 時間帯ごとの需要詳細を表示
+            for t_str in sorted(demand_map.keys()):
+                roles = [f"{position_names.get(pid, pid)}:{count}" for pid, count in demand_map[t_str].items()]
+                print(f"DEBUG: {t_str} の需要 → {', '.join(roles)}")
+            
             # 時間インターバル生成
             time_intervals = []
             current_dt = base_date.replace(hour=SHIFT_START.hour, minute=SHIFT_START.minute)
@@ -697,8 +702,8 @@ def auto_calendar():
                     print(f"DEBUG: OR-Toolsで最適化を開始...")
                     model = cp_model.CpModel()
                     
-                    # 変数定義: shifts[(uid, t_idx)] = そのユーザーがその時間に働くかどうか
-                    shifts = {}
+                    # ★完全修正: 変数定義を (uid, t_idx, position_id) の3次元にする
+                    shifts = {}  # shifts[(uid, t_idx, pid)] = そのユーザーがその時間にその役割で働くか
                     valid_preferences = []
                     
                     for pref in preference_rows:
@@ -710,6 +715,9 @@ def auto_calendar():
                         user_skills = user_skill_ids.get(uid_str, [])
                         if not user_skills:
                             continue
+                        
+                        user_skill_names = [position_names.get(pid, pid) for pid in user_skills]
+                        print(f"DEBUG: User {uid_str} のスキル: {', '.join(user_skill_names)}")
                         
                         pref_start = safe_to_time(pref['start_time'])
                         pref_end = safe_to_time(pref['end_time'])
@@ -725,173 +733,167 @@ def auto_calendar():
                             'skills': user_skills
                         })
                         
-                        # この人が働ける時間帯の変数を作成
+                        # ★重要: 各時間・各役割の組み合わせで変数を作成（需要がある場合のみ）
                         for t_idx, t_time in enumerate(time_intervals):
                             if pref_start <= t_time < pref_end:
-                                shifts[(uid_str, t_idx)] = model.NewBoolVar(f'shift_{uid_str}_{t_idx}')
+                                t_str = t_time.strftime("%H:%M")
+                                
+                                if t_str in remaining_demand:
+                                    # このユーザーの各スキルについて、需要がある場合のみ変数を作成
+                                    for pid in user_skills:
+                                        if pid in remaining_demand[t_str] and remaining_demand[t_str][pid] > 0:
+                                            shifts[(uid_str, t_idx, pid)] = model.NewBoolVar(f'shift_{uid_str}_{t_idx}_{pid}')
                     
                     if not shifts:
                         print(f"DEBUG: OR-Toolsで処理可能な希望シフトがありません。貪欲法にフォールバック")
                         use_ortools = False
                     else:
-                        # 制約1: 需要を満たす（できるだけ）
+                        # 制約1: 各ユーザーは各時間に最大1つの役割しか持てない
+                        for pref in valid_preferences:
+                            uid = pref['uid']
+                            for t_idx in range(len(time_intervals)):
+                                # この時間のこのユーザーの全役割の合計 <= 1
+                                user_time_vars = [shifts[(uid, t_idx, pid)] 
+                                                 for pid in pref['skills'] 
+                                                 if (uid, t_idx, pid) in shifts]
+                                if user_time_vars:
+                                    model.Add(sum(user_time_vars) <= 1)
+                        
+                        # 制約2: 需要を満たす
                         for t_idx, t_time in enumerate(time_intervals):
                             t_str = t_time.strftime("%H:%M")
                             if t_str in remaining_demand:
                                 for pid, required in remaining_demand[t_str].items():
                                     if required > 0:
-                                        # この時間にこの役割を持つ人の合計
-                                        workers = []
-                                        for pref in valid_preferences:
-                                            uid = pref['uid']
-                                            if pid in pref['skills'] and (uid, t_idx) in shifts:
-                                                workers.append(shifts[(uid, t_idx)])
+                                        # この時間にこの役割で働く人の合計 >= required
+                                        workers = [shifts[(uid, t_idx, pid)] 
+                                                  for pref in valid_preferences 
+                                                  for uid in [pref['uid']]
+                                                  if (uid, t_idx, pid) in shifts]
                                         
                                         if workers:
-                                            # ソフト制約として扱う（必ず満たす必要はない）
                                             model.Add(sum(workers) >= required)
                         
-                        # 制約2: 最大勤務時間
+                        # 制約3: 最大勤務時間
                         for pref in valid_preferences:
                             uid = pref['uid']
                             max_slots = int((max_hours * 60) / INTERVAL_MINUTES)
-                            user_shifts = [shifts[(uid, t_idx)] for t_idx in range(len(time_intervals)) if (uid, t_idx) in shifts]
-                            if user_shifts:
-                                model.Add(sum(user_shifts) <= max_slots)
+                            # この人の全時間・全役割の変数の合計
+                            all_shifts = [shifts[(uid, t_idx, pid)] 
+                                        for t_idx in range(len(time_intervals))
+                                        for pid in pref['skills']
+                                        if (uid, t_idx, pid) in shifts]
+                            if all_shifts:
+                                model.Add(sum(all_shifts) <= max_slots)
                         
-                        # 制約3: 最低勤務時間（合計で）
+                        # 制約4: 最低勤務時間
                         if min_hours > 0:
                             for pref in valid_preferences:
                                 uid = pref['uid']
                                 min_slots = int((min_hours * 60) / INTERVAL_MINUTES)
-                                user_shifts = [shifts[(uid, t_idx)] for t_idx in range(len(time_intervals)) if (uid, t_idx) in shifts]
-                                if user_shifts:
-                                    # 働く場合は最低時間以上
+                                all_shifts = [shifts[(uid, t_idx, pid)] 
+                                            for t_idx in range(len(time_intervals))
+                                            for pid in pref['skills']
+                                            if (uid, t_idx, pid) in shifts]
+                                if all_shifts:
                                     works = model.NewBoolVar(f'works_{uid}')
-                                    model.Add(sum(user_shifts) >= min_slots).OnlyEnforceIf(works)
-                                    model.Add(sum(user_shifts) == 0).OnlyEnforceIf(works.Not())
+                                    model.Add(sum(all_shifts) >= min_slots).OnlyEnforceIf(works)
+                                    model.Add(sum(all_shifts) == 0).OnlyEnforceIf(works.Not())
                         
-                        # 目的関数: 提出順を優先 + 連続勤務を優先
+                        # 目的関数: 提出順優先 + 連続勤務優先
                         objective_terms = []
                         
-                        # 1. 提出順優先（早く提出した人ほど高得点）
+                        # 1. 提出順優先
                         for i, pref in enumerate(valid_preferences):
                             uid = pref['uid']
-                            priority_score = (len(valid_preferences) - i) * 1000  # 提出順に大きな重み
+                            priority_score = (len(valid_preferences) - i) * 1000
                             for t_idx in range(len(time_intervals)):
-                                if (uid, t_idx) in shifts:
-                                    objective_terms.append(shifts[(uid, t_idx)] * priority_score)
+                                for pid in pref['skills']:
+                                    if (uid, t_idx, pid) in shifts:
+                                        objective_terms.append(shifts[(uid, t_idx, pid)] * priority_score)
                         
-                        # 2. 連続勤務を優先（連続していればボーナス）
+                        # 2. 連続勤務優先（同じ役割で連続）
                         for pref in valid_preferences:
                             uid = pref['uid']
-                            for t_idx in range(len(time_intervals) - 1):
-                                if (uid, t_idx) in shifts and (uid, t_idx + 1) in shifts:
-                                    continuity = model.NewBoolVar(f'cont_{uid}_{t_idx}')
-                                    model.AddMultiplicationEquality(continuity, [shifts[(uid, t_idx)], shifts[(uid, t_idx + 1)]])
-                                    objective_terms.append(continuity * 500)  # 連続性にも高い重み
+                            for pid in pref['skills']:
+                                for t_idx in range(len(time_intervals) - 1):
+                                    if (uid, t_idx, pid) in shifts and (uid, t_idx + 1, pid) in shifts:
+                                        continuity = model.NewBoolVar(f'cont_{uid}_{t_idx}_{pid}')
+                                        model.AddMultiplicationEquality(continuity, 
+                                                                       [shifts[(uid, t_idx, pid)], 
+                                                                        shifts[(uid, t_idx + 1, pid)]])
+                                        objective_terms.append(continuity * 500)
                         
                         model.Maximize(sum(objective_terms))
                         
                         # 求解
                         solver = cp_model.CpSolver()
-                        solver.parameters.max_time_in_seconds = 30.0  # 最大30秒
+                        solver.parameters.max_time_in_seconds = 30.0
                         status = solver.Solve(model)
                         
                         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
                             print(f"DEBUG: OR-Tools求解成功 (status={status})")
                             
-                            # 結果を現在の形式に変換
+                            # ★結果を現在の形式に変換
                             for pref in valid_preferences:
                                 uid = pref['uid']
-                                working_intervals = []
                                 
+                                # このユーザーが働く時間と役割を取得
+                                working_slots = []
                                 for t_idx, t_time in enumerate(time_intervals):
-                                    if (uid, t_idx) in shifts and solver.Value(shifts[(uid, t_idx)]) == 1:
-                                        working_intervals.append({'idx': t_idx, 'time': t_time})
+                                    for pid in pref['skills']:
+                                        if (uid, t_idx, pid) in shifts and solver.Value(shifts[(uid, t_idx, pid)]) == 1:
+                                            working_slots.append({
+                                                'idx': t_idx,
+                                                'time': t_time,
+                                                'position_id': pid,
+                                                'position_name': position_names.get(pid, 'Work')
+                                            })
                                 
-                                if not working_intervals:
+                                if not working_slots:
                                     continue
                                 
-                                # 連続ブロックに分割
-                                working_intervals.sort(key=lambda x: x['idx'])
+                                # 連続する同じ役割をまとめる
+                                working_slots.sort(key=lambda x: x['idx'])
                                 blocks = []
-                                current_block = [working_intervals[0]]
+                                current_block = [working_slots[0]]
                                 
-                                for i in range(1, len(working_intervals)):
-                                    if working_intervals[i]['idx'] == working_intervals[i-1]['idx'] + 1:
-                                        current_block.append(working_intervals[i])
+                                for i in range(1, len(working_slots)):
+                                    # 連続していて、かつ同じ役割
+                                    if (working_slots[i]['idx'] == working_slots[i-1]['idx'] + 1 and
+                                        working_slots[i]['position_id'] == working_slots[i-1]['position_id']):
+                                        current_block.append(working_slots[i])
                                     else:
                                         blocks.append(current_block)
-                                        current_block = [working_intervals[i]]
+                                        current_block = [working_slots[i]]
                                 
                                 blocks.append(current_block)
                                 
-                                # 各ブロックを役割ごとにシフトに変換
+                                # 各ブロックをシフトに変換
                                 for block in blocks:
-                                    # 役割を決定（需要に基づく）
-                                    role_assignments = []
+                                    start_time = block[0]['time']
+                                    last_time = block[-1]['time']
+                                    end_dt = datetime.combine(base_date, last_time) + timedelta(minutes=INTERVAL_MINUTES)
+                                    position_name = block[0]['position_name']
+                                    position_id = block[0]['position_id']
                                     
-                                    for interval in block:
-                                        t_str = interval['time'].strftime("%H:%M")
-                                        best_match = None
-                                        best_priority = 999
-                                        
-                                        if t_str in remaining_demand:
-                                            for pid in pref['skills']:
-                                                if pid in remaining_demand[t_str] and remaining_demand[t_str][pid] > 0:
-                                                    ptype = position_types.get(pid, 'normal')
-                                                    priority = {'critical': 0, 'normal': 1, 'support': 2}.get(ptype, 1)
-                                                    
-                                                    if priority < best_priority:
-                                                        best_priority = priority
-                                                        best_match = pid
-                                        
-                                        if not best_match and pref['skills']:
-                                            best_match = pref['skills'][0]
-                                        
-                                        role_assignments.append({
-                                            'interval': interval,
-                                            'position_id': best_match,
-                                            'position_name': position_names.get(best_match, 'Work')
-                                        })
+                                    print(f"DEBUG: OR-Tools配置 - User {uid} → {start_time.strftime('%H:%M')}-{end_dt.time().strftime('%H:%M')} ({position_name}, ID:{position_id})")
                                     
-                                    # 同じ役割の連続をまとめる
-                                    if role_assignments:
-                                        role_blocks = []
-                                        current_role = [role_assignments[0]]
-                                        
-                                        for j in range(1, len(role_assignments)):
-                                            if role_assignments[j]['position_id'] == role_assignments[j-1]['position_id']:
-                                                current_role.append(role_assignments[j])
-                                            else:
-                                                role_blocks.append(current_role)
-                                                current_role = [role_assignments[j]]
-                                        
-                                        role_blocks.append(current_role)
-                                        
-                                        # 役割ごとにシフトを作成
-                                        for role_block in role_blocks:
-                                            start_time = role_block[0]['interval']['time']
-                                            last_time = role_block[-1]['interval']['time']
-                                            end_dt = datetime.combine(base_date, last_time) + timedelta(minutes=INTERVAL_MINUTES)
-                                            position_name = role_block[0]['position_name']
-                                            
-                                            assigned_shifts.append({
-                                                'user_id': uid,
-                                                'date': target_date_str,
-                                                'start_time': start_time.strftime("%H:%M"),
-                                                'end_time': end_dt.time().strftime("%H:%M"),
-                                                'type': position_name
-                                            })
-                                            
-                                            # 需要を減らす
-                                            for item in role_block:
-                                                t_str = item['interval']['time'].strftime("%H:%M")
-                                                pid = item['position_id']
-                                                if t_str in remaining_demand and pid in remaining_demand[t_str]:
-                                                    if remaining_demand[t_str][pid] > 0:
-                                                        remaining_demand[t_str][pid] -= 1
+                                    assigned_shifts.append({
+                                        'user_id': uid,
+                                        'date': target_date_str,
+                                        'start_time': start_time.strftime("%H:%M"),
+                                        'end_time': end_dt.time().strftime("%H:%M"),
+                                        'type': position_name
+                                    })
+                                    
+                                    # 需要を減らす
+                                    for slot in block:
+                                        t_str = slot['time'].strftime("%H:%M")
+                                        pid = slot['position_id']
+                                        if t_str in remaining_demand and pid in remaining_demand[t_str]:
+                                            if remaining_demand[t_str][pid] > 0:
+                                                remaining_demand[t_str][pid] -= 1
                             
                             print(f"DEBUG: OR-Toolsによる配置完了 - 配置数: {len(assigned_shifts)}")
                         
@@ -931,16 +933,19 @@ def auto_calendar():
                         continue
                     
                     # この人の希望時間帯で需要がある時間帯を抽出
+                    # ★修正: 需要データに存在する役割のみ配置
                     can_work_intervals = []
                     for t_idx, t_time in enumerate(time_intervals):
                         if pref_start <= t_time < pref_end:
                             t_str = t_time.strftime("%H:%M")
                             
+                            # ★重要: この時間帯に需要データが存在するかチェック
                             if t_str in remaining_demand:
                                 best_match = None
                                 best_priority = 999
                                 
                                 for pid in user_skills:
+                                    # ★重要: この時間帯にこの役割の需要が存在し、かつ残り枠があるかチェック
                                     if pid in remaining_demand[t_str] and remaining_demand[t_str][pid] > 0:
                                         ptype = position_types.get(pid, 'normal')
                                         priority = {'critical': 0, 'normal': 1, 'support': 2}.get(ptype, 1)
@@ -949,7 +954,9 @@ def auto_calendar():
                                             best_priority = priority
                                             best_match = pid
                                 
+                                # ★修正: 需要がある役割が見つかった場合のみ追加
                                 if best_match:
+                                    print(f"DEBUG: {t_str} - User {uid_str} に {position_names.get(best_match)} を候補として追加（残り需要: {remaining_demand[t_str][best_match]}）")
                                     can_work_intervals.append({
                                         'time_index': t_idx,
                                         'time': t_time,
@@ -957,6 +964,10 @@ def auto_calendar():
                                         'position_id': best_match,
                                         'position_name': position_names.get(best_match, 'Work')
                                     })
+                                else:
+                                    # ★追加: 需要がない場合のログ
+                                    available_positions = [position_names.get(pid) for pid in user_skills if pid in remaining_demand.get(t_str, {})]
+                                    print(f"DEBUG: {t_str} - User {uid_str} の配置不可（この時間帯の需要: {available_positions if available_positions else 'なし'}）")
                     
                     if not can_work_intervals:
                         continue
@@ -1226,6 +1237,8 @@ def auto_calendar():
                                settings=error_settings, 
                                shifts=[], 
                                message=f"❌ エラーが発生しました: {str(e)}")
+
+    
 @makeshift_bp.route("/toggle_lock", methods=["POST"])
 def toggle_lock():
     data = request.json
