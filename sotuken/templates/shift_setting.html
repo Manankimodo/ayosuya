@@ -480,10 +480,15 @@
       <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <h4 style="margin:0; color:#3f51b5;">🏢 平日の設定 ({{ weekday_demands|length }} 件)</h4>
-          <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;">
+
+        <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;" 
+              onsubmit="handleResetDemand(event, 'weekday')"> 
             <input type="hidden" name="day_type" value="weekday">
-            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;" onclick="return confirm('平日の設定を全て削除しますか？')">🗑 平日をリセット</button>
-          </form>
+            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;">
+                🗑 平日をリセット
+            </button>
+        </form>
+
         </div>
         <div style="max-height: 300px; overflow-y: auto;">
           <table>
@@ -530,10 +535,15 @@
       <div style="background:#fff3e0; padding:15px; border-radius:8px; margin-bottom:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <h4 style="margin:0; color:#d32f2f;">🎉 土日祝の設定 ({{ holiday_demands|length }} 件)</h4>
-          <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;">
+
+        <form action="{{ url_for('makeshift.reset_demand_by_type') }}" method="POST" style="margin:0;" 
+              onsubmit="handleResetDemand(event, 'holiday')"> 
             <input type="hidden" name="day_type" value="holiday">
-            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;" onclick="return confirm('土日祝の設定を全て削除しますか？')">🗑 土日祝をリセット</button>
-          </form>
+            <button type="submit" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85em;">
+                🗑 土日祝をリセット
+            </button>
+        </form>
+
         </div>
         <div style="max-height: 300px; overflow-y: auto;">
           <table>
@@ -576,12 +586,14 @@
         </div>
       </div>
     
-      <!-- 全体リセットボタン -->
-      <div style="text-align:right;">
-        <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0; display:inline;">
-          <button type="submit" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="return confirm('平日・土日祝の全ての設定を削除してリセットしますか？')">🗑 全て削除してリセット</button>
-        </form>
-      </div>
+        <div style="text-align:right;">
+          <form action="{{ url_for('makeshift.reset_demand') }}" method="POST" style="margin:0; display:inline;"
+                onsubmit="handleResetAll(event)">
+            <button type="submit" style="background:#d32f2f; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;">
+              🗑 全て削除してリセット
+            </button>
+          </form>
+        </div>
     </div>
     <div style="background:#fff; padding:20px; border-radius:8px; margin-top:30px;">
       <h3>📅 特別営業時間の設定</h3>
