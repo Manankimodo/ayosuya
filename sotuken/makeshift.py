@@ -759,21 +759,80 @@ def auto_calendar():
                                 if user_time_vars:
                                     model.Add(sum(user_time_vars) <= 1)
                         
-                        # 制約2: 需要を満たす
+                        # 制約2: 需要を満たす（ちょうど指定人数）
                         for t_idx, t_time in enumerate(time_intervals):
                             t_str = t_time.strftime("%H:%M")
                             if t_str in remaining_demand:
                                 for pid, required in remaining_demand[t_str].items():
                                     if required > 0:
-                                        # この時間にこの役割で働く人の合計 >= required
                                         workers = [shifts[(uid, t_idx, pid)] 
-                                                  for pref in valid_preferences 
-                                                  for uid in [pref['uid']]
-                                                  if (uid, t_idx, pid) in shifts]
+                                                for pref in valid_preferences 
+                                                for uid in [pref['uid']]
+                                                if (uid, t_idx, pid) in shifts]
                                         
                                         if workers:
-                                            model.Add(sum(workers) >= required)
-                        
+                                            model.Add(sum(workers) == required)
+
+                        # ========================================================
+                        # ★ 新規追加：提出順優先制約
+                        # ========================================================
+                        # 各時間・各役割について、後から提出した人は先の人が配置されない場合のみ配置可能
+                        for t_idx, t_time in enumerate(time_intervals):
+                            t_str = t_time.strftime("%H:%M")
+                            if t_str not in remaining_demand:
+                                continue
+                            
+                            for pid in remaining_demand[t_str].keys():
+                                # この時間・この役割で働ける人を提出順に並べる
+                                candidates = []
+                                for i, pref in enumerate(valid_preferences):
+                                    uid = pref['uid']
+                                    if (uid, t_idx, pid) in shifts:
+                                        candidates.append({
+                                            'var': shifts[(uid, t_idx, pid)],
+                                            'uid': uid,
+                                            'submit_order': i  # 提出順（小さいほど早い）
+                                        })
+                                
+                                # 提出順にソート
+                                candidates.sort(key=lambda x: x['submit_order'])
+                                
+                                # 制約: 後の人は前の人が0の時だけ1にできる
+                                for i in range(1, len(candidates)):
+                                    prev_person = candidates[i-1]['var']
+                                    curr_person = candidates[i]['var']
+                                    
+                                    # 前の人が働いていない(0) かつ 後の人が働いている(1) → 禁止
+                                    # つまり: curr_person == 1 ならば prev_person == 1 でなければならない
+                                    # これは: curr_person <= prev_person と等価（ただし完全には表現できないので別の方法を使う）
+                                    
+                                    # より厳密には：後の人が1なら、前の人も1でなければならない
+                                    # model.Add(curr_person <= prev_person) では不十分
+                                    
+                                    # 正しい制約：「後の人が配置される(1) → 前の人も配置されているか、前の人の時間外」
+                                    # ただし時間外判定が複雑なので、簡易版として：
+                                    # 「同じ時間・同じ役割なら、提出が早い人を優先的に使う」
+                                    
+                                    # ★実装：後の人が1なら前の人も1（ただし前の人が希望時間外なら除外）
+                                    prev_pref = valid_preferences[candidates[i-1]['submit_order']]
+                                    curr_pref = valid_preferences[candidates[i]['submit_order']]
+                                    
+                                    # 両者ともこの時間に希望を出している場合のみ制約
+                                    t_time_obj = time_intervals[t_idx]
+                                    prev_can_work = (prev_pref['pref_start'] <= t_time_obj < prev_pref['pref_end'] and 
+                                                pid in prev_pref['skills'])
+                                    curr_can_work = (curr_pref['pref_start'] <= t_time_obj < curr_pref['pref_end'] and 
+                                                pid in curr_pref['skills'])
+                                    
+                                    if prev_can_work and curr_can_work:
+                                        # 制約: 後の人が働く(1) なら 前の人も働く(1) または 需要が2以上
+                                        # より簡単に：後の人 <= 前の人 + (需要-1)
+                                        # でも需要=1の時は：後の人 <= 前の人
+                                        required = remaining_demand[t_str][pid]
+                                        if required == 1:
+                                            # 1人だけ必要 → 先着優先
+                                            model.Add(curr_person <= prev_person)
+                                                
                         # 制約3: 最大勤務時間
                         for pref in valid_preferences:
                             uid = pref['uid']
@@ -799,7 +858,46 @@ def auto_calendar():
                                     works = model.NewBoolVar(f'works_{uid}')
                                     model.Add(sum(all_shifts) >= min_slots).OnlyEnforceIf(works)
                                     model.Add(sum(all_shifts) == 0).OnlyEnforceIf(works.Not())
-                        
+
+                        # ========================================================
+                        # ★ 新規追加：中抜け禁止制約（OR-Tools版）
+                        # ========================================================
+                        print(f"DEBUG: 中抜け禁止制約を追加中...")
+                        for pref in valid_preferences:
+                            uid = pref['uid']
+                            
+                            # このユーザーの全時間・全役割の変数を取得
+                            user_time_slots = []
+                            for t_idx in range(len(time_intervals)):
+                                # この時間に何らかの役割で働いているか
+                                any_role_vars = [shifts[(uid, t_idx, pid)] 
+                                                for pid in pref['skills']
+                                                if (uid, t_idx, pid) in shifts]
+                                
+                                if any_role_vars:
+                                    # この時間に働いているか（どれかの役割で）
+                                    is_working = model.NewBoolVar(f'working_{uid}_{t_idx}')
+                                    model.Add(sum(any_role_vars) >= 1).OnlyEnforceIf(is_working)
+                                    model.Add(sum(any_role_vars) == 0).OnlyEnforceIf(is_working.Not())
+                                    user_time_slots.append((t_idx, is_working))
+                            
+                            # 中抜けチェック：働いている時間の間に働いていない時間があってはいけない
+                            # つまり：is_working[i]=1, is_working[j]=1 (i<j) なら、i<k<j の全てで is_working[k]=1
+                            if len(user_time_slots) >= 3:  # 3時間以上でないと中抜けは発生しない
+                                for i in range(len(user_time_slots)):
+                                    for j in range(i + 2, len(user_time_slots)):  # 最低1時間空ける必要がある
+                                        idx_i, var_i = user_time_slots[i]
+                                        idx_j, var_j = user_time_slots[j]
+                                        
+                                        # i と j の間の全ての時間
+                                        for k in range(i + 1, j):
+                                            idx_k, var_k = user_time_slots[k]
+                                            
+                                            # 制約：var_i=1 かつ var_j=1 なら var_k=1
+                                            # これは：var_i + var_j <= 1 + var_k と等価
+                                            both_working = model.NewBoolVar(f'both_{uid}_{i}_{j}')
+                                            model.AddMultiplicationEquality(both_working, [var_i, var_j])
+                                            model.Add(var_k >= both_working)
                         # 目的関数: 提出順優先 + 連続勤務優先
                         objective_terms = []
                         
@@ -945,8 +1043,10 @@ def auto_calendar():
                                 best_priority = 999
                                 
                                 for pid in user_skills:
-                                    # ★重要: この時間帯にこの役割の需要が存在し、かつ残り枠があるかチェック
-                                    if pid in remaining_demand[t_str] and remaining_demand[t_str][pid] > 0:
+                                    # ★修正: 需要が「まだ残っているか」を厳密にチェック
+                                    if (pid in remaining_demand[t_str] and 
+                                        remaining_demand[t_str][pid] > 0):
+                                        
                                         ptype = position_types.get(pid, 'normal')
                                         priority = {'critical': 0, 'normal': 1, 'support': 2}.get(ptype, 1)
                                         
@@ -970,19 +1070,69 @@ def auto_calendar():
                                     print(f"DEBUG: {t_str} - User {uid_str} の配置不可（この時間帯の需要: {available_positions if available_positions else 'なし'}）")
                     
                     if not can_work_intervals:
+                        print(f"DEBUG: User {uid_str} - 配置可能な時間なし（需要なしor既に埋まっている）")
                         continue
                     
-                    # 連続する勤務ブロックを作成
+                    # ========================================================
+                    # ★ 新規追加：中抜け禁止処理
+                    # ========================================================
                     can_work_intervals.sort(key=lambda x: x['time_index'])
                     
+                    # 最初の時間から最後の時間までの範囲を取得
+                    first_idx = can_work_intervals[0]['time_index']
+                    last_idx = can_work_intervals[-1]['time_index']
+                    
+                    # 範囲内に「配置できない時間」があるかチェック
+                    expected_indices = set(range(first_idx, last_idx + 1))
+                    actual_indices = set(x['time_index'] for x in can_work_intervals)
+                    
+                    if expected_indices != actual_indices:
+                        # 中抜けがある = 連続していない
+                        missing_indices = expected_indices - actual_indices
+                        print(f"⚠️ User {uid_str} - 中抜け検出: {len(missing_indices)}箇所")
+                        
+                        # 連続ブロックに分割
+                        continuous_blocks = []
+                        current_block = [can_work_intervals[0]]
+                        
+                        for i in range(1, len(can_work_intervals)):
+                            if can_work_intervals[i]['time_index'] == can_work_intervals[i-1]['time_index'] + 1:
+                                current_block.append(can_work_intervals[i])
+                            else:
+                                continuous_blocks.append(current_block)
+                                current_block = [can_work_intervals[i]]
+                        continuous_blocks.append(current_block)
+                        
+                        # 最長ブロックを選択
+                        longest_block = max(continuous_blocks, key=len)
+                        
+                        # 不採用の時間の需要を戻す
+                        for block in continuous_blocks:
+                            if block != longest_block:
+                                for interval in block:
+                                    t_str = interval['time_str']
+                                    pid = interval['position_id']
+                                    if t_str in remaining_demand and pid in remaining_demand[t_str]:
+                                        remaining_demand[t_str][pid] += 1
+                                        print(f"DEBUG: {t_str} {position_names.get(pid)} を戻しました（中抜け部分）")
+                        
+                        can_work_intervals = longest_block
+                        print(f"✅ 最長ブロック採用: {longest_block[0]['time_str']} - {longest_block[-1]['time_str']}")
+                    
+                    # ========================================================
+                    # ★ 以降は既存のコード（役割ごとのブロック分割）
+                    # ========================================================
                     blocks = []
                     current_block = [can_work_intervals[0]]
                     
                     for i in range(1, len(can_work_intervals)):
                         prev_idx = can_work_intervals[i-1]['time_index']
                         curr_idx = can_work_intervals[i]['time_index']
+                        prev_pid = can_work_intervals[i-1]['position_id']
+                        curr_pid = can_work_intervals[i]['position_id']
                         
-                        if curr_idx == prev_idx + 1:
+                        # 同じ役割で連続している場合のみまとめる
+                        if curr_idx == prev_idx + 1 and prev_pid == curr_pid:
                             current_block.append(can_work_intervals[i])
                         else:
                             blocks.append(current_block)
@@ -1042,14 +1192,16 @@ def auto_calendar():
                                 'type': position_name
                             })
                             
-                            # 需要を減らす
+                            # 需要を減らす（★マイナスにならないよう保護★）
                             for interval in role_block:
                                 t_str = interval['time_str']
                                 pid = interval['position_id']
                                 if t_str in remaining_demand and pid in remaining_demand[t_str]:
-                                    remaining_demand[t_str][pid] -= 1
-                            
-                            print(f"DEBUG: ✅ User {uid_str} 配置 - {start_time.strftime('%H:%M')}-{end_dt.time().strftime('%H:%M')} ({position_name}, {role_duration:.1f}h)")
+                                    if remaining_demand[t_str][pid] > 0:  # ★追加
+                                        remaining_demand[t_str][pid] -= 1
+                                    else:
+                                        print(f"⚠️ 警告: {t_str} {position_names.get(pid)} の需要が既に0です")
+                           
                         
                         total_assigned_hours += block_duration_hours
                         
