@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
- 
+
   <script>
     // サーバーからのデータをJS変数として受け取る
     window.flaskData = {
@@ -16,151 +16,247 @@
       settings: JSON.parse('{{ settings|tojson|safe }}') || {}
     };
     
-    // ★★★ 修正: グラフインスタンスを保存する配列 ★★★
     window.chartInstances = {};
+    
+    window.chartSettings = {
+      heightPerPerson: 60,
+      maxHeight: 800,
+      displayMode: 'all'
+    };
   </script>
  
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      // 1. ハンバーガーメニュー制御
-      const menuIcon = document.getElementById('menuIcon');
-      const sideMenu = document.getElementById('sideMenu');
-      const closeBtn = document.getElementById('closeBtn');
-      
-      if (menuIcon && sideMenu) {
-          menuIcon.addEventListener('click', function() {
-              sideMenu.classList.add('active');
-          });
+<script>
+  // サーバーからのデータをJS変数として受け取る
+  window.flaskData = {
+    shifts: JSON.parse('{{ shifts|tojson|safe }}') || [],
+    settings: JSON.parse('{{ settings|tojson|safe }}') || {}
+  };
+  
+  window.chartInstances = {};
+  
+  // ★★★ グラフ設定を保存 ★★★
+  window.chartSettings = {
+    heightPerPerson: 60,  // 1人あたりの高さ
+    maxHeight: 800,       // 最大高さ
+    displayMode: 'all'    // 'all', 'daily', 'weekly'
+  };
+</script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    // 1. ハンバーガーメニュー制御
+    const menuIcon = document.getElementById('menuIcon');
+    const sideMenu = document.getElementById('sideMenu');
+    const closeBtn = document.getElementById('closeBtn');
+    
+    if (menuIcon && sideMenu) {
+      menuIcon.addEventListener('click', function() {
+        sideMenu.classList.add('active');
+      });
+    }
+    
+    if (closeBtn && sideMenu) {
+      closeBtn.addEventListener('click', function() {
+        sideMenu.classList.remove('active');
+      });
+    }
+    
+    if (sideMenu) {
+      sideMenu.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', function() {
+          sideMenu.classList.remove('active');
+        });
+      });
+    }
+
+    // ========================================================
+    // 2. 公開・非公開切り替え関数
+    // ========================================================
+    window.publishShift = async function(month, status) {
+      const action = status === 1 ? "公開" : "非公開";
+      if (!confirm(`${month} 分のシフトを ${action} にしてもよろしいですか？`)) return;
+
+      try {
+        const response = await fetch("/makeshift/api/publish_status", {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ month: month, status: status })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`✅ ${result.message}`);
+          location.reload();
+        } else {
+          alert(`❌ エラー: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('API Error:', error);
+        alert('通信中にエラーが発生しました。');
       }
-      
-      if (closeBtn && sideMenu) {
-          closeBtn.addEventListener('click', function() {
-              sideMenu.classList.remove('active');
-          });
-      }
-      
-      if (sideMenu) {
-          sideMenu.querySelectorAll('a').forEach(link => {
-              link.addEventListener('click', function() {
-                  sideMenu.classList.remove('active');
-              });
-          });
+    };
+
+    // ========================================================
+    // ★★★ ロック切り替え関数 ★★★
+    // ========================================================
+    window.toggleLock = async function(userId, date, startTime, endTime, chartId) {
+      if (!userId || parseInt(userId) < 0) {
+        showToast("⚠️ 不足データはロックできません");
+        return;
       }
 
-      // ========================================================
-      // 2. 公開・非公開切り替え関数
-      // ========================================================
-      window.publishShift = async function(month, status) {
-          const action = status === 1 ? "公開" : "非公開";
-          if (!confirm(`${month} 分のシフトを ${action} にしてもよろしいですか？`)) return;
-
-          try {
-              const response = await fetch("/makeshift/api/publish_status", {
-                  method: 'POST',
-                  headers: { 
-                      'Content-Type': 'application/json',
-                      'X-Requested-With': 'XMLHttpRequest'
-                  },
-                  body: JSON.stringify({ month: month, status: status })
-              });
-              const result = await response.json();
-
-              if (result.success) {
-                  alert(`✅ ${result.message}`);
-                  location.reload();
-              } else {
-                  alert(`❌ エラー: ${result.message}`);
+      try {
+        const response = await fetch('/makeshift/toggle_lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            user_id: userId, 
+            date: date,
+            start_time: startTime,
+            end_time: endTime
+          })
+        });
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          window.flaskData.shifts.forEach(s => {
+            if (s.user_id == userId && s.date == date && 
+                s.start_time == startTime && s.end_time == endTime) {
+              s.is_locked = result.new_state;
+            }
+          });
+          
+          const chart = window.chartInstances[chartId];
+          if (chart) {
+            chart.data.datasets[0].data.forEach(d => {
+              if (d.original_user_id == userId && d.date == date &&
+                  d.x[0].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) == startTime &&
+                  d.x[1].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) == endTime) {
+                d.is_locked = result.new_state;
               }
-          } catch (error) {
-              console.error('API Error:', error);
-              alert('通信中にエラーが発生しました。');
+            });
+            chart.update();
           }
-      };
-
-      // ========================================================
-      // ★★★ 修正: ロック切り替え関数 ★★★
-      // ========================================================
-      window.toggleLock = async function(userId, date, startTime, endTime, chartId) {
-          if (!userId || parseInt(userId) < 0) {
-              showToast("⚠️ 不足データはロックできません");
-              return;
-          }
-
-          try {
-              const response = await fetch('/makeshift/toggle_lock', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                      user_id: userId, 
-                      date: date,
-                      start_time: startTime,
-                      end_time: endTime
-                  })
-              });
-              const result = await response.json();
-              
-              if (result.status === 'success') {
-                  // データを更新
-                  window.flaskData.shifts.forEach(s => {
-                      if (s.user_id == userId && s.date == date && 
-                          s.start_time == startTime && s.end_time == endTime) {
-                          s.is_locked = result.new_state;
-                      }
-                  });
-                  
-                  // グラフを更新
-                  const chart = window.chartInstances[chartId];
-                  if (chart) {
-                      chart.data.datasets[0].data.forEach(d => {
-                          if (d.original_user_id == userId && d.date == date &&
-                              d.x[0].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) == startTime &&
-                              d.x[1].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) == endTime) {
-                              d.is_locked = result.new_state;
-                          }
-                      });
-                      chart.update();
-                  }
-                  
-                  showToast(result.new_state === 1 ? "🔒 ロックしました" : "🔓 ロック解除しました");
-              } else {
-                  alert('エラー: ' + result.message);
-              }
-          } catch (e) {
-              console.error(e);
-              alert('通信エラーが発生しました');
-          }
-      };
-
-      function showToast(msg) {
-          const toast = document.createElement("div");
-          toast.innerText = msg;
-          toast.style.position = "fixed";
-          toast.style.bottom = "20px";
-          toast.style.right = "20px";
-          toast.style.background = "rgba(0,0,0,0.8)";
-          toast.style.color = "#fff";
-          toast.style.padding = "10px 20px";
-          toast.style.borderRadius = "5px";
-          toast.style.zIndex = "9999";
-          document.body.appendChild(toast);
-          setTimeout(() => toast.remove(), 2000);
+          
+          showToast(result.new_state === 1 ? "🔒 ロックしました" : "🔓 ロック解除しました");
+        } else {
+          alert('エラー: ' + result.message);
+        }
+      } catch (e) {
+        console.error(e);
+        alert('通信エラーが発生しました');
       }
+    };
 
-      // ========================================================
-      // 4. グラフ描画ロジック
-      // ========================================================
+    function showToast(msg) {
+      const toast = document.createElement("div");
+      toast.innerText = msg;
+      toast.style.position = "fixed";
+      toast.style.bottom = "20px";
+      toast.style.right = "20px";
+      toast.style.background = "rgba(0,0,0,0.8)";
+      toast.style.color = "#fff";
+      toast.style.padding = "10px 20px";
+      toast.style.borderRadius = "5px";
+      toast.style.zIndex = "9999";
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2000);
+    }
+
+    // ========================================================
+    // ★★★ 週の開始日を取得する関数 ★★★
+    // ========================================================
+    function getWeekStart(dateStr) {
+      const date = new Date(dateStr);
+      const day = date.getDay();
+      const diff = date.getDate() - day; // 日曜日を週の開始とする
+      const weekStart = new Date(date.setDate(diff));
+      return weekStart.toISOString().split('T')[0];
+    }
+
+    // ========================================================
+    // ★★★ 週ごとにグループ化 ★★★
+    // ========================================================
+    function groupByWeek(groupedByDate) {
+      const weekGroups = {};
+      
+      Object.keys(groupedByDate).forEach(date => {
+        const weekStart = getWeekStart(date);
+        if (!weekGroups[weekStart]) {
+          weekGroups[weekStart] = {};
+        }
+        weekGroups[weekStart][date] = groupedByDate[date];
+      });
+      
+      return weekGroups;
+    }
+
+    // ========================================================
+    // ★★★ 週の範囲を表示形式に変換 ★★★
+    // ========================================================
+    function getWeekLabel(weekStart, dates) {
+      const sortedDates = Object.keys(dates).sort();
+      const start = sortedDates[0];
+      const end = sortedDates[sortedDates.length - 1];
+      return `${start} 〜 ${end}`;
+    }
+
+    // ========================================================
+    // ★★★ タブ切り替え関数 ★★★
+    // ========================================================
+    window.showChart = function(identifier) {
+      // すべてのタブの active クラスを削除
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      // クリックされたタブに active クラスを追加
+      event.target.classList.add('active');
+      
+      // すべてのチャートコンテナを非表示
+      document.querySelectorAll('.chart-day-container, .chart-week-container').forEach(container => {
+        container.style.display = 'none';
+      });
+      
+      // 選択されたチャートを表示
+      const targetContainer = document.getElementById(`container_${identifier}`);
+      if (targetContainer) {
+        targetContainer.style.display = 'block';
+      }
+    };
+
+    // ========================================================
+    // ★★★ グラフ再描画関数 ★★★
+    // ========================================================
+    window.redrawCharts = function() {
+      const chartsDiv = document.getElementById("charts");
+      if (!chartsDiv) return;
+      
+      // 既存のグラフを削除
+      Object.values(window.chartInstances).forEach(chart => chart.destroy());
+      window.chartInstances = {};
+      chartsDiv.innerHTML = '';
+      
+      // グラフを再描画
+      drawCharts();
+    };
+
+    // ========================================================
+    // ★★★ グラフ描画関数 ★★★
+    // ========================================================
+    function drawCharts() {
       const rawData = window.flaskData.shifts;
       const settings = window.flaskData.settings;
       const chartsDiv = document.getElementById("charts");
       
-      // ★★★ デバッグ: 初期データの確認 ★★★
       console.log('rawData総数:', rawData.length);
-      console.log('rawData不足データ数:', rawData.filter(s => parseInt(s.user_id) < 0).length);
-      console.log('rawData不足データ一覧:', rawData.filter(s => parseInt(s.user_id) < 0));
       
       if (!rawData || rawData.length === 0 || !chartsDiv) {
-          if(chartsDiv) chartsDiv.innerHTML = '<p style="text-align:center; padding:20px;">シフトデータがありません。</p>';
-          return;
+        if(chartsDiv) chartsDiv.innerHTML = '<p style="text-align:center; padding:20px;">シフトデータがありません。</p>';
+        return;
       }
 
       rawData.sort((a, b) => {
@@ -178,182 +274,290 @@
 
       const mergedShifts = [];
       if (rawData.length > 0) {
-          let current = { ...rawData[0] };
-          for (let i = 1; i < rawData.length; i++) {
-              const next = rawData[i];
-              
-              // ★★★ 修正: 不足データ（負のuser_id）は絶対にマージしない ★★★
-              const shouldMerge = (
-                  parseInt(current.user_id) > 0 &&  // 通常のスタッフのみマージ
-                  current.user_id === next.user_id &&
-                  current.date === next.date &&
-                  current.type === next.type &&
-                  (current.is_locked || 0) === (next.is_locked || 0) &&
-                  current.end_time === next.start_time
-              );
-              
-              // ★★★ デバッグ: マージ判定の詳細を出力 ★★★
-              if (parseInt(current.user_id) < 0 || parseInt(next.user_id) < 0) {
-                  console.log(`不足データチェック: current=${current.user_id}(${current.type}), next=${next.user_id}(${next.type}), shouldMerge=${shouldMerge}`);
-              }
-              
-              if (shouldMerge) {
-                  current.end_time = next.end_time;
-              } else {
-                  mergedShifts.push(current);
-                  current = { ...next };      
-              }
+        let current = { ...rawData[0] };
+        for (let i = 1; i < rawData.length; i++) {
+          const next = rawData[i];
+          
+          const shouldMerge = (
+            parseInt(current.user_id) > 0 &&
+            current.user_id === next.user_id &&
+            current.date === next.date &&
+            current.type === next.type &&
+            (current.is_locked || 0) === (next.is_locked || 0) &&
+            current.end_time === next.start_time
+          );
+          
+          if (shouldMerge) {
+            current.end_time = next.end_time;
+          } else {
+            mergedShifts.push(current);
+            current = { ...next };
           }
-          mergedShifts.push(current);
+        }
+        mergedShifts.push(current);
       }
-      
-      // ★★★ デバッグ: マージ後の不足データ確認 ★★★
-      const shortageCountJS = mergedShifts.filter(s => parseInt(s.user_id) < 0).length;
-      console.log(`JavaScript DEBUG: マージ後のシフト数: ${mergedShifts.length}, 不足データ数: ${shortageCountJS}`);
-      console.log('不足データ一覧:', mergedShifts.filter(s => parseInt(s.user_id) < 0));
 
       const minTime = settings.start_time ? new Date(`1970-01-01T${settings.start_time}:00`) : new Date("1970-01-01T08:00:00");
       const maxTime = settings.end_time ? new Date(`1970-01-01T${settings.end_time}:00`) : new Date("1970-01-01T23:00:00");
       
       const groupedByDate = {};
       mergedShifts.forEach(s => {
-          if (!groupedByDate[s.date]) groupedByDate[s.date] = [];
-          groupedByDate[s.date].push(s);
+        if (!groupedByDate[s.date]) groupedByDate[s.date] = [];
+        groupedByDate[s.date].push(s);
       });
 
+      const displayMode = window.chartSettings.displayMode;
+
+      // ★★★ 表示モードに応じた処理 ★★★
+      if (displayMode === 'all') {
+        // 全日表示（既存の処理）
+        drawAllCharts(groupedByDate, minTime, maxTime);
+      } else if (displayMode === 'daily') {
+        // 日別タブ表示
+        drawDailyTabs(groupedByDate, minTime, maxTime);
+      } else if (displayMode === 'weekly') {
+        // 週別タブ表示
+        drawWeeklyTabs(groupedByDate, minTime, maxTime);
+      }
+    }
+
+    // ========================================================
+    // ★★★ 全日表示 ★★★
+    // ========================================================
+    function drawAllCharts(groupedByDate, minTime, maxTime) {
+      const chartsDiv = document.getElementById("charts");
       const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
       const userColorMap = {};
       let colorIndex = 0;
 
       Object.entries(groupedByDate).forEach(([date, shifts], idx) => {
-          const chartId = `chart_${idx}`;
-          const container = document.createElement("div");
-          container.className = "chart-container";
-          container.style.cssText = "margin-bottom:30px; padding:20px; background:#ffffff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);";
-          
-          container.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom:10px;">
-                <h3 style="margin:0; color: #333;">📅 ${date} のシフト</h3>
-                <small style="color:#666;">※バーをクリックで固定(ロック)切替</small>
-            </div>
-            <div style="height: 400px;"><canvas id="${chartId}"></canvas></div>
-          `;
-          chartsDiv.appendChild(container);
-
-          const ctx = document.getElementById(chartId).getContext("2d");
-          const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
-
-          const chartDataPoints = shifts.map(s => {
-              const uName = s.user_name || `ID:${s.user_id}`;
-              if (!userColorMap[s.user_id]) {
-                  userColorMap[s.user_id] = baseColors[colorIndex % baseColors.length];
-                  colorIndex++;
-              }
-              
-              let barColor = userColorMap[s.user_id] || "#bdbdbd";
-              if (s.type && s.type.indexOf("不足") !== -1) barColor = "#ef5350";
-              else if (s.type && s.type.includes("キッチン")) barColor = "#42a5f5";
-              else if (s.type && s.type.includes("ホール")) barColor = "#66bb6a";
-
-              return {
-                  x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
-                  y: uName,
-                  type: s.type,
-                  is_locked: s.is_locked || 0,
-                  original_user_id: s.user_id,
-                  date: s.date,
-                  backgroundColor: barColor
-              };
-          });
-
-          // ★★★ 修正: グラフインスタンスを保存 ★★★
-          const chart = new Chart(ctx, {
-              type: "bar",
-              data: {
-                  datasets: [{
-                      data: chartDataPoints,
-                      backgroundColor: chartDataPoints.map(d => d.backgroundColor),
-                      barPercentage: 0.7,
-                      borderRadius: 4,
-                      borderSkipped: false,
-                      borderWidth: ctx => (ctx.raw && ctx.raw.is_locked) ? 3 : 0,
-                      borderColor: '#333'
-                  }]
-              },
-              options: {
-                  indexAxis: "y",
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  onClick: (e, elements) => {
-                      if (elements.length > 0) {
-                          const elementIndex = elements[0].index;
-                          const dataPoint = chart.data.datasets[0].data[elementIndex];
-                          const startTime = dataPoint.x[0].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-                          const endTime = dataPoint.x[1].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-                          window.toggleLock(dataPoint.original_user_id, dataPoint.date, startTime, endTime, chartId);
-                      }
-                  },
-                  scales: {
-                      x: {
-                          type: "time",
-                          time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
-                          min: minTime, max: maxTime,
-                          grid: { color: "#f0f0f0" },
-                          ticks: { color: "#333" }
-                      },
-                      y: {
-                          type: 'category',
-                          labels: yLabels,
-                          grid: { display: false },
-                          ticks: { color: "#333", font: { weight: 'bold' } }
-                      }
-                  },
-                  plugins: {
-                      legend: { display: false },
-                      tooltip: {
-                          callbacks: {
-                              label: c => {
-                                  const d = c.raw;
-                                  const st = d.x[0].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                                  const en = d.x[1].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                                  return `${d.type}: ${st}〜${en} (${d.is_locked ? "🔒固定中" : "🔓未固定"})`;
-                              }
-                          }
-                      }
-                  }
-              },
-              plugins: [{
-                id: 'roleLabels',
-                afterDatasetsDraw(chart) {
-                    const { ctx } = chart;
-                    chart.data.datasets.forEach((dataset, i) => {
-                        const meta = chart.getDatasetMeta(i);
-                        meta.data.forEach((element, index) => {
-                            const d = dataset.data[index];
-                            ctx.font = 'bold 14px "Helvetica Neue", Arial';
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            let labelText = (d.type !== 'work') ? d.type : "";
-                            if (d.is_locked) labelText = "🔒 " + labelText;
-
-                            if (labelText) {
-                                ctx.lineWidth = 3;
-                                ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-                                ctx.strokeText(labelText, element.x, element.y);
-                                ctx.fillStyle = '#ffffff';
-                                ctx.fillText(labelText, element.x, element.y);
-                            }
-                        });
-                    });
-                }
-              }]
-          });
-          
-          // ★★★ グラフインスタンスを保存 ★★★
-          window.chartInstances[chartId] = chart;
+        createChartContainer(date, shifts, `chart_${idx}`, minTime, maxTime, userColorMap, baseColors, colorIndex, false);
       });
-    });
-  </script>
+    }
+
+    // ========================================================
+    // ★★★ 日別タブ表示 ★★★
+    // ========================================================
+    function drawDailyTabs(groupedByDate, minTime, maxTime) {
+      const chartsDiv = document.getElementById("charts");
+      const dates = Object.keys(groupedByDate).sort();
+      
+      // タブナビゲーションを作成
+      const tabsHtml = dates.map((date, i) => 
+        `<button class="tab-btn ${i===0?'active':''}" onclick="showChart('${date.replace(/-/g, '')}')">${date}</button>`
+      ).join('');
+      
+      chartsDiv.innerHTML = `
+        <div class="tabs" style="display: flex; gap: 5px; margin-bottom: 20px; flex-wrap: wrap; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+          ${tabsHtml}
+        </div>
+        <div id="chart-area"></div>
+      `;
+
+      const chartArea = document.getElementById('chart-area');
+      const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
+      const userColorMap = {};
+      let colorIndex = 0;
+
+      dates.forEach((date, idx) => {
+        const shifts = groupedByDate[date];
+        const containerId = `container_${date.replace(/-/g, '')}`;
+        
+        const wrapper = document.createElement('div');
+        wrapper.id = containerId;
+        wrapper.className = 'chart-day-container';
+        wrapper.style.display = idx === 0 ? 'block' : 'none';
+        chartArea.appendChild(wrapper);
+        
+        createChartContainer(date, shifts, `chart_daily_${idx}`, minTime, maxTime, userColorMap, baseColors, colorIndex, true, wrapper);
+      });
+    }
+
+    // ========================================================
+    // ★★★ 週別タブ表示 ★★★
+    // ========================================================
+    function drawWeeklyTabs(groupedByDate, minTime, maxTime) {
+      const chartsDiv = document.getElementById("charts");
+      const weekGroups = groupByWeek(groupedByDate);
+      const weeks = Object.keys(weekGroups).sort();
+      
+      // タブナビゲーションを作成
+      const tabsHtml = weeks.map((weekStart, i) => {
+        const weekLabel = getWeekLabel(weekStart, weekGroups[weekStart]);
+        return `<button class="tab-btn ${i===0?'active':''}" onclick="showChart('week_${weekStart.replace(/-/g, '')}')">${weekLabel}</button>`;
+      }).join('');
+      
+      chartsDiv.innerHTML = `
+        <div class="tabs" style="display: flex; gap: 5px; margin-bottom: 20px; flex-wrap: wrap; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+          ${tabsHtml}
+        </div>
+        <div id="chart-area"></div>
+      `;
+
+      const chartArea = document.getElementById('chart-area');
+      const baseColors = ["hsl(0, 70%, 60%)", "hsl(70, 70%, 60%)", "hsl(140, 70%, 60%)", "hsl(210, 70%, 60%)", "hsl(280, 70%, 60%)"];
+      const userColorMap = {};
+      let colorIndex = 0;
+
+      weeks.forEach((weekStart, weekIdx) => {
+        const weekDates = weekGroups[weekStart];
+        const containerId = `container_week_${weekStart.replace(/-/g, '')}`;
+        
+        const weekWrapper = document.createElement('div');
+        weekWrapper.id = containerId;
+        weekWrapper.className = 'chart-week-container';
+        weekWrapper.style.display = weekIdx === 0 ? 'block' : 'none';
+        chartArea.appendChild(weekWrapper);
+        
+        // 週内の各日付のグラフを作成
+        Object.entries(weekDates).sort().forEach(([date, shifts], dayIdx) => {
+          createChartContainer(date, shifts, `chart_week_${weekIdx}_day_${dayIdx}`, minTime, maxTime, userColorMap, baseColors, colorIndex, true, weekWrapper);
+        });
+      });
+    }
+
+    // ========================================================
+    // ★★★ チャートコンテナ作成（共通関数） ★★★
+    // ========================================================
+    function createChartContainer(date, shifts, chartId, minTime, maxTime, userColorMap, baseColors, colorIndex, isTabMode, parentElement = null) {
+      const container = document.createElement("div");
+      container.className = "chart-container";
+      container.style.cssText = "margin-bottom:30px; padding:20px; background:#ffffff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);";
+      
+      const yLabels = [...new Set(shifts.map(s => s.user_name || `ID:${s.user_id}`))];
+      const dynamicHeight = Math.max(400, yLabels.length * window.chartSettings.heightPerPerson);
+      const maxHeight = window.chartSettings.maxHeight;
+      
+      container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom:10px;">
+          <h3 style="margin:0; color: #333;">📅 ${date} のシフト (${yLabels.length}名)</h3>
+          <small style="color:#666;">※バーをクリックで固定(ロック)切替</small>
+        </div>
+        <div style="height: ${Math.min(dynamicHeight, maxHeight)}px; overflow-y: auto; overflow-x: hidden;">
+          <canvas id="${chartId}" style="height: ${dynamicHeight}px;"></canvas>
+        </div>
+      `;
+      
+      if (parentElement) {
+        parentElement.appendChild(container);
+      } else {
+        document.getElementById("charts").appendChild(container);
+      }
+
+      const ctx = document.getElementById(chartId).getContext("2d");
+
+      const chartDataPoints = shifts.map(s => {
+        const uName = s.user_name || `ID:${s.user_id}`;
+        if (!userColorMap[s.user_id]) {
+          userColorMap[s.user_id] = baseColors[colorIndex % baseColors.length];
+          colorIndex++;
+        }
+        
+        let barColor = userColorMap[s.user_id] || "#bdbdbd";
+        if (s.type && s.type.indexOf("不足") !== -1) barColor = "#ef5350";
+        else if (s.type && s.type.includes("キッチン")) barColor = "#42a5f5";
+        else if (s.type && s.type.includes("ホール")) barColor = "#66bb6a";
+
+        return {
+          x: [new Date(`1970-01-01T${s.start_time}:00`), new Date(`1970-01-01T${s.end_time}:00`)],
+          y: uName,
+          type: s.type,
+          is_locked: s.is_locked || 0,
+          original_user_id: s.user_id,
+          date: s.date,
+          backgroundColor: barColor
+        };
+      });
+
+      const chart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          datasets: [{
+            data: chartDataPoints,
+            backgroundColor: chartDataPoints.map(d => d.backgroundColor),
+            barPercentage: 0.7,
+            borderRadius: 4,
+            borderSkipped: false,
+            borderWidth: ctx => (ctx.raw && ctx.raw.is_locked) ? 3 : 0,
+            borderColor: '#333'
+          }]
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (e, elements) => {
+            if (elements.length > 0) {
+              const elementIndex = elements[0].index;
+              const dataPoint = chart.data.datasets[0].data[elementIndex];
+              const startTime = dataPoint.x[0].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+              const endTime = dataPoint.x[1].toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+              window.toggleLock(dataPoint.original_user_id, dataPoint.date, startTime, endTime, chartId);
+            }
+          },
+          scales: {
+            x: {
+              type: "time",
+              time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+              min: minTime, max: maxTime,
+              grid: { color: "#f0f0f0" },
+              ticks: { color: "#333" }
+            },
+            y: {
+              type: 'category',
+              labels: yLabels,
+              grid: { display: false },
+              ticks: { color: "#333", font: { weight: 'bold' } }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: c => {
+                  const d = c.raw;
+                  const st = d.x[0].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                  const en = d.x[1].toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                  return `${d.type}: ${st}〜${en} (${d.is_locked ? "🔒固定中" : "🔓未固定"})`;
+                }
+              }
+            }
+          }
+        },
+        plugins: [{
+          id: 'roleLabels',
+          afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            chart.data.datasets.forEach((dataset, i) => {
+              const meta = chart.getDatasetMeta(i);
+              meta.data.forEach((element, index) => {
+                const d = dataset.data[index];
+                ctx.font = 'bold 14px "Helvetica Neue", Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                let labelText = (d.type !== 'work') ? d.type : "";
+                if (d.is_locked) labelText = "🔒 " + labelText;
+
+                if (labelText) {
+                  ctx.lineWidth = 3;
+                  ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                  ctx.strokeText(labelText, element.x, element.y);
+                  ctx.fillStyle = '#ffffff';
+                  ctx.fillText(labelText, element.x, element.y);
+                }
+              });
+            });
+          }
+        }]
+      });
+      
+      window.chartInstances[chartId] = chart;
+    }
+
+    // 初回描画
+    drawCharts();
+  });
+</script>
 </head>
 <body>
       <!-- ハンバーガーメニュー -->
@@ -370,6 +574,103 @@
         <a href="/login/logout">🚪 ログアウト</a>
     </div>
   <header>自動作成シフトカレンダー</header>
+<!-- グラフ表示設定フォーム -->
+<div class="settings-box" style="margin: 20px auto; max-width: 800px;">
+  <h3>📊 グラフ表示設定</h3>
+  
+  <!-- 表示モード選択 -->
+  <div style="margin-bottom: 20px;">
+    <label style="display: block; margin-bottom: 10px; font-weight: bold;">
+      📋 表示モード:
+    </label>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <input type="radio" name="displayMode" value="all" checked onchange="updateDisplayMode(this.value)">
+        <span>全日表示</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <input type="radio" name="displayMode" value="daily" onchange="updateDisplayMode(this.value)">
+        <span>日別タブ</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <input type="radio" name="displayMode" value="weekly" onchange="updateDisplayMode(this.value)">
+        <span>週別タブ</span>
+      </label>
+    </div>
+    <small style="color: #666;">※週別タブは日曜日を週の開始日とします</small>
+  </div>
+  
+  <!-- サイズ設定 -->
+  <div style="display: flex; gap: 20px; align-items: end; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 200px;">
+      <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+        1人あたりの高さ (px):
+      </label>
+      <input type="number" id="heightPerPerson" value="60" min="30" max="150" step="10" 
+             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      <small style="color: #666;">推奨: 40〜80px</small>
+    </div>
+    
+    <div style="flex: 1; min-width: 200px;">
+      <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+        最大表示高さ (px):
+      </label>
+      <input type="number" id="maxHeight" value="800" min="400" max="2000" step="100" 
+             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      <small style="color: #666;">この高さを超えるとスクロール表示</small>
+    </div>
+    
+    <button onclick="applyChartSettings()" class="btn" style="background: #2196F3; color: white; padding: 8px 20px; white-space: nowrap;">
+      ⚙️ 適用
+    </button>
+  </div>
+</div>
+
+
+<script>
+  function updateDisplayMode(mode) {
+    window.chartSettings.displayMode = mode;
+    window.redrawCharts();
+    showToast(`📋 ${mode === 'all' ? '全日表示' : mode === 'daily' ? '日別タブ' : '週別タブ'}に切り替えました`);
+  }
+  
+  function applyChartSettings() {
+    const heightPerPerson = parseInt(document.getElementById('heightPerPerson').value);
+    const maxHeight = parseInt(document.getElementById('maxHeight').value);
+    
+    if (heightPerPerson < 30 || heightPerPerson > 150) {
+      alert('1人あたりの高さは30〜150pxの範囲で設定してください');
+      return;
+    }
+    
+    if (maxHeight < 400 || maxHeight > 2000) {
+      alert('最大表示高さは400〜2000pxの範囲で設定してください');
+      return;
+    }
+    
+    window.chartSettings.heightPerPerson = heightPerPerson;
+    window.chartSettings.maxHeight = maxHeight;
+    
+    window.redrawCharts();
+    
+    showToast('✅ 設定を適用しました');
+  }
+  
+  function showToast(msg) {
+    const toast = document.createElement("div");
+    toast.innerText = msg;
+    toast.style.position = "fixed";
+    toast.style.bottom = "20px";
+    toast.style.right = "20px";
+    toast.style.background = "rgba(0,0,0,0.8)";
+    toast.style.color = "#fff";
+    toast.style.padding = "10px 20px";
+    toast.style.borderRadius = "5px";
+    toast.style.zIndex = "9999";
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
+  }
+</script>
  
   {% if settings %}
   <div class="settings-box">
@@ -386,48 +687,57 @@
     <p class="message">{{ message }}</p>
   {% endif %}
  
-  <div id="charts"></div>
-  {% if shifts and shifts[0] %}
-    {% set target_month = shifts[0].date[:7] %} 
-    <div class="settings-box" style="border-left: 5px solid #28a745; background: #e9f7ef; margin-top: 20px;">
-      <h3 style="color: #28a745;">📢 シフトの公開設定 (対象月: {{ target_month }})</h3>
-      <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+<div id="charts"></div>
+
+{% if shifts and shifts[0] %}
+  {% set target_month = shifts[0].date[:7] %}
+  <div id="stickyHeader">
+    <div class="settings-box public-status">
+      <h3>📢 シフトの公開設定 (対象月: {{ target_month }})</h3>
+      <p>
         ※自動作成された内容を確認し、問題なければ「公開」ボタンを押してください。<br>
         公開すると、従業員が自分のスマホからシフトを確認できるようになります。
       </p>
-      <div style="display: flex; gap: 10px;">
-        <button onclick="publishShift('{{ target_month }}', 1)" class="btn" style="background: #28a745; color: white; flex: 1;">🚀 シフトを公開する</button>
+      <div style="display: flex; gap: 10px; width: 100%;">
+        <button onclick="publishShift('{{ target_month }}', 1)" class="btn" style="flex: 1;">🚀 シフトを公開する</button>
         <button onclick="publishShift('{{ target_month }}', 0)" class="btn secondary" style="flex: 1;">🔒 非公開に戻す</button>
       </div>
     </div>
-  {% endif %}
+{% endif %}
 
-  <div class="button-group" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-    <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成(穴埋め)</a>
-    <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800; color: white;" onclick="return confirm('全ての保護を解除しますか?\n次回作成時に削除されます。')">🔓 全保護解除</a>
-    <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか?')">🔄 全リセット</a>
-    
-    <button onclick="openHelpModal()" class="btn danger" style="background: #e91e63;">🚨 ヘルプ募集</button>
-  </div>
- 
-  <div id="helpModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 style="margin-top:0; color:#d32f2f;">🚨 ヘルプ急募配信</h3>
-        <p style="margin-bottom: 15px; color: #666;">条件に合うスタッフに通知します。</p>
-        <label>📅 日付:</label> <input type="date" id="helpDate" class="form-control">
-        <label>⏰ 開始:</label> <input type="time" id="helpStart" class="form-control">
-        <label>🏁 終了:</label> <input type="time" id="helpEnd" class="form-control">
-        <label>👤 募集ポジション:</label>
-        <select id="helpPosition" class="form-control">
-            <option value="">読み込み中...</option>
-        </select>
-        <div class="modal-actions">
-            <button onclick="closeHelpModal()" class="btn secondary">キャンセル</button>
-            <button onclick="submitHelpRequest()" class="btn danger">配信</button>
-        </div>
+    <div class="button-group">
+      <a href="{{ url_for('makeshift.auto_calendar', mode='fill') }}" class="btn secondary">♻️ 再作成(穴埋め)</a>
+      <!-- <a href="{{ url_for('makeshift.auto_calendar', mode='unlock_all') }}" class="btn" style="background: #ff9800;" onclick="return confirm('全ての保護を解除しますか?\n次回作成時に削除されます。')">🔓 全保護解除</a>
+      <a href="{{ url_for('makeshift.auto_calendar', mode='reset') }}" class="btn danger" onclick="return confirm('全て削除してリセットしますか?')">🔄 全リセット</a> -->
+      <button onclick="openHelpModal()" class="btn danger" style="background: #e91e63;">🚨 ヘルプ募集</button>
     </div>
   </div>
 
+<div id="helpModal" class="modal-overlay">
+  <div class="modal-content">
+    <h3>🚨 ヘルプ急募配信</h3>
+    <p>条件に合うスタッフに通知します。</p>
+    
+    <label>📅 日付:</label>
+    <input type="date" id="helpDate" class="form-control">
+    
+    <label>⏰ 開始:</label>
+    <input type="time" id="helpStart" class="form-control">
+    
+    <label>🏁 終了:</label>
+    <input type="time" id="helpEnd" class="form-control">
+    
+    <label>👤 募集ポジション:</label>
+    <select id="helpPosition" class="form-control">
+      <option value="">読み込み中...</option>
+    </select>
+    
+    <div class="modal-actions">
+      <button onclick="closeHelpModal()" class="btn secondary">キャンセル</button>
+      <button onclick="submitHelpRequest()" class="btn danger">配信</button>
+    </div>
+  </div>
+</div>
  
     <script>
     // ★モーダル表示時にポジションリストを取得★
@@ -520,6 +830,18 @@
             alert('通信エラーが発生しました');
         }
     }
+
+      // スクロール時にヘッダーに影を追加するエフェクト
+    window.addEventListener('scroll', function() {
+        const header = document.getElementById('stickyHeader');
+        if (header) {
+        if (window.scrollY > 50) {
+            header.classList.add('scrolled');
+        } else {
+            header.classList.remove('scrolled');
+        }
+        }
+    });
     </script>
 </body>
 </html>
