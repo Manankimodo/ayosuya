@@ -3,19 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!-- ✅ キャッシュ無効化 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>AI チャットボット</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbot.css') }}">
     <script defer src="{{ url_for('static', filename='js/index.js') }}"></script>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <!-- ✅ キャッシュ無効化 -->
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-        <meta http-equiv="Pragma" content="no-cache">
-        <meta http-equiv="Expires" content="0">
-        <title>MovieShift カレンダー</title>
-        ...
-      </head>
-    <title>AI チャットボット</title>
 </head>
 <body>
     <header class="top-bar">
@@ -34,7 +28,7 @@
                 </div>
             {% endfor %}
         {% else %}
-            <div class="message bot">こんにちは！ご質問をどうぞ 😊</div>
+            <div class="message bot">こんにちは!ご質問をどうぞ 😊</div>
         {% endif %}
     </div>
 
@@ -51,14 +45,14 @@
             <span class="nav-label">カレンダー</span>
         </a>
         
-        <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item active">
+        <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item">
             <div class="nav-icon icon-check" style="position: relative;">
                 {% if has_new_shift %}
                 <span style="
                     position: absolute;
                     top: -5px;
                     right: -8px;
-                    background-color: #ff3b30; /* 鮮やかな赤 */
+                    background-color: #ff3b30;
                     color: white;
                     font-size: 10px;
                     font-weight: bold;
@@ -68,7 +62,7 @@
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    border: 2px solid white; /* 境界をくっきりさせる */
+                    border: 2px solid white;
                     z-index: 10;
                 ">1</span>
                 {% endif %}

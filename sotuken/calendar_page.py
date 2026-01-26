@@ -50,24 +50,19 @@ def calendar():
         return "店舗情報が見つかりません", 404
 
     # --- 🌟 2. 募集中のターゲット月を自動計算するロジック ---
-    # 設定から締め切り日を取得
     sql_deadline = text("SELECT deadline_day FROM shift_settings WHERE store_id = :store_id")
     setting = db.session.execute(sql_deadline, {"store_id": store_id}).fetchone()
     deadline_day = setting[0] if setting and setting[0] else 20
 
     today = datetime.now()
-    # 今月の締め切り日時（例: 1月13日 23:59:59）
     this_month_deadline = today.replace(day=deadline_day, hour=23, minute=59, second=59)
 
     if today > this_month_deadline:
-        # 期限を過ぎたので「翌々月」を表示 (例: 1/14なら3月分)
         target_month = (today + relativedelta(months=2)).strftime("%Y-%m")
     else:
-        # 期限内なので「翌月」を表示 (例: 1/12なら2月分)
         target_month = (today + relativedelta(months=1)).strftime("%Y-%m")
 
     # --- 🌟 3. グラフに表示するデータをターゲット月に絞って取得 ---
-    # ここで target_month を使うことで、期限切れの月のグラフは出なくなります
     sql_shifts = text("""
         SELECT c.*, a.name as user_name 
         FROM calendar c
@@ -92,46 +87,33 @@ def calendar():
             "type": "出勤" if s.work == 1 else "休み"
         })
 
-    # 4. 希望日リスト取得（ドット表示用などは全期間でもOKですが、月を絞るならここも調整）
+    # 4. 希望日リスト取得
     sql_dates = text("SELECT date FROM calendar WHERE ID = :user_id")
     result = db.session.execute(sql_dates, {"user_id": user_id}).fetchall()
     sent_dates = [row[0].strftime("%Y-%m-%d") for row in result]
 
-    # 5. シフトの公開状態と通知判定 (target_monthと連動)
-    sql_publish = text("""
-        SELECT is_published, updated_at FROM shift_publish_status 
-        WHERE store_id = :store_id AND target_month = :target_month
-    """)
-    publish_res = db.session.execute(sql_publish, {
-        "store_id": store_id, 
-        "target_month": target_month
-    }).fetchone()
-    
-    has_new_shift = False
-    if publish_res and publish_res[0] == 1:
-        db_updated_at = publish_res[1].replace(tzinfo=None) if publish_res[1] else None
-        last_viewed_at = session.get("last_viewed_at")
-        if last_viewed_at:
-            last_viewed_at = last_viewed_at.replace(tzinfo=None) if hasattr(last_viewed_at, 'replace') else last_viewed_at
-            
-        if not last_viewed_at or (db_updated_at and db_updated_at > last_viewed_at):
-            has_new_shift = True
+    # ✅ 5. has_new_shift の計算を削除（app.py の inject_common_data() に任せる）
+    # この部分を全て削除またはコメントアウト
+    # sql_publish = text(...)
+    # publish_res = db.session.execute(...)
+    # has_new_shift = False
+    # if publish_res and publish_res[0] == 1:
+    #     ...
 
-    # ★ return_monthパラメータを取得（シフト提出後の戻り先指定用）
+    # ★ return_monthパラメータを取得
     return_month = request.args.get('month', '')
 
+    # ✅ has_new_shift を render_template に渡さない
     return render_template(
         "calendar.html", 
         sent_dates=sent_dates or [],
-        has_new_shift=has_new_shift,
+        # has_new_shift=has_new_shift,  # ← この行を削除
         store_id=store_id,
         user_name=session.get("user_name"),
         target_month=target_month,
         shifts_js=shifts_for_js,
-        return_month=return_month  # ★ JavaScriptでURLパラメータとして使用
+        return_month=return_month
     )
-# どのファイルにあるか確認してください（おそらく calendar_page.py）
-# calendar_page.py (または makeshift.py)
 
 @calendar_bp.route("/admin") 
 def admin(): 
@@ -454,9 +436,6 @@ def sinsei(date):
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
-# ==========================
-# 🔹 確定シフト確認へのリダイレクト
-# ==========================
 @calendar_bp.route("/my_confirmed_shift")
 def my_confirmed_shift():
     if "user_id" not in session:
@@ -466,13 +445,13 @@ def my_confirmed_shift():
     from sqlalchemy import text
     
     user_id = session["user_id"]
-    print(f"🔍 確定シフト画面: user_id = {user_id}")  # ← 追加
+    print(f"🔍 確定シフト画面: user_id = {user_id}")
     
     # ✅ ユーザーの店舗IDを取得
     sql_store = text("SELECT store_id FROM account WHERE ID = :user_id")
     user_data = db.session.execute(sql_store, {"user_id": user_id}).fetchone()
     store_id = user_data[0] if user_data else None
-    print(f"🔍 確定シフト画面: store_id = {store_id}")  # ← 追加
+    print(f"🔍 確定シフト画面: store_id = {store_id}")
     
     if store_id:
         # ✅ すべての公開済みシフトを既読にする
@@ -482,17 +461,59 @@ def my_confirmed_shift():
             WHERE store_id = :store_id AND is_published = 1
         """)
         published_shifts = db.session.execute(sql_publish, {"store_id": store_id}).fetchall()
-        print(f"🔍 確定シフト画面: published_shifts = {published_shifts}")  # ← 追加
+        print(f"🔍 確定シフト画面: published_shifts = {published_shifts}")
         
         now = datetime.now()
+        
+        # ✅ タイムゾーン情報を削除
+        if now.tzinfo is not None:
+            now = now.replace(tzinfo=None)
+        
+        # ✅ データベースに閲覧履歴を保存
         for shift in published_shifts:
             target_month = shift[0]
-            session[f"last_viewed_at_{target_month}"] = now
-            print(f"🔍 セッションに保存: last_viewed_at_{target_month} = {now}")  # ← 追加
+            
+            # 既存レコードがあるか確認
+            check_sql = text("""
+                SELECT COUNT(*) FROM shift_view_history 
+                WHERE user_id = :user_id AND target_month = :target_month
+            """)
+            exists = db.session.execute(check_sql, {
+                "user_id": user_id,
+                "target_month": target_month
+            }).scalar()
+            
+            if exists > 0:
+                # 更新
+                update_sql = text("""
+                    UPDATE shift_view_history 
+                    SET last_viewed_at = :now, store_id = :store_id
+                    WHERE user_id = :user_id AND target_month = :target_month
+                """)
+                db.session.execute(update_sql, {
+                    "user_id": user_id,
+                    "target_month": target_month,
+                    "now": now,
+                    "store_id": store_id
+                })
+            else:
+                # 新規作成
+                insert_sql = text("""
+                    INSERT INTO shift_view_history (user_id, store_id, target_month, last_viewed_at)
+                    VALUES (:user_id, :store_id, :target_month, :now)
+                """)
+                db.session.execute(insert_sql, {
+                    "user_id": user_id,
+                    "store_id": store_id,
+                    "target_month": target_month,
+                    "now": now
+                })
+            
+            print(f"🔍 DBに保存: user_id={user_id}, target_month={target_month}, last_viewed_at={now}")
         
-        session.modified = True
+        db.session.commit()
+        
         print(f"✅ すべての公開済みシフトを既読にしました: {[s[0] for s in published_shifts]}")
-        print(f"🔍 セッション全体: {dict(session)}")  # ← 追加
     
     return redirect(url_for("makeshift.show_user_shift_view", user_id=user_id))
 # ==========================

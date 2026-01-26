@@ -51,6 +51,7 @@ def login():
                 'name': manager.name,
                 'store_id': manager.store_id
             }
+            session.permanent = True  # ✅ セッションを永続化
             # 選択画面へリダイレクト
             return redirect(url_for("login.select_role"))
 
@@ -77,6 +78,7 @@ def login():
                     'name': staff.name,
                     'store_id': staff.store_id
                 }
+                session.permanent = True  # ✅ セッションを永続化
                 return redirect(url_for("login.select_role"))
             
             # staffの場合は直接カレンダー画面へ
@@ -88,8 +90,10 @@ def login():
             }
             session['user_id'] = staff.id
             session['role'] = staff.role
-            session['user_name'] = staff.name  # ★ この行を追加
-            session['store_id'] = staff.store_id  # ★ この行も追加
+            session['user_name'] = staff.name
+            session['store_id'] = staff.store_id
+            session.permanent = True  # ✅ セッションを永続化
+            session.modified = True  # ✅ セッションの変更を確実に保存
             return redirect(url_for("calendar.calendar"))
 
         # 3. ログイン失敗
@@ -133,8 +137,10 @@ def confirm_role():
     session['user_id'] = temp_user['id']
     session['role'] = temp_user['role']  # 元のrole（manager）
     session['selected_role'] = selected_role  # ★ 選択したロールを保存
-    session['user_name'] = temp_user['name']  # ★ この行を追加
-    session['store_id'] = temp_user['store_id']  # ★ この行も追加
+    session['user_name'] = temp_user['name']
+    session['store_id'] = temp_user['store_id']
+    session.permanent = True  # ✅ セッションを永続化
+    session.modified = True  # ✅ セッションの変更を確実に保存
     
     # 一時保存データを削除
     session.pop('temp_user', None)
@@ -187,13 +193,9 @@ def staff_home():
 ## ----------------------------------------------------
 @login_bp.route('/logout') 
 def logout():
-    session.pop('user_id', None)
-    session.pop('role', None)
-    session.pop('user', None)
-    session.pop('temp_user', None)
-
-    # 🌟 "success" を "danger" に書き換える
-    # 今のHTMLは category != 'success' のものだけを表示するので、これで表示されます
+    # ✅ セッション全体をクリア
+    session.clear()
+    
     flash("ログアウトしました", "danger") 
     
     return redirect(url_for("login.login"))

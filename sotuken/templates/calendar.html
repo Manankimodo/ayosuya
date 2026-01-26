@@ -3,18 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ✅ キャッシュ無効化 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>MovieShift カレンダー</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- ✅ キャッシュ無効化 -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <title>MovieShift カレンダー</title>
-    ...
-  </head>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}?v={{ range(1, 10000) | random }}">
 </head>
 <body>
   <div class="user-info">
@@ -38,7 +32,6 @@
   {% endif %}
   {% endwith %}
 
-
   <!-- カレンダー -->
   <table class="calendar" id="calendar">
     <thead>
@@ -59,21 +52,21 @@
     {{ sent_dates | tojson | safe }}
   </script>
 
-  <!-- ボトムナビゲーション（追加） -->
+  <!-- ボトムナビゲーション -->
   <nav class="bottom-nav">
-    <a href="#" class="nav-item active" id="nav-calendar">
+    <a href="{{ url_for('calendar.calendar') }}" class="nav-item active" id="nav-calendar">
       <div class="nav-icon icon-calendar"></div>
       <span class="nav-label">カレンダー</span>
     </a>
     
-    <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item active">
+    <a href="{{ url_for('calendar.my_confirmed_shift') }}" class="nav-item">
       <div class="nav-icon icon-check" style="position: relative;">
           {% if has_new_shift %}
           <span style="
               position: absolute;
               top: -5px;
               right: -8px;
-              background-color: #ff3b30; /* 鮮やかな赤 */
+              background-color: #ff3b30;
               color: white;
               font-size: 10px;
               font-weight: bold;
@@ -83,13 +76,13 @@
               display: flex;
               align-items: center;
               justify-content: center;
-              border: 2px solid white; /* 境界をくっきりさせる */
+              border: 2px solid white;
               z-index: 10;
           ">1</span>
           {% endif %}
       </div>
       <span class="nav-label">確定シフト</span>
-  </a>
+    </a>
     
     <a href="{{ url_for('chatbot.chat') }}" class="nav-item">
       <div class="nav-icon icon-chat"></div>
@@ -108,7 +101,7 @@
   </nav>
 
   <!-- ✅ calendar.js はこの下で読み込む -->
-  <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/calendar.js') }}?v={{ range(1, 10000) | random }}"></script>
 
   <!-- ボトムナビゲーションのアクティブ状態切り替え（オプション） -->
   <script>
