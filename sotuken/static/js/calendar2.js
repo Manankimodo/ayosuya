@@ -7,7 +7,22 @@ document.addEventListener("DOMContentLoaded", function() {
     const modalText = document.getElementById("modal-text");
     const closeBtn = document.getElementById("modal-close");
 
+    // ✅ 締切日を基準に表示月を決定
     let currentDate = new Date();
+    const today = new Date();
+    const currentDay = today.getDate();
+    
+    // deadlineDay は HTMLから渡される（例: 15日）
+    const deadlineDay = window.deadlineDay || 15;
+    
+    // 今日が締切日を過ぎていたら、翌々月を表示
+    if (currentDay > deadlineDay) {
+        currentDate.setMonth(currentDate.getMonth() + 2);
+    } else {
+        // 締切日前なら翌月を表示
+        currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+    
     const sentDates = window.sentDates || [];
 
     function renderCalendar() {
