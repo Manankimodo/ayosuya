@@ -40,17 +40,31 @@ body {
 
 /* タイトル */
 h1 {
-    font-size: 2.2em;
-    margin-bottom: 40px;
+    font-size: 2.5em;
+    margin-bottom: 50px;
+    margin-top: 20px;
     /* 強調された赤ライン */
-    border-bottom: 3px solid var(--accent); 
-    padding-bottom: 10px;
+    border-bottom: 4px solid var(--accent); 
+    padding-bottom: 15px;
     width: 100%;
-    max-width: 800px;
+    max-width: 900px;
     text-align: center;
     color: var(--text-light);
     font-weight: 700;
+    letter-spacing: 1.5px;
+}
+
+/* サブタイトル */
+h2 {
+    font-size: 1.8em;
+    margin-bottom: 25px;
+    margin-top: 30px;
+    color: var(--text-light);
+    font-weight: 600;
     letter-spacing: 1px;
+    text-align: center;
+    width: 100%;
+    max-width: 900px;
 }
 
 /* フォーム全体（新規登録/編集エリア） */
@@ -64,9 +78,18 @@ form {
     border-radius: 8px;
     background-color: var(--card-dark); 
     width: 100%;
-    max-width: 600px;
+    max-width: 900px;
     margin-bottom: 40px;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
+}
+
+/* フォーム内のラベル */
+form label {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--text-light);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
 }
 
 /* テーブル（一覧表示） */
@@ -88,6 +111,7 @@ th, td {
     border: none; /* セル内のボーダーを削除 */
     text-align: left;
     vertical-align: middle;
+    font-size: 1em;
 }
 
 /* テーブルヘッダー */
@@ -96,6 +120,7 @@ th {
     color: var(--muted-text);
     font-weight: 600;
     letter-spacing: 0.5px;
+    font-size: 1.05em;
 }
 
 /* テーブルボディの行 */
@@ -126,11 +151,12 @@ textarea {
     margin-bottom: 20px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    font-size: 1em;
+    font-size: 1.05em;
     background-color: #1f1f1f; /* ダークな入力背景 */
     color: var(--text-light);
     box-sizing: border-box;
     transition: border-color 0.2s;
+    font-family: "Noto Sans JP", 'Helvetica Neue', sans-serif;
 }
 
 input[type="text"]:focus,
@@ -155,7 +181,7 @@ a[href*="delete_faq"] {
     border-radius: 4px;
     background-color: var(--accent); 
     color: #fff;
-    font-size: 1em;
+    font-size: 1.05em;
     font-weight: 600;
     cursor: pointer;
     text-decoration: none;

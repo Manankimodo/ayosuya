@@ -29,8 +29,6 @@ from datetime import datetime
 
 from datetime import datetime
 
-from datetime import datetime
-
 from flask import render_template, session, redirect, url_for, request
 from sqlalchemy import text
 from datetime import datetime
@@ -105,7 +103,7 @@ def calendar():
     # ★ return_monthパラメータを取得
     return_month = request.args.get('month', '')
 
-    # ✅ deadline_day をテンプレートに渡す（JavaScriptで使用）
+    # ✅ has_new_shift を render_template に渡さない
     return render_template(
         "calendar.html", 
         sent_dates=sent_dates or [],
@@ -114,8 +112,7 @@ def calendar():
         user_name=session.get("user_name"),
         target_month=target_month,
         shifts_js=shifts_for_js,
-        return_month=return_month,
-        deadline_day=deadline_day  # ✅ 追加: 締切日をテンプレートに渡す
+        return_month=return_month
     )
 
 @calendar_bp.route("/admin") 

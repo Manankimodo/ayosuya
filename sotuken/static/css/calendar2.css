@@ -181,6 +181,28 @@ h1 {
     font-size: 17px;
     line-height: 1.7;
     white-space: pre-wrap;
+    max-height: 60vh; /* 画面の60%の高さまで */
+    overflow-y: auto; /* 縦スクロールを有効化 */
+    padding-right: 10px; /* スクロールバー分の余白 */
+}
+
+/* スクロールバーのカスタマイズ（Netflix風） */
+#modal-text::-webkit-scrollbar {
+    width: 8px;
+}
+
+#modal-text::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+}
+
+#modal-text::-webkit-scrollbar-thumb {
+    background: #E50914;
+    border-radius: 4px;
+}
+
+#modal-text::-webkit-scrollbar-thumb:hover {
+    background: #B8070F;
 }
 
 /* モーダル表示時のアニメーション */

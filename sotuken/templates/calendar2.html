@@ -7,22 +7,34 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger.css') }}">
     <title>カレンダー</title>
 </head>
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    <div style="padding: 10px;">
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }}" style="text-align: center; padding: 10px; border-radius: 5px; margin-bottom: 10px; background-color: #d4edda; color: #155724;">
-          {{ message }}
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-{% endwith %}
 <body>
   <!-- ユーザー情報表示 -->
   <div class="user-info">
     <p>{{ store_id }}号店 {{ user_name }}さん</p>
   </div>
+
+  <!-- フラッシュメッセージ -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div style="display: flex; justify-content: center; padding: 10px 0;">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}" style="
+            text-align: center; 
+            padding: 10px 20px; 
+            border-radius: 8px; 
+            background-color: #1a1a1a; 
+            color: #E50914;
+            border: 1px solid #E50914;
+            max-width: 400px;
+            font-size: 14px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+          ">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
 
     <h1 id="monthYear"></h1>
     <div class="month-switch">
@@ -89,7 +101,8 @@
 
     <!-- ✅ スクリプト -->
     <script>
-        const sentDates = [];
+        window.sentDates = [];
+        window.deadlineDay = parseInt('{{ deadline_day | default(15) }}') || 15;
     </script>
     <script src="{{ url_for('static', filename='js/calendar2.js') }}"></script>
 </body>
